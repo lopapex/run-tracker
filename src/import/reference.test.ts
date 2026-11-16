@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { mergePages, pageWords, parsePlanPage, weekSumCheck, type OcrFn, type OcrWord, type ParsedPage, type Raster } from './gridParser';
+import { parsePaceOptions, type PaceOption } from './paceParser';
 
 const dir = process.env.REF_PAGES;
 const enabled = Boolean(dir && existsSync(dir));
@@ -31,6 +32,7 @@ describe.skipIf(!enabled)('referenční půlmaratonský plán', () => {
 
     const files = readdirSync(dir!).filter((f) => /^page-\d+\.png$/.test(f)).sort((a, b) => parseInt(a.slice(5)) - parseInt(b.slice(5)));
     const pages: ParsedPage[] = [];
+    const paceOptions: PaceOption[] = [];
     for (const f of files) {
       const img = await loadImage(`${dir}/${f}`);
       const canvas = createCanvas(img.width, img.height);
@@ -38,6 +40,7 @@ describe.skipIf(!enabled)('referenční půlmaratonský plán', () => {
       ctx.drawImage(img, 0, 0);
       const image: Raster = { width: img.width, height: img.height, data: new Uint8ClampedArray(ctx.getImageData(0, 0, img.width, img.height).data) };
       const words = await pageWords(image, ocr);
+      if (f === 'page-3.png') paceOptions.push(...parsePaceOptions(await ocr(image,'block'),3));
       pages.push(await parsePlanPage({ page: parseInt(f.slice(5)), image, words, ocr }));
     }
     await worker.terminate();
@@ -52,5 +55,6 @@ describe.skipIf(!enabled)('referenční půlmaratonský plán', () => {
     const w6long = result.weeks[5].days.find((d) => d.workout.type === 'long');
     expect(w6long?.workout.distanceM).toBe(22_000);
     expect(result.weeks.every((w) => weekSumCheck(w).state !== 'mismatch')).toBe(true);
+    expect(paceOptions.find(p => p.units === 'km' && p.goalTimeSec === 5400)?.chart.easy).toEqual({fromSec:304,toSec:336});
   }, 900_000);
 });

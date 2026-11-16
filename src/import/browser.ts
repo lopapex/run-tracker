@@ -34,7 +34,7 @@ async function previewOf(canvas: HTMLCanvasElement): Promise<{ url: string; widt
   return { url: blob ? URL.createObjectURL(blob) : '', width: canvas.width, height: canvas.height };
 }
 
-async function createOcr(): Promise<{ ocr: OcrFn; close: () => Promise<void> }> {
+async function createOcr(signal?: AbortSignal): Promise<{ ocr: OcrFn; close: () => Promise<void> }> {
   const { createWorker, PSM } = await import('tesseract.js');
   const worker = await createWorker('eng', 1, {
     workerPath: `${VENDOR}/tesseract/worker.min.js`,
@@ -42,8 +42,10 @@ async function createOcr(): Promise<{ ocr: OcrFn; close: () => Promise<void> }> 
     langPath: `${VENDOR}/tesseract/lang`,
   });
   const ocr: OcrFn = async (image, mode) => {
+    if (signal?.aborted) throw new DOMException('Zrušeno','AbortError');
     await worker.setParameters({ tessedit_pageseg_mode: mode === 'page' ? PSM.AUTO : mode === 'block' ? PSM.SINGLE_BLOCK : PSM.SINGLE_LINE });
     const { data } = await worker.recognize(toCanvas(image), {}, { tsv: true });
+    if (signal?.aborted) throw new DOMException('Zrušeno','AbortError');
     return (data.tsv ?? '')
       .split('\n')
       .map((l) => l.split('\t'))
@@ -60,11 +62,13 @@ interface PageSource {
   textWords: (scaleTo: HTMLCanvasElement) => Promise<OcrWord[]>;
   textItems: number;
 }
+interface SourceBundle { pages: PageSource[]; close: () => Promise<void> }
 
-async function pdfSources(data: ArrayBuffer): Promise<PageSource[]> {
+async function pdfSources(data: ArrayBuffer): Promise<SourceBundle> {
   const pdfjs = await import('pdfjs-dist');
   pdfjs.GlobalWorkerOptions.workerSrc = `${VENDOR}/pdf.worker.min.mjs`;
-  const doc = await pdfjs.getDocument({ data }).promise;
+  const task = pdfjs.getDocument({ data });
+  const doc = await task.promise;
   const out: PageSource[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
@@ -98,12 +102,12 @@ async function pdfSources(data: ArrayBuffer): Promise<PageSource[]> {
         }),
     });
   }
-  return out;
+  return { pages: out, close: async () => { await task.destroy(); } };
 }
 
-async function imageSource(file: Blob): Promise<PageSource[]> {
+async function imageSource(file: Blob): Promise<SourceBundle> {
   const bitmap = await createImageBitmap(file);
-  return [
+  return { pages: [
     {
       page: 1,
       textItems: 0,
@@ -120,18 +124,22 @@ async function imageSource(file: Blob): Promise<PageSource[]> {
       },
       textWords: async () => [],
     },
-  ];
+  ], close: async () => { bitmap.close(); } };
 }
 
 export async function importPlanFile(file: File, onStep: (label: string) => void, signal?: AbortSignal): Promise<ImportOutput> {
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
   onStep('Otevírám soubor');
-  const sources = isPdf ? await pdfSources(await file.arrayBuffer()) : await imageSource(file);
+  const bundle = isPdf ? await pdfSources(await file.arrayBuffer()) : await imageSource(file);
+  const sources = bundle.pages;
   onStep('Načítám čtení textu (OCR)');
-  const { ocr, close } = await createOcr();
+  let reader: Awaited<ReturnType<typeof createOcr>>;
+  try { reader = await createOcr(signal); } catch (error) { await bundle.close(); throw error; }
+  const { ocr, close } = reader;
   const previews: ImportOutput['previews'] = new Map();
   const pagesRead: number[] = [];
   const paceOptions: PaceOption[] = [];
+  let completed = false;
 
   try {
     // Průchod 1: najít stránky s týdenní tabulkou a jejich jednotky. Stránky se souvislým textem se přeskočí.
@@ -179,8 +187,10 @@ export async function importPlanFile(file: File, onStep: (label: string) => void
     }
     const byGoal = new Map<number, PaceOption>();
     for (const p of paceOptions) if (!byGoal.has(p.goalTimeSec) || p.units === 'km') byGoal.set(p.goalTimeSec, p);
+    completed = true;
     return { result, previews, pagesTotal: sources.length, pagesRead, paceOptions: [...byGoal.values()].sort((a, b) => a.goalTimeSec - b.goalTimeSec) };
   } finally {
-    await close();
+    try { await close(); } finally { await bundle.close(); }
+    if (!completed) for (const p of previews.values()) URL.revokeObjectURL(p.url);
   }
 }

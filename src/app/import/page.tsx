@@ -2,7 +2,7 @@
 
 import { WarningCircle } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { db } from '@/db/db';
 import { publishTemplate, saveProfile } from '@/db/repo';
 import { sha256Hex } from '@/domain/activities';
@@ -53,6 +53,8 @@ export default function ImportPage() {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [paceIndex, setPaceIndex] = useState<number | null>(null);
   const [paceConfirmed, setPaceConfirmed] = useState(false);
+  useEffect(() => () => { if (output) for (const p of output.previews.values()) URL.revokeObjectURL(p.url); }, [output]);
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
   const paceChart = paceIndex != null ? output?.paceOptions[paceIndex]?.chart : profile?.paceChart;
 
   const start = async (file: File) => {

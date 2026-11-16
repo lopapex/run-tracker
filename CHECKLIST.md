@@ -26,7 +26,7 @@ Datum: 16. 11. 2026. Zadání: soukromý RUN_TRACKER_PRODUCT_PLAN.md v3.1.
 - [x] Opakování přes zalomení, více pracovních částí, inline ×, oddělené posilování; originální instrukce se zachová.
 - [x] Editor segmentů, opakování, pauz, rovinek a pořadí; oprava hodnot bez zahození struktury.
 - [x] Kontrola importu po jednom vybraném týdnu; problémy a neplatné jednotky se nepřevezmou potichu.
-- [~] Tabulka temp: konzervativní rozpoznání úplných řádků, výběr cíle a potvrzení proti originálu. Obecné případy testované, celé nové browser PDF workflow ještě projít.
+- [x] Tabulka temp: obecné testy i skutečný řádek 1:30 z referenčního PDF (easy 5:04–5:36/km) prošly. Výběr a potvrzení proti originálu implementované; celé nové browser PDF workflow čeká na povolení výběru souboru v rozšíření.
 - [x] Čas → rozsah km, více bloků, poslední pauza neurčená = rozsah, chybějící tempo = nevyčíslená část.
 - [x] Výhled týdne nahrazuje jednoznačný den skutečností. Dva stejně dlouhé běhy v den se nespojí bez blízkého času startu.
 - [ ] Odlišný formát dokumentu (G4), automatické rozpoznání cílové délky a historický rozpis „platný tehdy“.
@@ -55,7 +55,8 @@ Datum: 16. 11. 2026. Zadání: soukromý RUN_TRACKER_PRODUCT_PLAN.md v3.1.
 - [x] Živý SQL test: dva účty, zakázané čtení/zápis cizích dat, soukromé soubory, anonymní zákaz, optimistic concurrency. Testovací záznamy rollback.
 - [x] Validace snapshotu, konzistentní obnova, odmítnutí chybějícího dokumentu a souběžné lokální změny – testy.
 - [x] Účty/host mají oddělené databáze a klíče rozpracovaného stavu.
-- [~] Google/e-mail přihlášení, zapínaná autosynchronizace, návrat online, řešení konfliktu a převzetí hosta.
+- [x] Produkční Google přihlášení prošlo až do soukromého prostoru vlastního účtu.
+- [~] E-mail přihlášení, zapínaná autosynchronizace, návrat online, řešení konfliktu a převzetí hosta.
 - [~] Privátní upload/download originálů s kontrolním součtem – klient implementovaný, reálný round trip mezi zařízeními zbývá.
 - [ ] Plný export/obnova včetně binárních originálů a samoobslužné smazání účtu/cloudových dat.
 - [ ] Otestovat změny na dvou fyzických zařízeních a výpadek během ukládání.
@@ -66,7 +67,8 @@ Datum: 16. 11. 2026. Zadání: soukromý RUN_TRACKER_PRODUCT_PLAN.md v3.1.
 - [x] Strava callback, Client ID a produkční secret nastavené v Netlify; secret není v repu.
 - [x] Stránkování aktivit, 7denní cache, odpojení, prokliky, atribuce a izolace od AI/exportu.
 - [x] Při chybějící konfiguraci cesta do návodu místo slepého červeného toastu.
-- [~] Produkční OAuth/refresh/sync s reálným účtem – ověřit po novém nasazení.
+- [x] Produkční OAuth a načtení reálného posledního běhu ověřené po nasazení.
+- [~] Automatická obnova expirovaného tokenu – čeká dlouhý reálný průchod.
 - [ ] Veřejná kapacita Stravy (nyní 1 sportovec), webhooky revoke/delete, serverové tokeny.
 - [x] Oficiální osobní konektor ve vlastním Claude je oddělená cesta; veřejná PWA neprovozuje Strava AI proxy.
 
@@ -79,4 +81,4 @@ Datum: 16. 11. 2026. Zadání: soukromý RUN_TRACKER_PRODUCT_PLAN.md v3.1.
 - [ ] Pixel 10: instalace, offline, scroll/navigace, přepnutí do externího chatu a návrat.
 - [ ] Automatické zálohy, provozní retence/cleanup, obnovení po ztrátě zařízení a úplné smazání účtu.
 
-Poslední ověření: 44 testů + samostatný referenční PDF test; další drobná oprava deduplikace čeká finální test run. Produkční sestavení průběžně prochází. Přesné vydání a závěrečné ověření doplnit po nasazení.
+Poslední ověření: 45 testů + referenční integrační test (12 týdnů a skutečná tabulka temp), produkční build, živé Google přihlášení a Strava OAuth/načtení běhu. První ověřené nasazení: 6afb11f6e7bad17d934c16be, https://run-tracker-613.netlify.app. Automatický browser upload PDF blokuje oprávnění rozšíření k file URLs; soukromý plán byl ověřen lokálním integračním testem. Závěrečné vydání doplnit po nasazení paměťového cleanupu importu a offline startu.

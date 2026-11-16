@@ -94,7 +94,7 @@ export default function ProfilePage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">AI a spotřeba</h2>
-        <p className="text-[14px] text-muted">Trenéra používáš ve vlastním ChatGPT / Claude s jeho oficiálním připojením ke Stravě. V aplikaci otevři Trenér → připrav otázku → zkopíruj podklady → vrať návrh. Žádný API klíč není potřeba.</p>
+        <p className="text-[14px] text-muted">Trenéra používáš ve vlastním chatu. Ověřený oficiální konektor Stravy je v Claude; možnosti ChatGPT vysvětluje průvodce. Otevři Trenér → připrav otázku → zkopíruj podklady → vrať návrh. Žádný API klíč není potřeba.</p>
 
         <h3 className="pt-2 text-[15px] font-medium">Historická spotřeba</h3>
         <Segmented label="Období" value={period} onChange={setPeriod} options={[{ value: 7, label: '7 dní' }, { value: 30, label: '30 dní' }, { value: 0, label: 'Vše' }]} />
@@ -118,7 +118,7 @@ export default function ProfilePage() {
       <Card className="space-y-3">
         <h2 className="font-semibold">Data v zařízení</h2>
         <dl className="num space-y-1 text-[15px]">
-          {[['Ověřené plány', counts.plans], ['Uložené originály', counts.documents], ['Aktivity', counts.activities], ['Zprávy v chatu', counts.messages], ['Obsazené úložiště (včetně modelů)', mb(storage.usage)], ['Trvalé úložiště', storage.persisted == null ? 'neznámé' : storage.persisted ? 'ano' : 'ne, prohlížeč může data smazat']].map(([k, v]) => (
+          {[['Ověřené plány', counts.plans], ['Uložené originály', counts.documents], ['Aktivity', counts.activities], ['Zprávy v chatu', counts.messages], ['Obsazené úložiště', mb(storage.usage)], ['Trvalé úložiště', storage.persisted == null ? 'neznámé' : storage.persisted ? 'ano' : 'ne, prohlížeč může data smazat']].map(([k, v]) => (
             <div key={String(k)} className="flex justify-between gap-4"><dt className="text-muted">{k}</dt><dd>{v}</dd></div>
           ))}
         </dl>

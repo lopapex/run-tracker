@@ -10,11 +10,13 @@ const listeners = new Set<() => void>();
 export const useAccount = () => useSyncExternalStore(l => { listeners.add(l); return () => { listeners.delete(l); }; }, () => account, () => null);
 export function initializeAccount(): Promise<void> {
   initialized ??= (async () => {
-    const { data, error } = await cloud.auth.getSession();
-    if (error && navigator.onLine) throw new Error('Přihlášení se nepodařilo ověřit. Zkus obnovit stránku.');
+    const offline = !navigator.onLine;
+    const { data, error } = offline ? {data:{session:null},error:null} : await cloud.auth.getSession();
+    if (error) throw new Error('Přihlášení se nepodařilo ověřit. Zkus obnovit stránku.');
     account = data.session?.user ? { id: data.session.user.id, email: data.session.user.email } : null;
-    if (!navigator.onLine && error) {
+    if (offline) {
       try { const cached = JSON.parse(localStorage.getItem('rt.lastAccount') ?? 'null'); if (cached && typeof cached.id === 'string') account = cached; } catch { /* bez uloženého účtu */ }
+      window.addEventListener('online',()=>location.reload(),{once:true});
     }
     if (account) localStorage.setItem('rt.lastAccount', JSON.stringify(account));
     else if (!error) localStorage.removeItem('rt.lastAccount');
@@ -23,6 +25,7 @@ export function initializeAccount(): Promise<void> {
     let userId = account?.id;
     cloud.auth.onAuthStateChange((_event, session) => {
       if (_event === 'INITIAL_SESSION') return;
+      if (_event === 'SIGNED_OUT') localStorage.removeItem('rt.lastAccount');
       if (session?.user.id !== userId) { userId = session?.user.id; location.reload(); }
     });
   })();
