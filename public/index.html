@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run Tracker – běžecký plán v Claude</title>
+  <meta name="description" content="Konektor pro Claude, který drží tvůj běžecký plán: nahraješ PDF, Claude plán založí a pak ho s tebou přeplánuje podle toho, jak běháš.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="/icon.svg" alt="" width="48" height="48">
+      <h1>Běžecký plán, který s tebou řeší Claude</h1>
+      <p class="lead">Nahraješ plán v PDF, Claude ho založí a pak mu stačí napsat „o víkendu nemůžu“. Run Tracker si pamatuje plán, přesuny a splnění. Běhy si Claude čte z tvé Stravy.</p>
+    </header>
+
+    <ol class="steps">
+      <li>
+        <h2>Vytvoř si adresu konektoru</h2>
+        <p>Adresa je zároveň tvůj klíč. Vzniká v tomhle prohlížeči a nikam se neposílá, dokud ji sám nevložíš do Claude.</p>
+        <button type="button" id="create" class="primary">Vytvořit moji adresu</button>
+        <div id="result" hidden>
+          <label for="url">Tvoje adresa konektoru</label>
+          <div class="copy-row">
+            <input id="url" type="text" readonly spellcheck="false" autocomplete="off">
+            <button type="button" id="copy">Zkopírovat</button>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+          <p class="warn">Kdo adresu zná, vidí a mění tvůj plán. Ulož si ji třeba do správce hesel a nikomu ji neposílej. Bez ní se k plánu nedostaneš.</p>
+          <button type="button" id="renew" class="link">Vytvořit novou adresu s prázdným plánem</button>
+        </div>
+      </li>
+      <li>
+        <h2>Přidej ji do Claude</h2>
+        <p>V Claude na webu otevři nastavení konektorů, zvol přidání vlastního konektoru a vlož adresu. Přihlášení se nevyplňuje. Konektor pak funguje i v mobilní aplikaci.</p>
+        <p><a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" rel="noopener noreferrer">Návod Claude k vlastním konektorům</a></p>
+      </li>
+      <li>
+        <h2>Připoj Stravu</h2>
+        <p>Ve stejném nastavení vyhledej oficiální konektor Strava a přihlas se. Vyžaduje předplatné Stravy. Bez něj Run Tracker funguje taky, jen Claude neuvidí tvoje běhy a splnění mu řekneš sám.</p>
+      </li>
+      <li>
+        <h2>Nahraj plán a mluv s trenérem</h2>
+        <p>Do konverzace přilož plán v PDF, obrázku nebo tabulce a napiš, kdy začínáš nebo kdy máš závod.</p>
+        <ul class="prompts">
+          <li>Založ můj plán z přiloženého PDF. Závod mám 7. února.</li>
+          <li>Jak vypadá můj týden?</li>
+          <li>O víkendu nemůžu běhat, přeplánuj to.</li>
+          <li>Podívej se na můj úterní běh ve Stravě a zapiš, jak jsem ho splnil.</li>
+          <li>Vrať poslední změnu.</li>
+        </ul>
+      </li>
+    </ol>
+
+    <section aria-labelledby="privacy">
+      <h2 id="privacy">Soukromí</h2>
+      <ul>
+        <li>Žádný účet ani e-mail. Jediné, co tě s daty spojuje, je adresa konektoru.</li>
+        <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění a tvoje krátké poznámky.</li>
+        <li>Data aktivit ze Stravy Run Tracker nedostává ani neukládá. Čte je jen Claude přes oficiální konektor Stravy.</li>
+        <li>Všechno smažeš větou „Smaž všechna moje data v Run Trackeru“. Smazání je nevratné.</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>Run Tracker není lékařská služba. Při bolesti nebo zdravotních potížích se poraď s lékařem.</p>
+      <p><a href="https://github.com/lopapex/run-tracker" rel="noopener noreferrer">Zdrojový kód</a> · MIT</p>
+    </footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

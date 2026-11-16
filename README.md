@@ -1,48 +1,43 @@
 # Run Tracker
 
-Mobilní PWA pro běžecký plán, skutečné běhy a konzultace ve vlastním Claude/ChatGPT. Stav implementace a zbývající brány jsou v [CHECKLIST.md](CHECKLIST.md).
+Konektor pro Claude (vzdálený MCP server), který drží běžecký plán: ověřený plán, jeho zařazení do kalendáře, přesuny, stav splnění a vratnou historii změn. Konverzace běží v Claude uživatele a čerpá jeho předplatné. Skutečné běhy čte Claude přes oficiální konektor Stravy; Run Tracker data ze Stravy nedostává ani neukládá.
 
-## Použití
+Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 
-- PDF se čte lokálně: textová vrstva, OCR výřezu a kontrola proti originálu. Import zná tabulky se dny ve sloupcích; není univerzální převodník libovolného PDF.
-- Jednotka zachovává rozklus, více částí opakování, pauzy i výklus. Vizuální editor opraví jednotlivé hodnoty a pořadí. Původní instrukce zůstává dostupná.
-- Rozsahy tempa přepočítají časové úseky na rozsah kilometrů. Přednost má potvrzená tabulka plánu, případně vlastní tempa z Profilu. Výhled týdne nahradí jednoznačný den skutečným během; neznámé úseky se přiznají.
-- Trenér: otázka → zkontrolovat/kopírovat podklady → vlastní externí chat → vložit JSON návrhu → validace → potvrzení změny. Kompletní návrh vzniká nejprve jako draft.
-- Oficiální osobní Strava konektor je ověřený pro Claude a vyžaduje předplatné Stravy. Oficiální ChatGPT podpora není v aktuálním seznamu Stravy; aplikace ji neslibuje.
-- Lokální inference a přímý API chat byly na pokyn uživatele odstraněny. Žádné stahování modelů ani API klíč uživatele.
-- Bez účtu jsou data v IndexedDB. Google/e-mail přihlášení vytvoří samostatný místní prostor. Synchronizace do Supabase se zapíná výslovně; hostovská data lze převzít jako kopii.
-- Strava API připojení uvnitř PWA je samostatné a slouží k zobrazení. Tokeny/cache nejsou součástí AI podkladů ani cloudového workspace.
+## Jak to funguje
+
+1. Uživatel si na úvodní stránce vytvoří adresu `https://<web>/mcp/<klíč>`. Klíč vzniká v prohlížeči.
+2. Adresu přidá v Claude jako vlastní konektor. Účet ani přihlášení neexistují; adresa je jediné oprávnění.
+3. V konverzaci přiloží plán (PDF, obrázek, tabulka). Claude ho přepíše po týdnech přes `import_plan_weeks`, nástroj vrátí kontrolu týdenních součtů a `activate_plan` plán zařadí do kalendáře.
+4. Další změny jdou přes `move_workout`, `skip_workout`, `edit_workout`, `add_workout`, `restore_workout`, `shift_plan` a `set_status`. Každá je vratná přes `undo_change`. `get_plan` vrací aktuální stav, `delete_all_data` smaže vše.
+
+## Hranice vůči Stravě
+
+Podmínky Strava API (platné od 1. 6. 2026) zakazují posílat data z API do AI a provozovat vlastní MCP server se Strava daty. Run Tracker proto Strava API nepoužívá vůbec. Nástroje přijímají jen stav jednotky a krátkou poznámku uživatele a instrukce konektoru říkají modelu, aby data aktivit neposílal.
 
 ## Vývoj
 
-Node 24. `npm install`, `npm run dev`, `npm run build`.
-Testy: `npm test -- --pool=threads --maxWorkers=1`.
-Typy: `npm run typecheck -- --incremental false`.
-Referenční PDF je soukromé a není v repu; viz `src/import/reference.test.ts`.
+Node 24. `npm install`, `npm test`, `npm run typecheck`.
 
-## Backend a nasazení
+Testy v `src/connector/connector.test.ts` procházejí celý konektor přes skutečný MCP protokol nad úložištěm v paměti. Lokální běh funkce s Netlify Blobs vyžaduje `netlify dev`.
 
-Netlify: `netlify.toml`, statický export `out`, serverová funkce `/api/strava`.
-Strava vyžaduje `STRAVA_CLIENT_ID` a tajnou `STRAVA_CLIENT_SECRET` v Netlify. Callback doména musí odpovídat produkčnímu webu. Konfigurace je jednorázová pro provozovatele; běžný uživatel pouze projde OAuth. Kapacita aktuální Strava aplikace je jeden sportovec, veřejný přístup vyžaduje schválení.
+## Nasazení
 
-Supabase: veřejná klientská konfigurace je v `src/cloud/client.ts`. Publishable klíč je určený pro prohlížeč a nesmí se zaměnit za serverový secret/service_role klíč. Ochranu zajišťuje Auth + RLS. Google klientský secret zůstává v nastavení Supabase, nikoliv v kódu.
-
-`supabase/migrations/202611160001_workspace.sql` byl na novém projektu aplikovaný přes Dashboard SQL. Před prvním použitím CLI migrací je nutné sladit historii migrací; bootstrap nespouštět podruhé bez kontroly existujících policies.
-
-Synchronizace používá atomický verzovaný snapshot (max. 10 MB JSON), privátní originály dokumentů (max. 40 MB každý) a lokální hash základní verze. Souběžné úpravy zobrazí konflikt. Soukromé originály se stáhnou a ověří checksumem před obnovou. Strava tokeny/cache ani lokální sync metadata do snapshotu nepatří.
-
-Supabase Free má omezení kapacity a může po neaktivitě pozastavit projekt. Výchozí e-mailový transport má omezení příjemců; veřejné e-mailové přihlášení vyžaduje vlastní SMTP. Google OAuth má vlastní stav testování/publikace a případného ověření. Plná veřejná produkční akceptace ještě není uzavřená.
+Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functions/mcp.mts` na cestě `/mcp/:key`. Data jsou v Netlify Blobs (úložiště `workspaces`), jeden JSON na uživatele pod otiskem klíče. Žádné proměnné prostředí nejsou potřeba.
 
 ## Moduly
 
 | Cesta | Účel |
 |---|---|
-| `src/domain` | příkazy, revize, drafty, metriky, rozsahy vzdálenosti |
-| `src/import` | PDF/OCR, tabulka týdnů a temp |
-| `src/ai/coach.ts` | kontrolovaný kontext a validace vrácených návrhů |
-| `src/db` | účetní IndexedDB prostory a validovaný snapshot |
-| `src/cloud` | Supabase Auth, soukromý sync, konflikty a guest převzetí |
-| `src/strava` | OAuth a dočasná oddělená cache |
-| `src/ui`, `src/app` | rozhraní, PWA a průchod externím trenérem |
+| `src/domain` | příkazy nad rozpisem, revize a undo, mapování týdnů, vzdálenosti a tempa |
+| `src/connector/tools.ts` | operace konektoru nad prostorem uživatele |
+| `src/connector/server.ts` | registrace nástrojů a instrukce pro model |
+| `src/connector/http.ts` | bezstavový HTTP vstup MCP |
+| `src/connector/store.ts`, `blobStore.ts` | úložiště s podmíněným zápisem |
+| `public/` | úvodní stránka s vytvořením adresy a návodem |
+
+`src/domain` obsahuje i části původní aplikace, které konektor zatím nepoužívá (`activities.ts`, `drafts.ts`, `generator.ts`).
+
+Původní PWA je v historii gitu do commitu `6fcdf7d`.
 
 MIT.
