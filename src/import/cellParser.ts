@@ -114,21 +114,44 @@ export function parseCell(lines: CellLine[], load?: Load): ParsedCell {
   const type = TITLE_TYPES.find(([re]) => re.test(title))?.[1] ?? 'other';
   if (type === 'other') issues.push(`Neznámý typ jednotky „${title}“.`);
 
-  const workout: WorkoutSpec = { type, title, blocks: [], load: load ?? (type === 'rest' ? 'rest' : undefined) };
+  const workout: WorkoutSpec = { type, title, blocks: [], rawInstruction: raw, load: load ?? (type === 'rest' ? 'rest' : undefined) };
   if (type === 'rest') return { workout, issues };
 
   const unknown: string[] = [];
   const blocks: Block[] = [];
-  for (const group of body) {
+  // Mezery v grafice PDF nerozdělují význam opakování. Pracovní úsek i pauza
+  // mohou ležet v různých skupinách OCR; čteme je v jednom pořadí.
+  for (const group of [body.flat()]) {
     // „Pace“ na samostatném řádku patří k předchozímu.
     const lines2: string[] = [];
     for (const l of group) {
       if (/^pace$/i.test(l) && lines2.length) lines2[lines2.length - 1] += ' Pace';
-      else lines2.push(l);
+      else {
+        // Podporujeme i „6×400m at 5k Pace“ na jediném řádku.
+        const inlineRepeat = /^(\d+)\s*[x×]\s*(\d.+)$/i.exec(l);
+        if (inlineRepeat && !/strides?/i.test(l)) lines2.push(`${inlineRepeat[1]}x`, inlineRepeat[2]);
+        else lines2.push(l.replace(/^(\d+)\s*×\s*$/, '$1x'));
+      }
+    }
+    // Spojit zalomené segmenty ještě před hledáním opakování, aby je četl
+    // správně i lookahead pracovního úseku a jeho regenerace.
+    for (let j = 0; j < lines2.length - 1; j++) {
+      if (!parseSegment(lines2[j]) && !parseSegment(lines2[j + 1]) && parseSegment(`${lines2[j]} ${lines2[j + 1]}`)) {
+        lines2.splice(j, 2, `${lines2[j]} ${lines2[j + 1]}`);
+      }
     }
     const joined = lines2.join(' ');
     const strength = /strength\s*training\s*(\d+)\s*mins?/i.exec(joined);
-    if (strength) { workout.strengthMin = Number(strength[1]); continue; }
+    if (strength) {
+      workout.strengthMin = Number(strength[1]);
+      for (let j = 0; j < lines2.length; j++) {
+        if (/strength\s*training/i.test(lines2[j])) {
+          const combined = /strength\s*training\s*\d+\s*mins?/i.test(lines2[j]);
+          lines2.splice(j, combined ? 1 : /^\d+\s*mins?$/i.test(lines2[j + 1] ?? '') ? 2 : 1);
+          break;
+        }
+      }
+    }
 
     for (let i = 0; i < lines2.length; i++) {
       const line = lines2[i];

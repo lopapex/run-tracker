@@ -4,7 +4,8 @@ import { ArrowRight, CheckCircle, Lightning, Plus } from '@phosphor-icons/react'
 import Link from 'next/link';
 import { useState } from 'react';
 import { addDays, DOW_LONG, dowOf, formatDay, weekDates, weekStartOf } from '@/domain/dates';
-import { blockLines, formatDuration, formatPace, LOAD_LABEL, paceOf, weekTotalM } from '@/domain/format';
+import { blockLines, formatDuration, formatPace, LOAD_LABEL, paceOf, weekTotalM, formatDistanceRange } from '@/domain/format';
+import { plannedDistance, projectedDistance } from '@/domain/distance';
 import { dayWorkouts, progressWeek } from '@/domain/schedule';
 import type { ScheduledWorkout } from '@/domain/types';
 import { ActivitySheet, AddActivitySheet } from '@/ui/Activity';
@@ -51,6 +52,9 @@ export default function TodayPage() {
   const weekStrava = strava.runs.filter((r) => r.localDate >= ws && r.localDate <= dates[6] && !weekActs.some((a) => a.localDate === r.localDate && Math.abs(a.distanceM - r.distanceM) < 300));
   const weekDone = weekActs.reduce((s, a) => s + a.distanceM, 0) + weekStrava.reduce((s, r) => s + r.distanceM, 0);
   const ratio = weekPlan.totalM > 0 ? Math.min(1, weekDone / weekPlan.totalM) : 0;
+  const weekWorkouts = dates.flatMap(d => dayWorkouts(plan.workouts, d));
+  const estimate = plannedDistance(weekWorkouts.filter(w => w.status !== 'skipped').map(w => w.workout), chart);
+  const projection = projectedDistance(weekWorkouts, [...weekActs, ...weekStrava], chart);
 
   return (
     <div className="space-y-5">
@@ -133,13 +137,14 @@ export default function TodayPage() {
       {todayRuns.map((r) => <StravaRun key={r.id} run={r} planned={main} />)}
 
       {/* Týden */}
-      {plan.activation && weekPlan.totalM > 0 && (
+      {plan.activation && (estimate.maxM > 0 || estimate.unknown > 0) && (
         <Link href="/plan/" className="block rounded-[20px] border border-line bg-surface p-4 active:scale-[0.99]">
           <div className="flex items-end justify-between">
             <p className="label text-muted">Tento týden</p>
             <p className="num text-[13px] text-muted">{Math.round(ratio * 100)} %</p>
           </div>
-          <p className="mt-1"><span className="display text-[38px]">{km(weekDone)}</span><span className="display text-[22px] text-muted"> / {km(weekPlan.totalM)} km</span></p>
+          <p className="mt-1"><span className="display text-[38px]">{km(weekDone)}</span><span className="display text-[22px] text-muted"> km odběháno</span></p>
+          <p className="num text-[14px] text-muted">Předpis {formatDistanceRange(estimate)} · výhled {formatDistanceRange(projection)}</p>
           <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.round(ratio * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Odběháno z týdenního plánu">
             <div className="h-full rounded-full bg-load-low transition-[width] duration-300" style={{ width: `${ratio * 100}%` }} />
           </div>

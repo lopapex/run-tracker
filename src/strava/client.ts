@@ -166,7 +166,14 @@ export async function syncRange(from: IsoDate, to: IsoDate): Promise<number> {
   await purgeExpired();
   const after = Math.floor(new Date(`${from}T00:00:00`).getTime() / 1000) - 86_400;
   const before = Math.floor(new Date(`${to}T23:59:59`).getTime() / 1000) + 86_400;
-  const raw = (await api(`/athlete/activities?after=${after}&before=${before}&per_page=100`)) as Array<Record<string, unknown>>;
+  const raw: Array<Record<string, unknown>> = [];
+  for (let page = 1; ; page++) {
+    const batch = await api(`/athlete/activities?after=${after}&before=${before}&per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) throw new StravaError('failed', 'Strava vrátila neplatný seznam aktivit.');
+    raw.push(...batch);
+    if (batch.length < 100) break;
+    if (page >= 100) throw new StravaError('failed', 'Rozmezí obsahuje příliš mnoho aktivit. Otevři kratší období.');
+  }
   const now = new Date();
   const items = raw.map((r) => toStravaActivity(r, now)).filter((a): a is StravaActivity => a != null && a.localDate >= from && a.localDate <= to);
   await db().transaction('rw', db().stravaActivities, db().connections, async () => {

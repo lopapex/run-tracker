@@ -7,7 +7,8 @@ import { db } from '@/db/db';
 import { publishTemplate } from '@/db/repo';
 import { sha256Hex } from '@/domain/activities';
 import { DOW_LONG } from '@/domain/dates';
-import { formatKm, workoutSummary } from '@/domain/format';
+import { formatKm, workoutSummary, formatDistanceRange, formatPace, INTENSITY_LABEL } from '@/domain/format';
+import { plannedDistance } from '@/domain/distance';
 import { newId } from '@/domain/schedule';
 import type { PlanTemplate, TemplateDay, TemplateWeek, WorkoutSpec } from '@/domain/types';
 import type { ImportOutput } from '@/import/browser';
@@ -49,11 +50,16 @@ export default function ImportPage() {
   const [spec, setSpec] = useState<WorkoutSpec | null>(null);
   const [toActivate, setToActivate] = useState<PlanTemplate | null>(null);
   const [duplicate, setDuplicate] = useState<string | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [paceIndex, setPaceIndex] = useState<number | null>(null);
+  const [paceConfirmed, setPaceConfirmed] = useState(false);
+  const paceChart = paceIndex != null ? output?.paceOptions[paceIndex]?.chart : profile?.paceChart;
 
   const start = async (file: File) => {
     if (file.size > 40 * 1024 * 1024) { toast('Soubor je větší než 40 MB.', { tone: 'error' }); return; }
     if (!/\.(pdf|png|jpe?g|webp)$/i.test(file.name)) { toast('Podporované jsou PDF, PNG, JPG a WebP.', { tone: 'error' }); return; }
     setStage('reading');
+    setPaceIndex(null); setPaceConfirmed(false);
     setSteps([]);
     setDuplicate(null);
     const buffer = await file.arrayBuffer();
@@ -70,6 +76,7 @@ export default function ImportPage() {
       setDocId(id);
       setOutput(out);
       setWeeks(out.result.weeks);
+      setSelectedWeek(out.result.weeks[0]?.index ?? null);
       setName(file.name.replace(/\.[^.]+$/, ''));
       setStage('review');
     } catch (e) {
@@ -83,9 +90,11 @@ export default function ImportPage() {
   const open = weeks.flatMap((w) => w.days.filter((d) => d.source.review === 'unreviewed' && d.source.issues.length > 0).map((d) => ({ week: w.index, dow: d.dow })));
 
   const publish = async () => {
+    if (open.length || paceIndex != null && !paceConfirmed || weeks.some(w => w.days.some(d => !isValidSpec(d.workout)))) { toast('Nejdřív dokonči kontrolu jednotek a temp.', { tone: 'error' }); return; }
     const now = new Date().toISOString();
     const template: PlanTemplate = {
       id: newId(), name: name.trim() || 'Importovaný plán', origin: 'import', documentId: docId, createdAt: now, verifiedAt: now, units: output?.result.units ?? 'km',
+      paceChart,
       weeks: weeks.map((w) => ({ ...w, days: w.days.map((d) => ({ ...d, source: { ...d.source, review: d.source.review === 'unreviewed' ? ('confirmed' as const) : d.source.review } })) })),
     };
     await publishTemplate(template);
@@ -138,7 +147,18 @@ export default function ImportPage() {
             )}
           </Card>
 
-          {weeks.map((w) => {
+          {weeks.length > 0 && <Field label="Procházet týden"><select className={inputClass} value={selectedWeek ?? ''} onChange={e => setSelectedWeek(Number(e.target.value))}>{weeks.map(w => <option key={w.index} value={w.index}>Týden {w.index} · {w.days.filter(d => d.source.review === 'unreviewed' && d.source.issues.length > 0).length} nejasností</option>)}</select></Field>}
+          {output.paceOptions.length > 0 && <Card className="space-y-3">
+            <h3 className="font-semibold">Tempa z dokumentu</h3>
+            <Field label="Vyber řádek podle cílového času"><select className={inputClass} value={paceIndex ?? ''} onChange={e => { setPaceIndex(e.target.value === '' ? null : Number(e.target.value)); setPaceConfirmed(false); }}><option value="">Použít moje tempa z profilu</option>{output.paceOptions.map((p, i) => <option key={i} value={i}>Cíl {p.goalLabel} · strana {p.page} · původně min/{p.units}</option>)}</select></Field>
+            {paceIndex != null && <>
+              <dl className="num space-y-1 text-[14px]">{Object.entries(output.paceOptions[paceIndex].chart).map(([k, v]) => <div key={k} className="flex justify-between"><dt>{INTENSITY_LABEL[k as keyof typeof INTENSITY_LABEL]}</dt><dd>{formatPace(v.fromSec)}–{formatPace(v.toSec)}/km</dd></div>)}</dl>
+              <details><summary className="min-h-11 cursor-pointer py-2 text-[14px]">Porovnat s originálem</summary>{output.previews.get(output.paceOptions[paceIndex].page)?.url && <img src={output.previews.get(output.paceOptions[paceIndex].page)!.url} alt="Originální stránka s tabulkou temp" className="w-full" />}</details>
+              <label className="flex min-h-11 items-center gap-2 text-[14px]"><input type="checkbox" checked={paceConfirmed} onChange={e => setPaceConfirmed(e.target.checked)} />Zvolený řádek a tempa odpovídají originálu</label>
+            </>}
+            <p className="text-[13px] text-muted">Z těchto rozsahů se vypočítá odhad kilometrů časových úseků. Intenzity bez přesného tempa zůstanou nevyčíslené.</p>
+          </Card>}
+          {weeks.filter(w => w.index === selectedWeek).map((w) => {
             const sum = weekSumCheck(w);
             return (
               <Card key={w.index} className="space-y-2">
@@ -151,6 +171,7 @@ export default function ImportPage() {
                     {sum.state === 'unverifiable' && `${sum.timeBased}× dle času, nejde ověřit`}
                   </span>
                 </div>
+                <p className="num text-[13px] text-muted">Dle zvolených temp: {formatDistanceRange(plannedDistance(w.days.map(d => d.workout), paceChart))}</p>
                 <ul className="space-y-1">
                   {w.days.map((d) => {
                     const flagged = d.source.issues.length > 0 && d.source.review === 'unreviewed';
@@ -176,7 +197,7 @@ export default function ImportPage() {
           {weeks.length > 0 && (
             <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] flex gap-2 rounded-[12px] border border-line bg-surface p-2 shadow-lg">
               <Button onClick={() => setStage('pick')}>Zahodit</Button>
-              <Button variant="primary" className="flex-1" disabled={open.length > 0} onClick={publish}>{open.length ? `Nejdřív zkontroluj ${open.length}` : 'Potvrdit a zařadit do kalendáře'}</Button>
+              <Button variant="primary" className="flex-1" disabled={open.length > 0 || paceIndex != null && !paceConfirmed} onClick={publish}>{open.length ? `Nejdřív zkontroluj ${open.length}` : paceIndex != null && !paceConfirmed ? 'Potvrď tempa z dokumentu' : 'Potvrdit a zařadit do kalendáře'}</Button>
             </div>
           )}
         </>
@@ -189,7 +210,7 @@ export default function ImportPage() {
         footer={
           edit && spec ? (
             <>
-              <Button onClick={() => { patchDay(edit.week, edit.dow, { source: { ...dayOf(edit.week, edit.dow)!.source, review: 'confirmed' } }); setEdit(null); }}>Sedí, potvrdit</Button>
+              <Button disabled={!isValidSpec(dayOf(edit.week, edit.dow)!.workout)} onClick={() => { patchDay(edit.week, edit.dow, { source: { ...dayOf(edit.week, edit.dow)!.source, review: 'confirmed' } }); setEdit(null); }}>Sedí, potvrdit</Button>
               <Button variant="primary" className="flex-1" disabled={!isValidSpec(spec)} onClick={() => { patchDay(edit.week, edit.dow, { workout: spec, source: { ...dayOf(edit.week, edit.dow)!.source, review: 'edited' } }); setEdit(null); }}>Uložit opravu</Button>
             </>
           ) : undefined
@@ -201,7 +222,8 @@ export default function ImportPage() {
             <div className="space-y-4">
               <SourceCrop day={d} previews={output.previews} />
               {d.source.issues.length > 0 && <ul className="list-disc space-y-1 rounded-[8px] bg-warn-soft py-2 pl-7 pr-3 text-[14px] text-warn">{d.source.issues.map((i) => <li key={i}>{i}</li>)}</ul>}
-              <p className="text-[13px] text-muted">Přečteno z obrázku{d.source.confidence != null ? `, jistota čtení ${d.source.confidence} ze 100 (údaj nástroje, ne pravděpodobnost)` : ''}.</p>
+              <p className="text-[13px] text-muted">{d.source.method === 'pdf_text' ? 'Přečteno přímo z textu PDF.' : `Přečteno z obrázku${d.source.confidence != null ? `, jistota čtení ${d.source.confidence} ze 100 (údaj nástroje, ne pravděpodobnost)` : ''}.`}</p>
+              {spec.rawInstruction && <details><summary className="min-h-11 cursor-pointer py-2 text-[14px]">Původní přečtený text</summary><pre className="whitespace-pre-wrap text-[14px]">{spec.rawInstruction}</pre></details>}
               <WorkoutEditor value={spec} onChange={setSpec} />
             </div>
           );

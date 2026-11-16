@@ -29,7 +29,7 @@ export interface AiResult {
 }
 
 export interface AiEngine {
-  provider: 'webllm';
+  provider: 'webllm' | 'openai' | 'anthropic';
   model: string;
   mode: 'local' | 'cloud';
   capabilities: AiCapabilities;

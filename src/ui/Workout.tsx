@@ -8,10 +8,12 @@ import { db } from '@/db/db';
 import { undoRevision } from '@/db/repo';
 import { OPERATION_LABEL } from '@/domain/commands';
 import { addDays, DOW_SHORT, dowOf, formatDay, weekStartOf } from '@/domain/dates';
-import { blockLines, formatKm, formatShortDuration, LOAD_LABEL, TYPE_LABEL, workoutSummary } from '@/domain/format';
+import { blockLines, formatKm, formatShortDuration, LOAD_LABEL, TYPE_LABEL, workoutSummary, formatDistanceRange } from '@/domain/format';
+import { workoutDistance } from '@/domain/distance';
 import type { Load, PaceChart, ScheduledWorkout, WorkoutSpec, WorkoutType } from '@/domain/types';
 import { runWithUndo } from './hooks';
 import { Button, Chip, cx, Field, inputClass, Sheet, toast } from './primitives';
+import { BlockEditor } from './BlockEditor';
 
 export const LOAD_DOT: Record<Load, string> = { rest: 'bg-rest', low: 'bg-load-low', medium: 'bg-load-medium', high: 'bg-load-high' };
 
@@ -37,6 +39,7 @@ export function WorkoutBody({ workout, chart }: { workout: WorkoutSpec; chart?: 
   return (
     <div className="space-y-2 text-[15px]">
       <p className="num text-muted">{workoutSummary(workout)}</p>
+      {workout.type !== 'rest' && workout.distanceM == null && <p className="num text-[13px] text-muted">Vzdálenost: {formatDistanceRange(workoutDistance(workout, chart))}</p>}
       {lines.length > 0 && (
         <ol className="space-y-1">
           {lines.map((l, i) => (
@@ -87,7 +90,7 @@ export function WorkoutRow({ w, onOpen, today }: { w: ScheduledWorkout; onOpen: 
 
 const TYPES: WorkoutType[] = ['easy', 'long', 'speed', 'tempo', 'race', 'strength', 'cross', 'rest', 'other'];
 
-/** Jednoduchá editace jednotky. Vizuální editor bloků je mimo MVP (§2.1); strukturu jde ponechat nebo zahodit. */
+/** Stejný editor struktury pro import i úpravu kalendáře. */
 export function WorkoutEditor({ value, onChange }: { value: WorkoutSpec; onChange: (w: WorkoutSpec) => void }) {
   const set = (patch: Partial<WorkoutSpec>) => onChange({ ...value, ...patch });
   return (
@@ -124,20 +127,16 @@ export function WorkoutEditor({ value, onChange }: { value: WorkoutSpec; onChang
           </Field>
         </div>
       )}
-      {value.blocks.length > 0 && (
-        <div className="rounded-[8px] border border-line p-3 text-[14px]">
-          <p className="mb-1 font-medium text-muted">Struktura</p>
-          <ul className="num space-y-0.5">{blockLines(value.blocks).map((l, i) => <li key={i}>{l}</li>)}</ul>
-          <button type="button" className="mt-2 min-h-11 text-danger underline" onClick={() => set({ blocks: [] })}>Odebrat strukturu</button>
-        </div>
-      )}
+      {value.type !== 'rest' && <BlockEditor value={value.blocks} onChange={blocks => set({ blocks })} />}
       <Field label="Poznámka"><textarea className={cx(inputClass, 'py-2')} rows={2} value={value.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></Field>
     </div>
   );
 }
 
 export function isValidSpec(w: WorkoutSpec): boolean {
-  return w.title.trim().length > 0;
+  const positive = (n: number | undefined) => n == null || Number.isFinite(n) && n > 0;
+  const validSegment = (s: import('@/domain/types').Segment) => positive(s.distanceM) && positive(s.durationSec) && (s.distanceM != null || s.durationSec != null);
+  return w.title.trim().length > 0 && positive(w.distanceM) && positive(w.durationSec) && w.blocks.every(b => b.kind === 'note' ? !!b.text.trim() : b.kind === 'segment' ? validSegment(b) : Number.isInteger(b.count) && b.count > 0 && (b.kind === 'strides' ? positive(b.durationSec) : validSegment(b.work) && (b.more ?? []).every(validSegment) && (!b.recovery || validSegment(b.recovery))));
 }
 
 /** Detail jednotky (§4.4): záměr, bloky, původ, historie a akce. */

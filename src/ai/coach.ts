@@ -3,7 +3,7 @@
 import { applyScheduleCommand, type ScheduleSnapshot } from '@/domain/commands';
 import { addDays, DOW_LONG, dowOf, formatDay, todayIso, weekStartOf } from '@/domain/dates';
 import { INTENT_LABEL } from '@/domain/drafts';
-import { formatKm, formatPace, paceOf, workoutSummary } from '@/domain/format';
+import { formatKm, formatPace, paceOf, workoutSummary, blockLines } from '@/domain/format';
 import { defaultStart } from '@/domain/generator';
 import { newId } from '@/domain/schedule';
 import type { AiUsageEvent, CoachMessage, CoachProposal, ContextRef, PlanDraftRevision } from '@/domain/types';
@@ -56,7 +56,7 @@ export async function buildContext(refs: ContextRef[] = []): Promise<CoachContex
     snap = await loadSnapshot(activation.id);
     const from = weekStartOf(today);
     const to = addDays(from, 13);
-    const upcoming = (snap?.workouts ?? []).filter((w) => w.date >= from && w.date <= to).sort((a, b) => a.date.localeCompare(b.date));
+    const upcoming = (snap?.workouts ?? []).filter((w) => w.date >= from && w.date <= to || refs.some(r => r.kind === 'workout' && r.id === w.id || r.kind === 'week' && w.date >= r.id && w.date <= addDays(r.id, 6))).sort((a, b) => a.date.localeCompare(b.date));
     const mapping = activation.mapping.find((m) => m.weekStart === from);
     lines.push(`Aktivní plán: ${mapping?.sourceWeek != null ? `týden ${mapping.sourceWeek}` : mapping ? 'pauza' : 'tento týden je mimo plán'}. Rozpis (tento a příští týden):`);
     upcoming.forEach((w, i) => {
@@ -64,17 +64,22 @@ export async function buildContext(refs: ContextRef[] = []): Promise<CoachContex
       aliases.set(alias, w.id);
       const state = w.status === 'completed' ? 'splněno' : w.status === 'skipped' ? 'vynecháno' : w.locked ? 'zamčeno' : 'v plánu';
       lines.push(`${alias} | ${w.date} ${DOW_LONG[dowOf(w.date)]} | ${w.workout.title} | ${workoutSummary(w.workout)} | ${state}`);
+      const blocks = blockLines(w.workout.blocks, profile.paceChart);
+      if (blocks.length) lines.push(`Struktura ${alias}: ${blocks.join('; ')}.`);
     });
   } else {
     lines.push('Uživatel nemá aktivní plán.');
   }
 
-  const activities = (await db().activities.orderBy('localDate').reverse().limit(5).toArray()).filter((a) => a.sport === 'run');
+  const recent = await db().activities.orderBy('localDate').reverse().limit(5).toArray();
+  const selected = await db().activities.bulkGet(refs.filter(r => r.kind === 'activity').map(r => r.id));
+  const activities = [...new Map([...recent, ...selected.filter(a => a != null)].map(a => [a.id, a])).values()].filter(a => a.sport === 'run');
   if (activities.length) {
     lines.push('Poslední běhy (vlastní soubory nebo ruční zápis):');
     for (const a of activities) {
       const ci = await db().checkIns.where('activityId').equals(a.id).first();
       lines.push(`${a.localDate} | ${formatKm(a.distanceM)} | ${formatPace(paceOf(a.distanceM, a.movingSec))}/km | tep ${a.avgHr ?? 'chybí'} | pocit ${ci ? `${ci.feel}/5${ci.pain !== 'none' ? `, bolest: ${ci.pain === 'mild' ? 'mírná' : 'výrazná'}${ci.painNote ? ` (${ci.painNote})` : ''}` : ''}` : 'neuveden'}`);
+      if (refs.some(r => r.kind === 'activity' && r.id === a.id)) lines.push(`Kola vybraného běhu: ${a.laps.length ? a.laps.slice(0, 50).map(l => `${l.index}: ${formatKm(l.distanceM)}, ${l.durationSec} s, tep ${l.avgHr ?? 'chybí'}`).join('; ') : 'chybí'}. Chybějící údaje: ${a.missing.join(', ') || 'žádné'}.`);
     }
   } else gaps.push('žádné zaznamenané běhy');
 
@@ -219,7 +224,7 @@ export async function reply(engine: AiEngine, refs: ContextRef[], onText: (messa
   const startedAt = new Date().toISOString();
   await db().messages.add({ id, threadId: THREAD_ID, seq: await nextSeq(), role: 'assistant', text: '', at: startedAt, status: 'streaming' });
 
-  const result = await engine.generate(messages, { maxTokens: 600, onText: (t) => onText(id, extractCommand(t).text) });
+  const result = await engine.generate(messages, { maxTokens: engine.mode === 'cloud' ? 2400 : 600, onText: (t) => onText(id, extractCommand(t).text) });
 
   const usage: AiUsageEvent = {
     requestId: newId(),

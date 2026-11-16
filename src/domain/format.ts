@@ -1,4 +1,11 @@
 import type { Block, IntensityRef, Load, PaceChart, Segment, WorkoutSpec, WorkoutType } from './types';
+import type { DistanceRange } from './distance';
+
+export function formatDistanceRange(r: DistanceRange): string {
+  const min = Math.round(r.minM / 100) / 10;
+  const max = Math.round(r.maxM / 100) / 10;
+  return `${r.estimated ? '≈ ' : ''}${String(min).replace('.', ',')}${min !== max ? `–${String(max).replace('.', ',')}` : ''} km${r.unknown ? ' + nevyčíslené úseky' : ''}`;
+}
 
 export const INTENSITY_LABEL: Record<IntensityRef, string> = {
   easy: 'volně',

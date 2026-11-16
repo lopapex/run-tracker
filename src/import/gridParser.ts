@@ -279,11 +279,13 @@ export interface ParsePageOptions {
   image: Raster;
   /** Slova z textové vrstvy nebo ze stránkového OCR. */
   words: OcrWord[];
+  /** Původní text PDF, oddělený od OCR, aby se čísla zbytečně nečetla z obrázku. */
+  textWords?: OcrWord[];
   ocr: OcrFn;
   onStep?: (label: string) => void;
 }
 
-export async function parsePlanPage({ page, image, words, ocr, onStep }: ParsePageOptions): Promise<ParsedPage> {
+export async function parsePlanPage({ page, image, words, textWords = [], ocr, onStep }: ParsePageOptions): Promise<ParsedPage> {
   const headers = findHeaders(words);
   const out: ParsedPage = { page, units: null, weeks: [], issues: [] };
   if (headers.length === 0) return out;
@@ -327,10 +329,22 @@ export async function parsePlanPage({ page, image, words, ocr, onStep }: ParsePa
     for (let d = 0; d < 7; d++) {
       onStep?.(`Týden ${label}: ${DOW_NAMES[d]}`);
       const rect = { x: monLeft + d * h.colW + inset, y: top + inset, w: h.colW - 2 * inset, h: cellsBottom - top - 2 * inset };
-      const found = (await ocr(crop(image, rect), 'block')).filter((w) => w.text.trim());
-      const numeric = repairWords(image, rect, found);
-      const lines = toLines(found, { x: rect.x, y: rect.y });
-      const parsed = parseCell(lines, loads[d] ?? undefined);
+      const native = textWords.filter(w => w.x + w.w / 2 >= rect.x && w.x + w.w / 2 <= rect.x + rect.w && w.y + w.h / 2 >= rect.y && w.y + w.h / 2 <= rect.y + rect.h)
+        .map(w => ({ ...w, x: w.x - rect.x, y: w.y - rect.y }));
+      // PDF text items nejsou vždy celé řádky. Zarovnat podle skutečné svislé polohy.
+      const rows: OcrWord[][] = [];
+      for (const w of [...native].sort((a, b) => a.y - b.y)) {
+        const row = rows.find(r => Math.abs(r[0].y - w.y) < Math.max(r[0].h, w.h) * 0.45);
+        if (row) row.push(w); else rows.push([w]);
+      }
+      rows.forEach((row, n) => row.forEach(w => { w.line = `pdf${n}`; }));
+      const nativeLines = toLines(native, rect);
+      const nativeParsed = parseCell(nativeLines, loads[d] ?? undefined);
+      const useNative = native.length > 0 && nativeParsed.issues.length === 0;
+      const found = useNative ? native : (await ocr(crop(image, rect), 'block')).filter(w => w.text.trim());
+      const numeric = useNative ? { repaired: [], unclear: [] } : repairWords(image, rect, found);
+      const lines = useNative ? nativeLines : toLines(found, rect);
+      const parsed = useNative ? nativeParsed : parseCell(lines, loads[d] ?? undefined);
       const conf = lines.length ? lines.reduce((a, l) => a + l.conf, 0) / lines.length : 0;
       const issues = [...parsed.issues];
       if (numeric.repaired.length) issues.push(`Číslo doplněné podle tvaru znaků, zkontroluj: ${numeric.repaired.join(', ')}.`);
@@ -338,7 +352,7 @@ export async function parsePlanPage({ page, image, words, ocr, onStep }: ParsePa
       if (band && !loads[d]) issues.push('Zátěž se nepodařilo přečíst.');
       if (lines.some((l) => l.conf < 60) && issues.length === 0) issues.push('Nižší jistota čtení, zkontroluj proti originálu.');
       const source: SourceRef = {
-        method: 'ocr',
+        method: useNative ? 'pdf_text' : 'ocr',
         page,
         bbox: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.w), Math.round(rect.h)],
         confidence: Math.round(conf),

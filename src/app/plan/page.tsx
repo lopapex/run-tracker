@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { db } from '@/db/db';
 import { archiveActivePlan } from '@/db/repo';
 import { addDays, DOW_SHORT, formatDay, formatWeekRange, weekDates, weekStartOf } from '@/domain/dates';
-import { formatKm, weekTotalM } from '@/domain/format';
+import { formatKm, formatDistanceRange } from '@/domain/format';
+import { plannedDistance, projectedDistance } from '@/domain/distance';
 import { dayWorkouts, planRange } from '@/domain/schedule';
 import type { PlanTemplate, ScheduledWorkout } from '@/domain/types';
 import { ActivitySheet, AddActivitySheet } from '@/ui/Activity';
@@ -121,11 +122,12 @@ export default function PlanPage() {
   const mapping = plan.activation?.mapping.find((m) => m.weekStart === weekStart);
   const range = plan.activation ? planRange(plan.activation) : undefined;
   const weekWorkouts = dates.flatMap((d) => dayWorkouts(plan.workouts, d));
-  const planned = weekTotalM(weekWorkouts.filter((w) => w.status !== 'skipped').map((w) => w.workout));
   const weekActs = acts.activities.filter((a) => a.localDate >= weekStart && a.localDate <= dates[6] && a.sport === 'run');
   // Stejný běh nahraný souborem i načtený ze Stravy se nepočítá dvakrát.
   const weekStrava = strava.runs.filter((r) => r.localDate >= weekStart && r.localDate <= dates[6] && !weekActs.some((a) => a.localDate === r.localDate && Math.abs(a.distanceM - r.distanceM) < 300));
   const doneM = weekActs.reduce((s, a) => s + a.distanceM, 0) + weekStrava.reduce((s, r) => s + r.distanceM, 0);
+  const estimate = plannedDistance(weekWorkouts.filter(w => w.status !== 'skipped').map(w => w.workout), chart);
+  const projection = projectedDistance(weekWorkouts, [...weekActs, ...weekStrava], chart);
   const isCurrent = weekStart === weekStartOf(today);
   const templateWeek = mapping?.sourceWeek != null ? plan.template?.weeks.find((w) => w.index === mapping.sourceWeek) : undefined;
 
@@ -161,12 +163,14 @@ export default function PlanPage() {
       </div>
 
       <div className="rounded-[20px] border border-line bg-surface p-4">
+        <p className="num mb-2 text-[14px] text-muted">Předpis: {formatDistanceRange(estimate)}<br />Výhled týdne: {formatDistanceRange(projection)}</p>
+        <p className="mb-2 text-[12px] text-muted">Výhled nahrazuje plán dne skutečným během. Rozsah vychází z temp; bez tempa zůstává úsek nevyčíslený.</p>
         <div className="flex items-end justify-between gap-3">
-          <p><span className="display text-[34px]">{String(Math.round(doneM / 100) / 10).replace('.', ',')}</span><span className="display text-[20px] text-muted"> / {String(Math.round(planned.totalM / 100) / 10).replace('.', ',')} km</span></p>
-          <p className="label text-muted">{planned.unknown ? `+ ${planned.unknown}× dle času` : 'odběháno / plán'}</p>
+          <p><span className="display text-[34px]">{String(Math.round(doneM / 100) / 10).replace('.', ',')}</span><span className="display text-[20px] text-muted"> km</span></p>
+          <p className="label text-muted">odběháno</p>
         </div>
         <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface-2">
-          <div className="h-full rounded-full bg-load-low transition-[width] duration-300" style={{ width: `${planned.totalM > 0 ? Math.min(100, (doneM / planned.totalM) * 100) : 0}%` }} />
+          <div className="h-full rounded-full bg-load-low transition-[width] duration-300" style={{ width: `${estimate.maxM > 0 ? Math.min(100, (doneM / ((estimate.minM + estimate.maxM) / 2)) * 100) : 0}%` }} />
         </div>
       </div>
 

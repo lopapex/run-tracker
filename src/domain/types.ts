@@ -350,7 +350,7 @@ export type MeasurementKind = 'reported' | 'tokenized' | 'estimated';
 export interface AiUsageEvent {
   requestId: Id;
   threadId?: Id;
-  provider: 'webllm';
+  provider: 'webllm' | 'openai' | 'anthropic';
   model: string;
   mode: 'local' | 'cloud';
   status: 'completed' | 'stopped' | 'failed';

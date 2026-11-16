@@ -2,54 +2,20 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
-import { deleteModel, modelInfo, MODEL_OPTIONS, resolveModelId } from '@/ai/webllm';
 import { db } from '@/db/db';
 import { exportAll, saveProfile, wipeAll } from '@/db/repo';
 import { addDays, DOW_LONG, todayIso } from '@/domain/dates';
 import { INTENT_LABEL } from '@/domain/drafts';
 import { formatPace, INTENSITY_LABEL, parsePace } from '@/domain/format';
 import type { Dow, PaceChart, TrainingIntent } from '@/domain/types';
-import { cancelModel, ensureSupport, startModel, stopModel, useAi } from '@/ui/aiStore';
 import { useProfile } from '@/ui/hooks';
 import { Button, Card, Chip, DayToggles, Field, inputClass, Segmented, toast } from '@/ui/primitives';
 import { StravaSettings, useStrava } from '@/ui/Strava';
 
 const PACE_KEYS: Array<keyof PaceChart> = ['easy', 'mp', 'hm_pace', '10k_pace', '5k_pace'];
 
-function ModelRow({ id, label, note }: { id: string; label: string; note: string }) {
-  const ai = useAi();
-  const [info, setInfo] = useState<{ vramMb: number | null; cached: boolean } | null>(null);
-  const option = MODEL_OPTIONS.find((m) => m.id === id)!;
-  const resolved = ai.support?.ok ? resolveModelId(option, ai.support) : id;
-  const refresh = () => modelInfo(resolved).then(setInfo).catch(() => setInfo({ vramMb: null, cached: false }));
-  useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [resolved, ai.status]);
-  const running = ai.status === 'ready' && ai.modelId === resolved;
-  const loading = ai.status === 'loading' && ai.modelId === resolved;
-  return (
-    <li className="space-y-2 rounded-[8px] border border-line p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-auto font-medium">{label}</span>
-        {running && <Chip tone="accent">běží</Chip>}
-        {info?.cached && !running && <Chip>stažený</Chip>}
-      </div>
-      <p className="text-[13px] text-muted">{note}{info?.vramMb ? ` Udávaná potřeba grafické paměti: ${Math.round(info.vramMb)} MB (údaj z konfigurace WebLLM, ne velikost stahování ani měření).` : ''}</p>
-      {loading && (
-        <>
-          <progress className="h-2 w-full" value={ai.progress?.value ?? 0} max={1} aria-label="Průběh stahování" />
-          <p className="break-words text-[12px] text-muted">{ai.progress?.text}</p>
-        </>
-      )}
-      <div className="flex gap-2">
-        {loading ? <Button onClick={cancelModel}>Storno</Button> : running ? <Button onClick={stopModel}>Vypnout</Button> : <Button disabled={!ai.support?.ok || ai.status === 'loading'} onClick={() => startModel(option)}>{info?.cached ? 'Spustit' : 'Stáhnout a spustit'}</Button>}
-        {info?.cached && !loading && <Button variant="danger" onClick={async () => { await deleteModel(resolved); await stopModel(); await refresh(); toast('Model smazán ze zařízení. Plán a chat zůstávají.'); }}>Smazat ze zařízení</Button>}
-      </div>
-    </li>
-  );
-}
-
 export default function ProfilePage() {
   const profile = useProfile();
-  const ai = useAi();
   const [period, setPeriod] = useState<7 | 30 | 0>(7);
   const usage = useLiveQuery(() => db().usage.orderBy('startedAt').reverse().toArray(), []);
   const counts = useLiveQuery(async () => ({ plans: await db().templates.count(), activities: await db().activities.count(), messages: await db().messages.count(), documents: await db().documents.count() }), []);
@@ -58,7 +24,6 @@ export default function ProfilePage() {
   const strava = useStrava();
 
   useEffect(() => {
-    void ensureSupport();
     void (async () => {
       const est = await navigator.storage?.estimate?.();
       const persisted = await navigator.storage?.persisted?.();
@@ -112,7 +77,7 @@ export default function ProfilePage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Moje tempa</h2>
-        <p className="text-[14px] text-muted">Pásma v min/km. Zobrazí se u jednotek a slouží k porovnání volných běhů. Z importovaného PDF se zatím nenačítají, zadej je sem.</p>
+        <p className="text-[14px] text-muted">Pásma v min/km. Zobrazí se u jednotek a přepočítají časové úseky na odhad kilometrů. Z importovaného PDF se zatím nenačítají, zadej je sem.</p>
         {PACE_KEYS.map((k) => (
           <div key={k} className="grid grid-cols-[1fr_5rem_5rem] items-center gap-2">
             <span className="text-[15px]">{INTENSITY_LABEL[k]}</span>
@@ -124,16 +89,9 @@ export default function ProfilePage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">AI a spotřeba</h2>
-        <h3 className="text-[15px] font-medium">Lokální model v zařízení</h3>
-        {ai.support && !ai.support.ok && <p className="rounded-[8px] bg-warn-soft px-3 py-2 text-[14px] text-warn">{ai.support.reason}</p>}
-        {ai.error && <p className="text-[14px] text-danger">{ai.error}</p>}
-        <ul className="space-y-2">{MODEL_OPTIONS.map((m) => <ModelRow key={m.id} id={m.id} label={m.label} note={m.note} />)}</ul>
-        <p className="text-[13px] text-muted">Stažený model je mezipaměť, ne záloha. Smazání modelu nesmaže plán ani chat.</p>
+        <p className="text-[14px] text-muted">Trenéra používáš ve vlastním ChatGPT / Claude s jeho oficiálním připojením ke Stravě. V aplikaci otevři Trenér → připrav otázku → zkopíruj podklady → vrať návrh. Žádný API klíč není potřeba.</p>
 
-        <h3 className="pt-2 text-[15px] font-medium">Vlastní účet ChatGPT / Codex</h3>
-        <p className="text-[14px] text-muted">Zatím nedostupné. Propojení vlastního tarifu vyžaduje, aby aplikaci schválil OpenAI v programu „Sign in with ChatGPT“; to ještě ověřené není. Dokud nebude, žádné tlačítko „propojit“ tu není a aplikace nepoužívá neoficiální cesty.</p>
-
-        <h3 className="pt-2 text-[15px] font-medium">Spotřeba</h3>
+        <h3 className="pt-2 text-[15px] font-medium">Historická spotřeba</h3>
         <Segmented label="Období" value={period} onChange={setPeriod} options={[{ value: 7, label: '7 dní' }, { value: 30, label: '30 dní' }, { value: 0, label: 'Vše' }]} />
         <dl className="num grid grid-cols-2 gap-2 text-center">
           {[['Požadavků', inPeriod.length], ['Tokenů celkem', sum('totalTokens')], ['Vstupních', sum('inputTokens')], ['Výstupních', sum('outputTokens')]].map(([k, v]) => (
@@ -141,7 +99,7 @@ export default function ProfilePage() {
           ))}
         </dl>
         <p className="text-[13px] text-muted">
-          Jen požadavky této aplikace, vše lokálně; počty jsou z tokenizeru modelu. {inPeriod.length - measured.length > 0 ? `U ${inPeriod.length - measured.length} požadavků spotřeba změřená není (zastavené nebo neúspěšné) a v součtu chybí. ` : ''}Tokeny nejsou peníze: lokální model žádné cloudové tokeny neúčtuje. Limity tarifu tu nejsou, protože žádný cloudový účet připojený není.
+          Historie požadavků starších verzí aplikace. Spotřebu a zbývající limit vlastního ChatGPT / Claude tato aplikace nevidí; kontroluj je přímo v dané službě. {inPeriod.length - measured.length > 0 ? `U ${inPeriod.length - measured.length} požadavků není počet tokenů známý. ` : ''}
         </p>
       </Card>
 
@@ -162,7 +120,7 @@ export default function ProfilePage() {
         <Button className="w-full" onClick={async () => { const blob = await exportAll(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `run-tracker-${todayIso(profile.timezone)}.json`; a.click(); URL.revokeObjectURL(a.href); }}>Exportovat moje data (JSON)</Button>
         {confirmWipe ? (
           <div className="space-y-2 rounded-[8px] bg-danger-soft p-3">
-            <p className="text-[14px] text-danger">Smaže plány, aktivity, chat, originály i nastavení z tohoto zařízení. Nejde to vrátit. Stažené modely se mažou zvlášť výše.</p>
+            <p className="text-[14px] text-danger">Smaže plány, aktivity, chat, originály i nastavení z tohoto zařízení. Nejde to vrátit. </p>
             <div className="flex gap-2">
               <Button className="flex-1" onClick={() => setConfirmWipe(false)}>Nechat</Button>
               <Button variant="danger" className="flex-1" onClick={async () => { await wipeAll(); sessionStorage.clear(); location.href = '/'; }}>Smazat všechno</Button>

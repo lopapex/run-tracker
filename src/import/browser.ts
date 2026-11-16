@@ -1,6 +1,7 @@
 // Lokální importní pipeline v prohlížeči (§6.1): PDF.js vykreslí stránku, Tesseract.js čte text.
 // Nic se nikam neodesílá. Stránky se zpracují po jedné a bitmapy se hned uvolňují.
 import { inspectPage, mergePages, parsePlanPage, type ImportResult, type OcrFn, type OcrWord, type ParsedPage, type Raster } from './gridParser';
+import { parsePaceOptions, type PaceOption } from './paceParser';
 
 export interface ImportOutput {
   result: ImportResult;
@@ -8,6 +9,7 @@ export interface ImportOutput {
   previews: Map<number, { url: string; width: number; height: number }>;
   pagesTotal: number;
   pagesRead: number[];
+  paceOptions: PaceOption[];
 }
 
 const TARGET_WIDTH = 1800;
@@ -129,6 +131,7 @@ export async function importPlanFile(file: File, onStep: (label: string) => void
   const { ocr, close } = await createOcr();
   const previews: ImportOutput['previews'] = new Map();
   const pagesRead: number[] = [];
+  const paceOptions: PaceOption[] = [];
 
   try {
     // Průchod 1: najít stránky s týdenní tabulkou a jejich jednotky. Stránky se souvislým textem se přeskočí.
@@ -142,6 +145,8 @@ export async function importPlanFile(file: File, onStep: (label: string) => void
       let words = await src.textWords(canvas);
       if (inspectPage(words).weeks === 0) words = [...words, ...(await ocr(image, 'block'))];
       let probe = inspectPage(words);
+      const paces = parsePaceOptions(words, src.page);
+      if (paces.length) { paceOptions.push(...paces); previews.set(src.page, await previewOf(canvas)); }
       if (probe.weeks > 0 && probe.weeks < 6) {
         // Druhé členění stránky občas najde hlavičku týdne, kterou první vynechalo.
         words = [...words, ...(await ocr(image, 'page'))];
@@ -161,7 +166,7 @@ export async function importPlanFile(file: File, onStep: (label: string) => void
       if (signal?.aborted) throw new DOMException('Zrušeno', 'AbortError');
       const canvas = await c.src.render();
       const image = toRaster(canvas);
-      pages.push(await parsePlanPage({ page: c.src.page, image, words: c.words, ocr, onStep: (l) => onStep(`Strana ${c.src.page}: ${l}`) }));
+      pages.push(await parsePlanPage({ page: c.src.page, image, words: c.words, textWords: await c.src.textWords(canvas), ocr, onStep: (l) => onStep(`Strana ${c.src.page}: ${l}`) }));
       previews.set(c.src.page, await previewOf(canvas));
       pagesRead.push(c.src.page);
       canvas.width = canvas.height = 0;
@@ -172,7 +177,9 @@ export async function importPlanFile(file: File, onStep: (label: string) => void
     if (result.weeks.length === 0) {
       result.issues.push('V souboru jsem nenašel týdenní tabulku se dny ve sloupcích. Jiné rozložení zatím neumím přečíst; týden můžeš zadat ručně.');
     }
-    return { result, previews, pagesTotal: sources.length, pagesRead };
+    const byGoal = new Map<number, PaceOption>();
+    for (const p of paceOptions) if (!byGoal.has(p.goalTimeSec) || p.units === 'km') byGoal.set(p.goalTimeSec, p);
+    return { result, previews, pagesTotal: sources.length, pagesRead, paceOptions: [...byGoal.values()].sort((a, b) => a.goalTimeSec - b.goalTimeSec) };
   } finally {
     await close();
   }

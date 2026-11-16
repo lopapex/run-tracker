@@ -118,11 +118,26 @@ export function StravaCard({ view, syncing, error, onRefresh }: { view: StravaVi
 
 export function StravaSettings({ view }: { view: StravaView }) {
   const [busy, setBusy] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/strava').then(r => r.ok ? r.json() : null).then(data => { if (active) setConfigured(data?.configured ?? false); }).catch(() => { if (active) setConfigured(false); });
+    return () => { active = false; };
+  }, []);
   if (!view.connection) {
     return (
       <div className="space-y-2">
         <p className="text-[14px] text-muted">Čtení tvých aktivit ze Stravy k zobrazení v přehledu a v plánu. Žádá se jen oprávnění číst aktivity (bez soukromých „jen já“).</p>
-        <button type="button" className="min-h-12 w-full rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
+        {configured === false ? <div className="space-y-2 rounded-[12px] border border-line p-3 text-[14px]">
+          <p className="font-medium">Provozovatel musí nejdřív nastavit Stravu</p>
+          <p>Běžný uživatel žádný klíč nezadává. Až bude propojení připravené, tlačítko tě zavede do Stravy, kde povolíš čtení svých aktivit.</p>
+          <details><summary className="min-h-11 cursor-pointer py-2 font-medium">Návod pro provozovatele aplikace</summary><ol className="list-decimal space-y-2 pl-5">
+            <li>Otevři <a className="underline" href="https://www.strava.com/settings/api" target="_blank" rel="noopener noreferrer">Strava → Settings → My API Application</a> a založ aplikaci.</li>
+            <li>Jako web použij adresu této aplikace. Authorization Callback Domain nastav na <code className="break-all">{typeof location !== 'undefined' ? location.hostname : 'doménu aplikace'}</code> bez https:// a bez cesty.</li>
+            <li>V Netlify otevři projekt → Project configuration → Environment variables. Client ID vlož jako <code>STRAVA_CLIENT_ID</code>, Client Secret jako <code>STRAVA_CLIENT_SECRET</code> pro Functions. Secret nepatří do veřejného kódu.</li>
+            <li>Spusť nové nasazení a vrať se sem. Pak můžeš připojit svůj Strava účet. Pro veřejné uživatele je potřeba také schválení Stravy.</li>
+          </ol></details>
+        </div> : <button disabled={configured == null} type="button" className="min-h-12 w-full rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70 disabled:opacity-50" onClick={connectStrava}>{configured == null ? 'Ověřuji dostupnost propojení…' : 'Propojit se Stravou'}</button>}
       </div>
     );
   }
