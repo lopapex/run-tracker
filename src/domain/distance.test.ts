@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { plannedDistance, projectedDistance, workoutDistance } from './distance';
+import { plannedDistance, projectedDistance, workoutDistance, sameRun } from './distance';
 import type { ScheduledWorkout, WorkoutSpec } from './types';
 
 const easy: WorkoutSpec = { type: 'easy', title: '10 min easy', durationSec: 600, blocks: [] };
 const chart = { easy: { fromSec: 300, toSec: 360 } };
 describe('kilometry z časových úseků', () => {
+  it('spojí dvojí import stejného běhu, ale zachová dva stejně dlouhé běhy v den', () => {
+    const a = {startUtc:'2026-11-16T06:00:00Z',distanceM:10000};
+    expect(sameRun(a,{startUtc:'2026-11-16T06:00:30Z',distanceM:10100})).toBe(true);
+    expect(sameRun(a,{startUtc:'2026-11-16T17:00:00Z',distanceM:10000})).toBe(false);
+    expect(sameRun(a,{startUtc:'',distanceM:10000})).toBe(false);
+  });
   it('10 min při 5–6 min/km je 1,67–2 km a bez tempa nic nehádá', () => {
     expect(workoutDistance(easy, chart)).toMatchObject({ minM: 600 / 360 * 1000, maxM: 2000, estimated: true, unknown: 0 });
     expect(workoutDistance(easy).unknown).toBe(1);

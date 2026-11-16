@@ -1,6 +1,11 @@
 import type { PaceChart, Segment, WorkoutSpec, ScheduledWorkout } from './types';
 
 export interface DistanceRange { minM: number; maxM: number; estimated: boolean; unknown: number }
+/** Stejná vzdálenost ve stejný den nestačí: dva samostatné běhy se nesmějí slít. */
+export function sameRun(a: {startUtc: string; distanceM: number}, b: {startUtc: string; distanceM: number}): boolean {
+  const delta = Math.abs(Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  return Number.isFinite(delta) && delta <= 120000 && Math.abs(a.distanceM - b.distanceM) <= Math.max(100, Math.max(a.distanceM,b.distanceM) * .03);
+}
 const zero = (): DistanceRange => ({ minM: 0, maxM: 0, estimated: false, unknown: 0 });
 function add(a: DistanceRange, b: DistanceRange, count = 1): DistanceRange {
   return { minM: a.minM + b.minM * count, maxM: a.maxM + b.maxM * count, estimated: a.estimated || b.estimated, unknown: a.unknown + b.unknown * count };

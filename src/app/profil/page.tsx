@@ -11,10 +11,14 @@ import type { Dow, PaceChart, TrainingIntent } from '@/domain/types';
 import { useProfile } from '@/ui/hooks';
 import { Button, Card, Chip, DayToggles, Field, inputClass, Segmented, toast } from '@/ui/primitives';
 import { StravaSettings, useStrava } from '@/ui/Strava';
+import { AccountSettings } from '@/ui/AccountSettings';
+import { useAccount } from '@/cloud/auth';
+import { enableSync } from '@/cloud/sync';
 
 const PACE_KEYS: Array<keyof PaceChart> = ['easy', 'mp', 'hm_pace', '10k_pace', '5k_pace'];
 
 export default function ProfilePage() {
+  const account = useAccount();
   const profile = useProfile();
   const [period, setPeriod] = useState<7 | 30 | 0>(7);
   const usage = useLiveQuery(() => db().usage.orderBy('startedAt').reverse().toArray(), []);
@@ -44,14 +48,14 @@ export default function ProfilePage() {
     const cur = chart[key] ?? { fromSec: sec ?? 0, toSec: sec ?? 0 };
     if (sec == null) delete chart[key];
     else chart[key] = { ...cur, [part]: sec, ...(chart[key] ? {} : { fromSec: sec, toSec: sec }) };
-    void saveProfile({ paceChart: chart });
+    void saveProfile({ paceChart: chart, paceSource: 'profile' });
   };
 
   return (
     <div className="space-y-4">
       <Card className="space-y-2">
         <h2 className="font-semibold">Účet</h2>
-        <p className="text-[15px] text-muted">Používáš aplikaci bez účtu. Všechna data jsou jen v tomhle zařízení a prohlížeči. Přihlášení a synchronizace mezi zařízeními zatím nejsou hotové; do té doby si data zálohuj exportem.</p>
+        <AccountSettings />
         <Field label="Jméno (volitelné)"><input className={inputClass} defaultValue={profile.name ?? ''} onBlur={(e) => saveProfile({ name: e.target.value.trim() || undefined })} /></Field>
         <dl className="text-[14px] text-muted"><div className="flex justify-between"><dt>Jazyk a jednotky</dt><dd>čeština, km, min/km</dd></div><div className="flex justify-between"><dt>Časová zóna</dt><dd>{profile.timezone}</dd></div></dl>
       </Card>
@@ -77,7 +81,8 @@ export default function ProfilePage() {
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Moje tempa</h2>
-        <p className="text-[14px] text-muted">Pásma v min/km. Zobrazí se u jednotek a přepočítají časové úseky na odhad kilometrů. Z importovaného PDF se zatím nenačítají, zadej je sem.</p>
+        <p className="text-[14px] text-muted">Pásma v min/km přepočítávají časové úseky na odhad kilometrů. Vyber, jestli má přednost potvrzená tabulka plánu, nebo tvoje vlastní tempa. Chybějící intenzity doplní druhý zdroj.</p>
+        <Segmented label="Zdroj temp" value={profile.paceSource ?? 'plan'} onChange={v => saveProfile({paceSource:v as 'plan'|'profile'})} options={[{value:'plan',label:'Z plánu'},{value:'profile',label:'Moje tempa'}]} />
         {PACE_KEYS.map((k) => (
           <div key={k} className="grid grid-cols-[1fr_5rem_5rem] items-center gap-2">
             <span className="text-[15px]">{INTENSITY_LABEL[k]}</span>
@@ -106,7 +111,7 @@ export default function ProfilePage() {
       <Card className="space-y-2">
         <h2 className="font-semibold">Zdroje dat</h2>
         <p className="text-[15px] text-muted">Aktivity přidáváš vlastním souborem z hodinek (GPX, TCX, FIT) nebo ručně. K aktivitě si můžeš uložit odkaz, třeba na Stravu.</p>
-        <h3 className="pt-2 text-[15px] font-medium">Strava</h3>
+        <h3 id="strava" className="scroll-mt-24 pt-2 text-[15px] font-medium">Strava</h3>
         <StravaSettings view={strava} />
       </Card>
 
@@ -123,7 +128,7 @@ export default function ProfilePage() {
             <p className="text-[14px] text-danger">Smaže plány, aktivity, chat, originály i nastavení z tohoto zařízení. Nejde to vrátit. </p>
             <div className="flex gap-2">
               <Button className="flex-1" onClick={() => setConfirmWipe(false)}>Nechat</Button>
-              <Button variant="danger" className="flex-1" onClick={async () => { await wipeAll(); sessionStorage.clear(); location.href = '/'; }}>Smazat všechno</Button>
+              <Button variant="danger" className="flex-1" onClick={async () => { if (account) enableSync(account.id,false); await wipeAll(); sessionStorage.clear(); location.href = '/'; }}>Smazat místní data</Button>
             </div>
           </div>
         ) : (

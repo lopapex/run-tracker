@@ -7,7 +7,7 @@ import {
   type ScheduleSnapshot,
 } from '@/domain/commands';
 import { addDays, todayIso } from '@/domain/dates';
-import { applyDraftChanges, createDraftRevision, templateFromDraft, validateDraftRevision, type DraftResult } from '@/domain/drafts';
+import { applyDraftChanges, createDraftRevision, templateFromDraft, validateDraftRevision, importedWeeksSchema, type DraftResult } from '@/domain/drafts';
 import { createActivation, newId, type MappingOptions } from '@/domain/schedule';
 import { autoMatch, matchCandidates } from '@/domain/activities';
 import type {
@@ -143,11 +143,18 @@ export async function archiveActivePlan(): Promise<void> {
 
 // ---------- Drafty ----------
 
-export async function createDraft(params: unknown, title: string, author: Author, reason: string): Promise<DraftResult & { draft?: PlanDraft }> {
+export async function createDraft(params: unknown, title: string, author: Author, reason: string, weekEntries?: unknown): Promise<DraftResult & { draft?: PlanDraft }> {
   const d = db();
   const draftId = newId();
   const result = createDraftRevision(draftId, params, { author, now: now(), reason });
   if (!result.ok) return result;
+  if (weekEntries !== undefined) {
+    const parsed = importedWeeksSchema.safeParse(weekEntries);
+    if (!parsed.success) return { ok: false, code: 'invalid', message: `Návrh týdnů není úplný: ${parsed.error.issues[0]?.message}` };
+    result.revision.weeks = parsed.data.map(w => ({ ...w, days: w.days.map(day => ({ ...day, dow: day.dow as import('@/domain/types').Dow, source: { method: 'generated' as const, review: 'unreviewed' as const, issues: [] } })) }));
+    const problems = validateDraftRevision(result.revision);
+    if (problems.length) return { ok: false, code: 'invalid', message: problems.join(' ') };
+  }
   const draft: PlanDraft = { id: draftId, title, status: 'draft', createdAt: now(), currentRevisionId: result.revision.id };
   await d.transaction('rw', d.drafts, d.draftRevisions, d.audit, async () => {
     await d.drafts.add(draft);
@@ -274,7 +281,7 @@ export async function exportAll(): Promise<Blob> {
   const out: Record<string, unknown> = { format: 'run-tracker-export', version: 1, exportedAt: now() };
   for (const t of ALL_TABLES) {
     // Přístupové tokeny a cache ze Stravy do osobního exportu nepatří (§6.4, §10.1).
-    if (t === 'connections' || t === 'stravaActivities') continue;
+    if (t === 'connections' || t === 'stravaActivities' || t === 'syncMeta') continue;
     const rows = await d.table(t).toArray();
     // Originály dokumentů jsou binární; v exportu zůstává jen jejich popis.
     out[t] = t === 'documents' ? rows.map(({ blob: _blob, ...rest }) => rest) : rows;

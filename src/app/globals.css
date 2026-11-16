@@ -76,6 +76,15 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+}
+
+/* Vlastní vrstva drží navigaci při mobilním scrollu a výměně obsahu stránky. */
+.app-bottom-nav {
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 body {

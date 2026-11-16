@@ -3,13 +3,12 @@
 import { applyScheduleCommand, type ScheduleSnapshot } from '@/domain/commands';
 import { addDays, DOW_LONG, dowOf, formatDay, todayIso, weekStartOf } from '@/domain/dates';
 import { INTENT_LABEL } from '@/domain/drafts';
-import { formatKm, formatPace, paceOf, workoutSummary, blockLines } from '@/domain/format';
+import { formatKm, formatPace, paceOf, workoutSummary, blockLines, resolvePaceChart } from '@/domain/format';
 import { defaultStart } from '@/domain/generator';
 import { newId } from '@/domain/schedule';
-import type { AiUsageEvent, CoachMessage, CoachProposal, ContextRef, PlanDraftRevision } from '@/domain/types';
+import type { CoachMessage, CoachProposal, ContextRef, PlanDraftRevision } from '@/domain/types';
 import { db } from '@/db/db';
 import { activeActivation, createDraft, getProfile, loadSnapshot, runScheduleCommand, updateDraft } from '@/db/repo';
-import type { AiEngine, ChatMessage } from './engine';
 
 export const THREAD_ID = 'main';
 
@@ -25,7 +24,9 @@ Pravidla:
 Povolené operace:
 MOVE_WORKOUT {"workoutId":"w3","toDate":"RRRR-MM-DD"} přesun jednotky (id ber z DATA)
 SKIP_WORKOUT {"workoutId":"w3"} vynechání
+EDIT_WORKOUT {"workoutId":"w3","workout":{...}} úprava předpisu, vždy jako návrh k potvrzení
 CREATE_PLAN_DRAFT {"intent":"maintain|improve|race","weeks":4,"weeklyKm":50,"runsPerWeek":5,"restDows":[6],"longRunDow":5} nový návrh plánu (dny: 0=pondělí … 6=neděle)
+Pro vlastní konkrétní obsah přidej do payload CREATE_PLAN_DRAFT pole weekEntries: [{"index":1,"days":[{"dow":0,"workout":{...}}, ... všech 7 dní]}]. Počet týdnů musí odpovídat weeks. Workout má type (easy|long|speed|tempo|race|rest|strength|cross|other), title, volitelně distanceM/durationSec/load/note a povinné blocks: []. Blok je {kind:"segment",role:"warmup|work|recovery|cooldown|steady",distanceM nebo durationSec,intensity:"easy|steady|mp|hm_pace|10k_pace|5k_pace|strides|walk|free"}, nebo {kind:"repeat",count,work:segment,more:[segment],recovery:segment,recoveryAfterLast:true|false|null}, nebo {kind:"strides",count,durationSec}. U segmentu uvnitř repeat neuváděj kind. Volno je {type:"rest",title:"Volno",blocks:[]}.
 UPDATE_PLAN_DRAFT {"changes":[...]} úprava rozpracovaného návrhu; změny: {"op":"set_params","params":{...}}, {"op":"scale_week","week":1,"factor":0.7}, {"op":"swap_days","week":1,"a":1,"b":3}
 Blok přidej jen tehdy, když o změnu uživatel stojí. Jinak odpověz jen textem.`;
 
@@ -54,6 +55,9 @@ export async function buildContext(refs: ContextRef[] = []): Promise<CoachContex
   let snap: ScheduleSnapshot | undefined;
   if (activation) {
     snap = await loadSnapshot(activation.id);
+    const template = await db().templates.get(activation.templateId);
+    const chart = resolvePaceChart(profile, template?.paceChart);
+    lines.push(`Tempa min/km: ${Object.entries(chart).map(([key,p]) => `${key}: ${formatPace(p.fromSec)}–${formatPace(p.toSec)}`).join('; ') || 'nezadaná'}.`);
     const from = weekStartOf(today);
     const to = addDays(from, 13);
     const upcoming = (snap?.workouts ?? []).filter((w) => w.date >= from && w.date <= to || refs.some(r => r.kind === 'workout' && r.id === w.id || r.kind === 'week' && w.date >= r.id && w.date <= addDays(r.id, 6))).sort((a, b) => a.date.localeCompare(b.date));
@@ -64,7 +68,7 @@ export async function buildContext(refs: ContextRef[] = []): Promise<CoachContex
       aliases.set(alias, w.id);
       const state = w.status === 'completed' ? 'splněno' : w.status === 'skipped' ? 'vynecháno' : w.locked ? 'zamčeno' : 'v plánu';
       lines.push(`${alias} | ${w.date} ${DOW_LONG[dowOf(w.date)]} | ${w.workout.title} | ${workoutSummary(w.workout)} | ${state}`);
-      const blocks = blockLines(w.workout.blocks, profile.paceChart);
+      const blocks = blockLines(w.workout.blocks, chart);
       if (blocks.length) lines.push(`Struktura ${alias}: ${blocks.join('; ')}.`);
     });
   } else {
@@ -103,9 +107,9 @@ export async function buildContext(refs: ContextRef[] = []): Promise<CoachContex
 function describeDraft(title: string, rev: PlanDraftRevision): string {
   const weeks = rev.weeks
     .map((w) => `T${w.index}: ${w.days.filter((d) => d.workout.type !== 'rest').map((d) => `${DOW_LONG[d.dow].slice(0, 2)} ${d.workout.title}${d.workout.distanceM ? ` ${d.workout.distanceM / 1000}` : ''}${d.locked ? ' (zamčeno)' : ''}`).join(', ')}`)
-    .slice(0, 6)
     .join('\n');
-  return `Rozpracovaný návrh „${title}“, verze ${rev.seq}: ${INTENT_LABEL[rev.params.intent]}, ${rev.params.weeks} týdnů, ${rev.params.weeklyKm} km/týden, ${rev.params.runsPerWeek} běhů.\n${weeks}`;
+  const structure = rev.weeks.map(w => ({index:w.index,days:w.days.map(d => ({dow:d.dow,locked:d.locked,workout:d.workout}))}));
+  return `Rozpracovaný návrh „${title}“, verze ${rev.seq}: ${INTENT_LABEL[rev.params.intent]}, ${rev.params.weeks} týdnů, ${rev.params.weeklyKm} km/týden, ${rev.params.runsPerWeek} běhů.\n${weeks}\nPřesný obsah návrhu (data): ${JSON.stringify(structure)}`;
 }
 
 /** Vyjme blok příkazu z odpovědi. Text odpovědi zůstává vždy (CHAT-02). */
@@ -129,6 +133,7 @@ export async function handleCommand(raw: string, ctx: CoachContext): Promise<Com
   } catch {
     return { proposal: { commandJson: raw, state: 'invalid', error: 'Návrh změny nebyl čitelný, nic se neprovedlo.' } };
   }
+  if (!cmd || typeof cmd !== 'object' || Array.isArray(cmd) || typeof cmd.operation !== 'string' || !cmd.payload || typeof cmd.payload !== 'object' || Array.isArray(cmd.payload)) return { proposal: { commandJson: raw, state: 'invalid', error: 'Návrh musí mít operation a objekt payload.' } };
   const payload = { ...(cmd.payload ?? {}) };
   const reason = typeof cmd.reason === 'string' ? cmd.reason.slice(0, 300) : '';
 
@@ -148,7 +153,7 @@ export async function handleCommand(raw: string, ctx: CoachContext): Promise<Com
       ...payload,
       assumptions: profile.weeklyKm ? [] : ['Týdenní objem neznám z historie; vychází z údaje v návrhu.'],
     };
-    const r = await createDraft(params, `Návrh: ${INTENT_LABEL[(params.intent as keyof typeof INTENT_LABEL)] ?? 'plán'}`, 'coach', reason || 'Návrh z chatu');
+    const r = await createDraft(params, `Návrh: ${INTENT_LABEL[(params.intent as keyof typeof INTENT_LABEL)] ?? 'plán'}`, 'coach', reason || 'Návrh z chatu', payload.weekEntries);
     if (!r.ok) return { proposal: { commandJson: raw, state: 'invalid', error: r.message } };
     return { draftId: r.draft!.id };
   }
@@ -160,7 +165,7 @@ export async function handleCommand(raw: string, ctx: CoachContext): Promise<Com
     return { draftId: ctx.draft.id, note: r.summary.join(' ') };
   }
 
-  if (cmd.operation === 'MOVE_WORKOUT' || cmd.operation === 'SKIP_WORKOUT') {
+  if (cmd.operation === 'MOVE_WORKOUT' || cmd.operation === 'SKIP_WORKOUT' || cmd.operation === 'EDIT_WORKOUT') {
     const alias = String(payload.workoutId ?? '');
     const realId = ctx.aliases.get(alias);
     if (!realId) return { proposal: { commandJson: raw, state: 'invalid', error: 'Návrh odkazuje na jednotku, která v rozpisu není. Nic se neprovedlo.' } };
@@ -210,48 +215,4 @@ export async function addSystemNote(text: string, extra: Partial<CoachMessage> =
   const msg: CoachMessage = { id: newId(), threadId: THREAD_ID, seq: await nextSeq(), role: 'system', text, at: new Date().toISOString(), status: 'done', ...extra };
   await db().messages.add(msg);
   return msg;
-}
-
-/** Jedna odpověď trenéra. Neúplný výstup se uloží jako text, ale příkaz z něj se neprovede (INV-11). */
-export async function reply(engine: AiEngine, refs: ContextRef[], onText: (messageId: string, text: string) => void): Promise<void> {
-  const ctx = await buildContext(refs);
-  const history = (await db().messages.where('[threadId+seq]').between([THREAD_ID, 0], [THREAD_ID, Infinity]).toArray())
-    .filter((m) => m.role !== 'system' && m.text.trim())
-    .slice(-8);
-  const messages: ChatMessage[] = [{ role: 'system', content: ctx.system }, ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.text }))];
-
-  const id = newId();
-  const startedAt = new Date().toISOString();
-  await db().messages.add({ id, threadId: THREAD_ID, seq: await nextSeq(), role: 'assistant', text: '', at: startedAt, status: 'streaming' });
-
-  const result = await engine.generate(messages, { maxTokens: engine.mode === 'cloud' ? 2400 : 600, onText: (t) => onText(id, extractCommand(t).text) });
-
-  const usage: AiUsageEvent = {
-    requestId: newId(),
-    threadId: THREAD_ID,
-    provider: engine.provider,
-    model: engine.model,
-    mode: engine.mode,
-    status: result.status,
-    inputTokens: result.usage.inputTokens,
-    outputTokens: result.usage.outputTokens,
-    totalTokens: result.usage.totalTokens,
-    measurementKind: result.usage.kind,
-    startedAt,
-    durationMs: Math.round(result.durationMs),
-    usageScope: 'app_request',
-  };
-  await db().usage.add(usage);
-
-  const { text, raw } = extractCommand(result.text);
-  let outcome: CommandOutcome = {};
-  if (raw && result.status === 'completed') outcome = await handleCommand(raw, ctx);
-  await db().messages.update(id, {
-    text: text || (result.status === 'failed' ? '' : outcome.note ?? ''),
-    status: result.status === 'completed' ? 'done' : result.status === 'stopped' ? 'stopped' : 'error',
-    proposal: outcome.proposal,
-    draftId: outcome.draftId,
-    usageEventId: usage.requestId,
-  });
-  if (result.status === 'failed') await addSystemNote(`Odpověď se nepodařilo dokončit (${result.error ?? 'neznámá chyba'}). Tvoje zpráva zůstala uložená.`);
 }

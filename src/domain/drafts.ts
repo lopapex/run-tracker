@@ -8,6 +8,14 @@ import type { Author, Dow, DraftParams, PlanDraftRevision, PlanTemplate, Templat
 
 const dow = z.number().int().min(0).max(6);
 const isoDate = z.string().refine(isIsoDate, 'Neplatné datum');
+export const importedWeeksSchema = z.array(z.object({
+  index: z.number().int().min(1).max(52),
+  days: z.array(z.object({ dow, workout: workoutSpecSchema })).length(7),
+})).min(1).max(52).superRefine((weeks, ctx) => {
+  weeks.forEach((w, i) => {
+    if (w.index !== i + 1 || new Set(w.days.map(d => d.dow)).size !== 7) ctx.addIssue({ code: 'custom', message: 'Týdny musí jít od 1 po sobě a každý obsahovat právě pondělí až neděli.' });
+  });
+});
 
 export const draftParamsSchema = z.object({
   intent: z.enum(['maintain', 'improve', 'race']),
@@ -176,6 +184,7 @@ export function validateDraftRevision(rev: PlanDraftRevision): string[] {
   if (rev.weeks.length === 0) problems.push('Návrh nemá žádný týden.');
   if (rev.weeks.length !== rev.params.weeks) problems.push('Počet týdnů neodpovídá zadání.');
   for (const w of rev.weeks) {
+    if (!Number.isInteger(w.index) || new Set(w.days.map(d => d.dow)).size !== 7 || w.days.some(d => !Number.isInteger(d.dow) || d.dow < 0 || d.dow > 6)) problems.push(`Týden ${w.index} má neplatné nebo opakované dny.`);
     if (w.days.length !== 7) problems.push(`Týden ${w.index} není úplný.`);
     for (const d of w.days) if (!workoutSpecSchema.safeParse(d.workout).success) problems.push(`Týden ${w.index}, ${DOW_LONG[d.dow as Dow]}: neplatná jednotka.`);
     if (w.days.every((d) => d.workout.type === 'rest')) problems.push(`Týden ${w.index} nemá žádný běh.`);

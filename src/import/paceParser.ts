@@ -11,7 +11,8 @@ export function parsePaceOptions(words: OcrWord[], page: number): PaceOption[] {
   let units: 'km' | 'mi' | null = null;
   const result: PaceOption[] = [];
   for (const row of rows) {
-    const text = row.sort((a, b) => a.x - b.x).map(w => w.text).join(' ');
+    const text = row.sort((a, b) => a.x - b.x).map(w => w.text).join(' ').replace(/[|]/g, ' ').trim()
+      .replace(/\b(\d)(\d{2})\s*[-–—]\s*(\d)(\d{2})\b/g, '$1:$2-$3:$4');
     if (/pac(e|ing)/i.test(text) && /min/i.test(text)) {
       units = /\bkm\b|kilomet/i.test(text) ? 'km' : /mile/i.test(text) ? 'mi' : null;
       continue;

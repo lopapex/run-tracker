@@ -3,6 +3,7 @@
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { db } from '@/db/db';
 import { addActivity, deleteActivity, getProfile, saveCheckIn, setMatch } from '@/db/repo';
 import { buildActivity, evaluate, fromFitData, matchCandidates, parseGpx, parseTcx, sha256Hex, type ParsedActivity } from '@/domain/activities';
@@ -187,6 +188,7 @@ export function ActivitySheet({ activityId, onClose, chart }: { activityId: stri
 
         <section className="space-y-2">
           <h3 className="font-semibold">{ev.headline}</h3>
+          <Link href={`/trener/?aktivita=${a.id}`} className="flex min-h-11 items-center justify-center rounded-full bg-accent-soft px-3 font-medium">Probrat tento běh s trenérem</Link>
           {ev.facts.length > 0 && <ul className="list-disc space-y-1 pl-5 text-[15px]">{ev.facts.map((f) => <li key={f}>{f}</li>)}</ul>}
           {ev.gaps.length > 0 && <p className="text-[14px] text-muted">Co chybí: {ev.gaps.join(' ')}</p>}
         </section>

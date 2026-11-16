@@ -1,7 +1,7 @@
 // Propojení se Stravou: jen čtení vlastních aktivit k zobrazení (R-08).
 // Podmínky Stravy (API Policy) nedovolují dát tahle data AI ani z nich stavět trvalé indexy,
 // proto: dočasná cache s expirací, žádný vstup do trenéra, žádný zápis do rozpisu.
-import { db } from '@/db/db';
+import { db, sessionKey } from '@/db/db';
 import type { IsoDate } from '@/domain/types';
 import type { StravaActivity, StravaConnection } from './types';
 
@@ -39,7 +39,7 @@ async function config(): Promise<{ clientId: string }> {
 export async function beginConnect(): Promise<void> {
   const { clientId } = await config();
   const state = crypto.randomUUID();
-  sessionStorage.setItem(STATE_KEY, state);
+  sessionStorage.setItem(sessionKey(STATE_KEY), state);
   const q = new URLSearchParams({
     client_id: clientId,
     redirect_uri: `${location.origin}/strava/`,
@@ -72,8 +72,8 @@ async function tokenCall(body: Record<string, string>): Promise<TokenResponse> {
 }
 
 export async function completeConnect(params: URLSearchParams): Promise<void> {
-  const expected = sessionStorage.getItem(STATE_KEY);
-  sessionStorage.removeItem(STATE_KEY);
+  const expected = sessionStorage.getItem(sessionKey(STATE_KEY));
+  sessionStorage.removeItem(sessionKey(STATE_KEY));
   if (params.get('error')) throw new StravaError('denied', 'Propojení jsi ve Stravě nepovolil(a).');
   const code = params.get('code');
   if (!code || !expected || params.get('state') !== expected) throw new StravaError('failed', 'Odpověď ze Stravy nesedí k tomuto zařízení. Zkus propojení znovu.');

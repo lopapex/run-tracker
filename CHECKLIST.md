@@ -1,123 +1,82 @@
-# Run Tracker – checklist prvního kola (M1–M4 + Strava k zobrazení)
+# Run Tracker – stav implementace
 
-Zdroj zadání: `RUN_TRACKER_PRODUCT_PLAN.md` v3.0 (soukromý, není v repu – obsahuje osobní údaje).
+Datum: 16. 11. 2026. Zadání: soukromý RUN_TRACKER_PRODUCT_PLAN.md v3.1.
+`[x]` ověřeno · `[~]` implementováno, čeká úplný integrační/device test · `[ ]` zbývá.
 
-Stav: `[x]` hotovo a ověřeno (test nebo průchod v prohlížeči) · `[~]` napsáno, ale neověřeno na reálných datech/zařízení · `[ ]` čeká
+## Platná rozhodnutí
 
-## Rozhodnutí tohoto kola
+- [x] Veřejná mobilní PWA; primární telefon Pixel 10.
+- [x] Trenér ve vlastním externím Claude/ChatGPT, kontrolované kopírování a validovaný návrat. Lokální model a přímý API chat odstraněny.
+- [x] Supabase Free, region EU Frankfurt. Google OAuth nastavený poskytovatelem; e-mail je doplňková cesta.
+- [x] Strava API pro zobrazení a osobní konektor v externím AI jsou dva samostatné přístupy.
 
-- [x] Rozsah: M1–M4 včetně lokální AI (volba uživatele), dodatečně Strava v přehledu
-- [x] Repo: `lopapex/run-tracker`, veřejné
-- [x] Hosting: Netlify, CLI + průběžné nasazování z GitHubu
-- [x] Složka projektu: `Documents/projects/run-tracker`
-- [x] Next.js jako statický export; jediná serverová část je funkce pro tokeny Stravy
-- [x] Odchylky od §11.1: bez TanStack Query (do M5 není serverový stav), bez shadcn/Radix (vlastní primitives nad nativním `<dialog>`), bez Motion a Recharts (CSS přechody, zatím žádné grafy)
+## M1 – základ
 
-## M1 – lokální základ
+- [x] Next/React/TypeScript/Tailwind/Zod/Dexie, PWA manifest a service worker.
+- [x] Dnes / Plán / Trenér / Profil, onboarding, příkazy, audit a undo.
+- [x] Původní plány a zdrojová čísla týdnů zůstávají zachované.
+- [~] Spodní navigace drží vlastní vykreslovací vrstvu a nezmizí při načítání profilu; fyzický Pixel test zbývá.
+- [ ] Čtečka obrazovky, větší písmo a kompletní offline instalace na telefonu.
 
-- [x] Next.js App Router, TypeScript, Tailwind v4, Zod, Dexie
-- [x] Tokeny designu podle §4.5 (zelený akcent, light/dark podle systému, Geist, ovládání 44 px)
-- [x] PWA: manifest, ikony, service worker (Serwist), precache app shellu
-- [x] Navigace Dnes / Plán / Trenér + Profil pod avatarem (D07)
-- [x] První otevření: jazyk/jednotky/zóna, záměr, dostupnost; vše přeskočitelné (§4.2)
-- [x] IndexedDB schéma (§12, lokální část)
-- [x] Registr příkazů s validací, revizí a auditem (INV-04 až INV-07) – testy
-- [x] Undo jako další revize (INV-06) – testy + prohlížeč
-- [x] Export a smazání vlastních dat (R-15, lokální část)
-- [~] Offline běh po instalaci: service worker se sestaví a registruje; vypnutou síť jsem nezkoušel
-- [ ] Světlé téma a větší písmo jsem vizuálně neprocházel (UX-01), čtečku obrazovky také ne (UX-02)
+## M2 – plán a import
 
-## M2 – první souvislý průchod
-
-- [x] Ruční týden, volitelně opakovaný
-- [x] Import PDF: stránka → OCR → tabulka týdnů (§6.1) – referenční plán přečten v Node i v prohlížeči
-- [x] IMP-01: 12 týdnů, součty 58…48–51 km, fáze, long run 22 km v týdnu 6, míle nezdvojeny
-- [x] Kontrola importu: výřez originálu u každé buňky, nejasnosti, součty, oprava (§6.2)
-- [x] Čísla, která OCR v daném fontu slévá („11k“, „1km“, „71k“), se doplní podle tvaru znaků a hlásí ke kontrole
-- [x] Ověřená verze je neměnná (INV-01) – test
-- [x] Mapování: od data, k závodu, „jsem v týdnu N“, přeskočení týdnů (PLAN-01) – testy
-- [x] Pauza a přeskočení týdne v běžícím plánu, vratně – testy
-- [x] Dnes: dnešní jednotka, hlavní akce, poslední běh, další 3 dny (R-02)
-- [x] Plán: týdenní agenda, předchozí/další, výběr týdne, `Aktuální týden`; otevřený týden nezávislý na pozici (PLAN-03)
-- [~] Přejetí palcem mezi týdny: napsáno, na dotykovém zařízení nezkoušeno
-- [x] Detail jednotky: přesun (s prohozením), úprava, vynechání, zámek, obnovení originálu, historie
-- [~] Import obrázku (PNG/JPG): stejná cesta jako PDF, samostatně nezkoušeno
-- [ ] Pace chart se z PDF nenačítá (OCR tabulky temp je nespolehlivé); tempa se zadávají v profilu
-- [ ] IMP-03: nesoulad cíle plánu a profilu se hlásí jen když plán cíl má; importovaný plán ho zatím nenastavuje
-- [ ] Minulý týden ukazuje současný stav jednotek + historii změn, ne rekonstruovaný „tehdy platný“ rozpis
+- [x] Ruční týden, aktivace od libovolného týdne, přeskočení a pauzy, historie/přesuny/undo.
+- [x] PDF: textová vrstva s geometrií, OCR fallback a kontrolní výřezy.
+- [x] Referenční L4: 12 týdnů, součty a km/mílové varianty; úplný lokální OCR test prošel.
+- [x] Opakování přes zalomení, více pracovních částí, inline ×, oddělené posilování; originální instrukce se zachová.
+- [x] Editor segmentů, opakování, pauz, rovinek a pořadí; oprava hodnot bez zahození struktury.
+- [x] Kontrola importu po jednom vybraném týdnu; problémy a neplatné jednotky se nepřevezmou potichu.
+- [~] Tabulka temp: konzervativní rozpoznání úplných řádků, výběr cíle a potvrzení proti originálu. Obecné případy testované, celé nové browser PDF workflow ještě projít.
+- [x] Čas → rozsah km, více bloků, poslední pauza neurčená = rozsah, chybějící tempo = nevyčíslená část.
+- [x] Výhled týdne nahrazuje jednoznačný den skutečností. Dva stejně dlouhé běhy v den se nespojí bez blízkého času startu.
+- [ ] Odlišný formát dokumentu (G4), automatické rozpoznání cílové délky a historický rozpis „platný tehdy“.
 
 ## M3 – aktivity
 
-- [x] Import GPX / TCX, deduplikace podle checksumu (ACT-01) – testy
-- [x] Deterministické metriky: vzdálenost, pohybový čas, tempo, kola po km, tep, převýšení (§7.3)
-- [x] Párování: automaticky jen jednoznačný kandidát, jinak výběr; oprava nezdvojí objem – testy
-- [x] Rychlý check-in a hodnocení z dostupných vstupů s výpisem toho, co chybí (§7.4)
-- [x] Plán versus realita v týdnu
-- [~] FIT soubory: napojeno přes `fit-file-parser`, bez reálného souboru nezkoušeno
-- [~] Ruční aktivita a check-in: napsáno, v prohlížeči jsem neproklikával
+- [x] GPX/TCX, deduplikace, metriky, kola, párování, check-in a hodnocení dostupných údajů.
+- [x] Kontext konkrétní vlastní aktivity v trenérovi včetně kol; odkaz z detailu.
+- [~] FIT a reálné soubory různých hodinek.
 
-## M4 – chat a drafty
+## M4 – externí trenér a drafty
 
-- [x] Draft na 1/2/4 týdny nebo do data: udržování, zlepšení, závod (PLAN-04) – testy + prohlížeč
-- [x] Revize draftu, zámek dne, obnovení části starší verze; příklad z §5.5 jako test (PLAN-05)
-- [x] Atomická aktivace jen aktuální validní revize; zastaralá se odmítne (PLAN-06, INV-11) – test
-- [x] `AiEngine` kontrakt + WebLLM ve Web Workeru; model se stahuje až na vyžádání (§9.1)
-- [x] Chat se streamingem a kartami; odpověď lokálního modelu ověřena v desktopovém Chromu (Qwen2.5 0.5B)
-- [x] Příkazy z chatu ověřuje doména; neplatný nebo vymyšlený příkaz nic nezmění (CHAT-02) – test
-- [x] Usage: tokeny za požadavek i období, původ čísel, neznámé ≠ nula (R-13)
-- [x] Bez AI zůstává kalendář, ruční práce i návrh formulářem (AI-04, část)
-- [~] Návrh změny z chatu → karta → Použít → Vrátit: logika testovaná, s reálným modelem jsem to nevyvolal
-- [~] Zastavení generování, storno stahování a smazání modelu: napsáno, neproklikáno
-- [ ] Kvalita: nejmenší model česky jen opisuje data. Výběr výchozího modelu čeká na měření (G1)
-- [ ] Řízená paměť trenéra (§8.4) není; kontext se skládá vždy znovu z dat
+- [x] Otázka a evidence pack z vlastního plánu/souborů; Strava API data/tokeny nejsou přítomné.
+- [x] Náhled podkladů, kopírování, odkazy na vlastní Claude/ChatGPT a oficiální návod Stravy.
+- [x] Návrat JSON → validace → karta návrhu; přesun/vynechání/úprava s potvrzením a undo.
+- [x] Kompletní vlastní `weekEntries` vytvoří draft; duplicitní/neúplné dny se odmítnou.
+- [x] Iterace, zámky, verze, částečné obnovení a atomická aktivace aktuálního draftu.
+- [x] Browser průchod návratem externího návrhu do draftu.
+- [~] Rozpracované předání v sessionStorage, oddělené podle účtu; reload/přepnutí na fyzickém telefonu zbývá.
+- [x] Historická usage zůstává; nová spotřeba externího chatu je výslovně neměřitelná.
+- [ ] Více změn v jediném schvalovaném balíčku; řízená paměť mezi externími konverzacemi.
 
-## Strava (přidáno během práce)
+## M5 – účty a synchronizace
 
-- [x] Karta v přehledu, běhy se vzdáleností, časem, tempem a tepem, stav „odběháno / kratší než plán / mimo plán“
-- [x] Odkaz „View on Strava“ (v telefonu otevře aplikaci, je-li nainstalovaná), atribuce „Powered by Strava“
-- [x] Data ze Stravy nejdou do kontextu trenéra ani do exportu (DATA-01) – test
-- [x] Cache nejvýš 7 dní, starší týdny se načtou až při otevření, odpojení smaže token i cache
-- [~] OAuth, obnova tokenu a načítání aktivit: napsáno podle dokumentace, **bez přihlašovacích údajů Strava aplikace neověřeno**
-- [ ] Tokeny jsou do M5 uložené v zařízení uživatele, ne šifrovaně na serveru (odchylka od §10.2)
-- [ ] Webhooky Stravy (revoke/delete) nejsou; zrušený přístup se pozná až při dalším načtení
+- [x] Supabase Free projekt a bootstrap RLS, soukromý bucket, verzované ukládání.
+- [x] Živý SQL test: dva účty, zakázané čtení/zápis cizích dat, soukromé soubory, anonymní zákaz, optimistic concurrency. Testovací záznamy rollback.
+- [x] Validace snapshotu, konzistentní obnova, odmítnutí chybějícího dokumentu a souběžné lokální změny – testy.
+- [x] Účty/host mají oddělené databáze a klíče rozpracovaného stavu.
+- [~] Google/e-mail přihlášení, zapínaná autosynchronizace, návrat online, řešení konfliktu a převzetí hosta.
+- [~] Privátní upload/download originálů s kontrolním součtem – klient implementovaný, reálný round trip mezi zařízeními zbývá.
+- [ ] Plný export/obnova včetně binárních originálů a samoobslužné smazání účtu/cloudových dat.
+- [ ] Otestovat změny na dvou fyzických zařízeních a výpadek během ukládání.
 
-## Vzhled (přepracováno po zpětné vazbě)
+## M6 – Strava a integrace
 
-- [x] Vlastní identita místo šedých karet: tmavé „startovní číslo“ dne s neonovým akcentem, kondenzované kurzívní číslice (Barlow Condensed), plovoucí navigace
-- [x] Plán: proužek dnů s barvou zátěže a tečkou odběhnutí, souhrn týdne s ukazatelem, přejíždění mezi týdny
-- [x] Přidání aktivity: den předvyplněný dneškem, nápovědy už nevypadají jako vyplněné hodnoty
-- [~] Zkontrolováno Dnes a Plán ve světlém režimu na šířce telefonu; Trenér, Profil, Import a listy jsem po změně vzhledu znovu neprocházel
-- [ ] Odchylka od §4.5 zadání (tam byl „klidný deník“ s jedním zeleným akcentem); platí novější pokyn uživatele
+- [x] Netlify badge vypnutý v nastavení projektu.
+- [x] Strava callback, Client ID a produkční secret nastavené v Netlify; secret není v repu.
+- [x] Stránkování aktivit, 7denní cache, odpojení, prokliky, atribuce a izolace od AI/exportu.
+- [x] Při chybějící konfiguraci cesta do návodu místo slepého červeného toastu.
+- [~] Produkční OAuth/refresh/sync s reálným účtem – ověřit po novém nasazení.
+- [ ] Veřejná kapacita Stravy (nyní 1 sportovec), webhooky revoke/delete, serverové tokeny.
+- [x] Oficiální osobní konektor ve vlastním Claude je oddělená cesta; veřejná PWA neprovozuje Strava AI proxy.
 
-## Otevřené rozhodnutí: ChatGPT a Claude
+## M7 – vydání a provoz
 
-- [ ] Uživatel chce v nastavení propojení s ChatGPT i s Claudem. Předplatné ChatGPT/Claude se do cizí aplikace připojit nedá
-      (ChatGPT jen přes schválený program „Sign in with ChatGPT“, Claude to nenabízí vůbec). Reálná cesta je vlastní API klíč
-      od OpenAI / Anthropic, placený zvlášť podle spotřeby – zadání (§9.3) ji ale výslovně nevybralo. Čeká na rozhodnutí.
+- [x] GitHub/Netlify propojení a produkční build.
+- [x] Stránka soukromí popisuje aktuální ukládání a omezení.
+- [ ] Google OAuth audience/test users/publikace ověřit na reálném přihlášení.
+- [ ] Veřejné e-mailové přihlášení: vlastní SMTP, ověření domény a doručitelnost.
+- [ ] Pixel 10: instalace, offline, scroll/navigace, přepnutí do externího chatu a návrat.
+- [ ] Automatické zálohy, provozní retence/cleanup, obnovení po ztrátě zařízení a úplné smazání účtu.
 
-## Ověření
-
-- [x] 26 testů (doména, úložiště, Strava izolace) + test referenčního PDF (spouští se jen s lokálním souborem)
-- [x] Produkční build
-- [x] Průchod v prohlížeči na šířce telefonu, tmavé téma: onboarding → návrh → plán → přesun → vrácení → import PDF → chat
-
-## Vydání
-
-- [x] GitHub repo: https://github.com/lopapex/run-tracker
-- [x] Netlify web napojený na repo (push do `main` nasadí): https://run-tracker-613.netlify.app
-- [x] Živá URL ověřena: stránky, service worker, worker lokální AI i funkce `/api/strava` odpovídají
-- [ ] Aplikaci jsem na ostré adrese neproklikával v telefonu ani neinstaloval jako PWA
-
-## Co potřebuje tebe
-
-- [ ] Strava: založit API aplikaci na strava.com/settings/api, nastavit callback doménu a dvě proměnné v Netlify (viz README)
-- [ ] G1: vyzkoušet lokální modely na Pixelu 10 (rychlost, paměť, čeština) a vybrat výchozí
-- [ ] G2: veřejné vydání se Stravou vyžaduje její schválení aplikace (do té doby jen ty jako vlastník)
-- [ ] G3: vlastní tarif ChatGPT/Codex – ověřit způsobilost v programu „Sign in with ChatGPT“
-- [ ] G4: zkusit import plánu s jinou strukturou; parser zná jeden typ tabulky
-
-## Další kola
-
-- [ ] M5: Supabase Auth/RLS, sync, guest merge, serverové tokeny
-- [ ] M6: cloudová AI podle G3, limity tarifu, Strava webhooky
-- [ ] M7: mobilní QA, provozní retence, monitoring
+Poslední ověření: 44 testů + samostatný referenční PDF test; další drobná oprava deduplikace čeká finální test run. Produkční sestavení průběžně prochází. Přesné vydání a závěrečné ověření doplnit po nasazení.

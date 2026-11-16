@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import { Barlow_Condensed } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/ui/AppShell';
+import { AccountGate } from '@/ui/AccountGate';
 import './globals.css';
 
 const display = Barlow_Condensed({ subsets: ['latin', 'latin-ext'], weight: ['600', '700'], style: ['normal', 'italic'], variable: '--font-barlow', display: 'swap' });
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="cs" className={`${GeistSans.variable} ${display.variable}`}>
       <body>
-        <AppShell>{children}</AppShell>
+        <AccountGate><AppShell>{children}</AppShell></AccountGate>
       </body>
     </html>
   );

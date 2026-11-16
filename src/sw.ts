@@ -11,7 +11,7 @@ const serwist = new Serwist({
   navigationPreload: false,
   runtimeCaching: [
     {
-      // Líně načítané části (lokální AI, PDF, OCR) nejsou v precache; po prvním použití fungují offline.
+      // Líně načítané části PDF/OCR se po prvním použití drží pro offline práci.
       matcher: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/_next/static/'),
       handler: new CacheFirst({ cacheName: 'next-static', plugins: [new ExpirationPlugin({ maxEntries: 80 })] }),
     },

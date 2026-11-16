@@ -35,6 +35,7 @@ export class RunDb extends Dexie {
   audit!: Table<AuditEvent, string>;
   connections!: Table<StravaConnection, string>;
   stravaActivities!: Table<StravaActivity, number>;
+  syncMeta!: Table<{id: 'cloud'; remoteVersion: number; baseHash: string; at: string}, string>;
 
   constructor(name = 'run-tracker') {
     super(name);
@@ -56,16 +57,23 @@ export class RunDb extends Dexie {
     });
     // Data ze Stravy jsou oddělená dočasná cache s expirací (§10.1), ne součást trvalého archivu.
     this.version(2).stores({ connections: 'id', stravaActivities: 'id, localDate, expiresAt' });
+    this.version(3).stores({ syncMeta: 'id' });
   }
 }
 
 let instance: RunDb | undefined;
+let workspace = 'run-tracker';
+export function configureWorkspace(userId: string | null): void {
+  const name = userId ? `run-tracker-user-${userId}` : 'run-tracker';
+  if (workspace !== name) { instance?.close(); instance = undefined; workspace = name; }
+}
 export function db(): RunDb {
-  instance ??= new RunDb();
+  instance ??= new RunDb(workspace);
   return instance;
 }
+export function sessionKey(name: string): string { return `rt:${workspace}:${name}`; }
 
 export const ALL_TABLES = [
   'profile', 'documents', 'templates', 'activations', 'workouts', 'revisions', 'drafts',
-  'draftRevisions', 'activities', 'matches', 'checkIns', 'messages', 'usage', 'audit', 'connections', 'stravaActivities',
+  'draftRevisions', 'activities', 'matches', 'checkIns', 'messages', 'usage', 'audit', 'connections', 'stravaActivities', 'syncMeta',
 ] as const;

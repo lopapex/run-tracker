@@ -124,7 +124,7 @@ export function parseCell(lines: CellLine[], load?: Load): ParsedCell {
   for (const group of [body.flat()]) {
     // „Pace“ na samostatném řádku patří k předchozímu.
     const lines2: string[] = [];
-    for (const l of group) {
+    for (const l of group.flatMap(line => line.split(/\s*\+\s*|\s*;\s*/).filter(Boolean))) {
       if (/^pace$/i.test(l) && lines2.length) lines2[lines2.length - 1] += ' Pace';
       else {
         // Podporujeme i „6×400m at 5k Pace“ na jediném řádku.
@@ -140,16 +140,10 @@ export function parseCell(lines: CellLine[], load?: Load): ParsedCell {
         lines2.splice(j, 2, `${lines2[j]} ${lines2[j + 1]}`);
       }
     }
-    const joined = lines2.join(' ');
-    const strength = /strength\s*training\s*(\d+)\s*mins?/i.exec(joined);
-    if (strength) {
-      workout.strengthMin = Number(strength[1]);
-      for (let j = 0; j < lines2.length; j++) {
-        if (/strength\s*training/i.test(lines2[j])) {
-          const combined = /strength\s*training\s*\d+\s*mins?/i.test(lines2[j]);
-          lines2.splice(j, combined ? 1 : /^\d+\s*mins?$/i.test(lines2[j + 1] ?? '') ? 2 : 1);
-          break;
-        }
+    for (let j = 0; j < lines2.length; j++) {
+      for (let count = 1; count <= 3; count++) {
+        const strength = /^strength\s*training\s*(\d+)\s*mins?$/i.exec(lines2.slice(j, j + count).join(' '));
+        if (strength) { workout.strengthMin = Number(strength[1]); lines2.splice(j, count); j--; break; }
       }
     }
 

@@ -14,7 +14,7 @@ const TABS = [
   { href: '/trener/', label: 'Trenér', icon: ChatCircleDots },
 ] as const;
 
-const TITLES: Record<string, string> = { '/': 'Dnes', '/plan': 'Plán', '/trener': 'Trenér', '/profil': 'Profil', '/import': 'Import plánu', '/strava': 'Strava' };
+const TITLES: Record<string, string> = { '/': 'Dnes', '/plan': 'Plán', '/trener': 'Trenér', '/profil': 'Profil', '/import': 'Import plánu', '/strava': 'Strava', '/soukromi': 'Soukromí' };
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = (usePathname() ?? '/').replace(/\/$/, '') || '/';
@@ -29,8 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     void navigator.storage?.persist?.();
   }, []);
 
-  if (profile === undefined) return <div className="min-h-dvh" aria-busy="true" />;
-  if (!profile.onboardedAt) return <Onboarding profile={profile} />;
+  if (profile && !profile.onboardedAt) return <Onboarding profile={profile} />;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col">
@@ -40,8 +39,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UserCircle size={28} />
         </Link>
       </header>
-      <main className="flex-1 px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))]">{children}</main>
-      <nav aria-label="Hlavní" className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <main aria-busy={profile === undefined} className="flex-1 px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))]">{profile === undefined ? null : children}</main>
+      <nav aria-label="Hlavní" className="app-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <ul className="pointer-events-auto mx-auto flex max-w-sm gap-1 rounded-full bg-ink p-1.5 shadow-[0_8px_24px_rgb(0_0_0/0.28)]">
           {TABS.map((t) => {
             const active = pathname === (t.href.replace(/\/$/, '') || '/');

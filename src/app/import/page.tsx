@@ -4,7 +4,7 @@ import { WarningCircle } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { db } from '@/db/db';
-import { publishTemplate } from '@/db/repo';
+import { publishTemplate, saveProfile } from '@/db/repo';
 import { sha256Hex } from '@/domain/activities';
 import { DOW_LONG } from '@/domain/dates';
 import { formatKm, workoutSummary, formatDistanceRange, formatPace, INTENSITY_LABEL } from '@/domain/format';
@@ -230,7 +230,7 @@ export default function ImportPage() {
         })()}
       </Sheet>
 
-      <ActivateSheet template={toActivate} profile={profile} hasActive={plan.activation != null} onClose={() => { setToActivate(null); router.push('/plan/'); }} onDone={() => { setToActivate(null); router.push('/plan/'); }} />
+      <ActivateSheet template={toActivate} profile={profile} hasActive={plan.activation != null} onClose={() => { setToActivate(null); router.push('/plan/'); }} onDone={async () => { if(paceIndex != null) await saveProfile({paceSource:'plan'}); setToActivate(null); router.push('/plan/'); }} />
     </div>
   );
 }

@@ -28,7 +28,10 @@ const block = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('strides'), count: z.number().int().min(1).max(30), durationSec: z.number().int().min(5).max(120) }),
   z.object({ kind: z.literal('note'), text: z.string().max(500) }),
-]);
+]).superRefine((b, ctx) => {
+  const parts = b.kind === 'segment' ? [b] : b.kind === 'repeat' ? [b.work, ...(b.more ?? []), ...(b.recovery ? [b.recovery] : [])] : [];
+  if (parts.some(p => p.distanceM == null && p.durationSec == null)) ctx.addIssue({code:'custom',message:'Každý úsek musí mít vzdálenost nebo čas.'});
+});
 
 export const workoutSpecSchema = z.object({
   type: z.enum(['easy', 'long', 'speed', 'tempo', 'race', 'rest', 'strength', 'cross', 'other']),

@@ -1,6 +1,10 @@
 import type { Block, IntensityRef, Load, PaceChart, Segment, WorkoutSpec, WorkoutType } from './types';
 import type { DistanceRange } from './distance';
 
+export function resolvePaceChart(profile: {paceChart?: PaceChart; paceSource?: 'plan'|'profile'}, plan?: PaceChart): PaceChart {
+  return profile.paceSource === 'profile' ? {...plan,...profile.paceChart} : {...profile.paceChart,...plan};
+}
+
 export function formatDistanceRange(r: DistanceRange): string {
   const min = Math.round(r.minM / 100) / 10;
   const max = Math.round(r.maxM / 100) / 10;

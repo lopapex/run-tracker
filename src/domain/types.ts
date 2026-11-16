@@ -252,6 +252,7 @@ export interface AthleteProfile {
   raceTargetSec?: number;
   paceChart?: PaceChart;
   aiModelId?: string;
+  paceSource?: 'plan' | 'profile';
 }
 
 // ---------- Aktivity ----------

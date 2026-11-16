@@ -4,8 +4,8 @@ import { ArrowRight, CheckCircle, Lightning, Plus } from '@phosphor-icons/react'
 import Link from 'next/link';
 import { useState } from 'react';
 import { addDays, DOW_LONG, dowOf, formatDay, weekDates, weekStartOf } from '@/domain/dates';
-import { blockLines, formatDuration, formatPace, LOAD_LABEL, paceOf, weekTotalM, formatDistanceRange } from '@/domain/format';
-import { plannedDistance, projectedDistance } from '@/domain/distance';
+import { blockLines, formatDuration, formatPace, LOAD_LABEL, paceOf, formatDistanceRange, resolvePaceChart } from '@/domain/format';
+import { plannedDistance, projectedDistance, sameRun } from '@/domain/distance';
 import { dayWorkouts, progressWeek } from '@/domain/schedule';
 import type { ScheduledWorkout } from '@/domain/types';
 import { ActivitySheet, AddActivitySheet } from '@/ui/Activity';
@@ -29,7 +29,7 @@ export default function TodayPage() {
   const [adding, setAdding] = useState(false);
 
   if (!plan || !acts || !profile || !strava) return null;
-  const chart = profile.paceChart ?? plan.template?.paceChart;
+  const chart = resolvePaceChart(profile, plan.template?.paceChart);
   const todays = dayWorkouts(plan.workouts, today);
   const main = todays.find((w) => w.workout.type !== 'rest') ?? todays[0];
   const isRest = main?.workout.type === 'rest';
@@ -47,13 +47,13 @@ export default function TodayPage() {
   // Týden na dosah: plán proti odběhanému, bez dvojího počítání téhož běhu.
   const ws = weekStartOf(today);
   const dates = weekDates(ws);
-  const weekPlan = weekTotalM(dates.flatMap((d) => dayWorkouts(plan.workouts, d)).filter((w) => w.status !== 'skipped').map((w) => w.workout));
   const weekActs = acts.activities.filter((a) => a.localDate >= ws && a.localDate <= dates[6] && a.sport === 'run');
-  const weekStrava = strava.runs.filter((r) => r.localDate >= ws && r.localDate <= dates[6] && !weekActs.some((a) => a.localDate === r.localDate && Math.abs(a.distanceM - r.distanceM) < 300));
+  const weekStrava = strava.runs.filter((r) => r.localDate >= ws && r.localDate <= dates[6] && !weekActs.some((a) => sameRun(a,r)));
   const weekDone = weekActs.reduce((s, a) => s + a.distanceM, 0) + weekStrava.reduce((s, r) => s + r.distanceM, 0);
-  const ratio = weekPlan.totalM > 0 ? Math.min(1, weekDone / weekPlan.totalM) : 0;
   const weekWorkouts = dates.flatMap(d => dayWorkouts(plan.workouts, d));
   const estimate = plannedDistance(weekWorkouts.filter(w => w.status !== 'skipped').map(w => w.workout), chart);
+  const meanEstimate = (estimate.minM + estimate.maxM) / 2;
+  const ratio = meanEstimate > 0 ? Math.min(1, weekDone / meanEstimate) : 0;
   const projection = projectedDistance(weekWorkouts, [...weekActs, ...weekStrava], chart);
 
   return (

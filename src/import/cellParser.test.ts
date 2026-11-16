@@ -4,6 +4,19 @@ import { parseCell } from './cellParser';
 const lines = (values: string[]) => values.map((text, i) => ({ text, y: i * 35, h: 10 }));
 
 describe('složené jednotky z PDF', () => {
+  it('oddělí délku běhu od zalomeného doplňkového posilování', () => {
+    const parsed = parseCell(lines(['Easy Run','10k','+','Strength','Training','30 Mins']));
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.workout.distanceM).toBe(10000);
+    expect(parsed.workout.strengthMin).toBe(30);
+    expect(parsed.workout.durationSec).toBeUndefined();
+  });
+  it('přečte složený trénink oddělený plusy na stejném řádku', () => {
+    const parsed = parseCell(lines(['Speed Session','10 Mins Easy + 4×3 Mins at 5k Pace + 2 Mins Walk + 10 Mins Easy']));
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.workout.blocks).toHaveLength(3);
+    expect(parsed.workout.blocks[1]).toMatchObject({kind:'repeat',count:4,recovery:{intensity:'walk'}});
+  });
   it('udrží opakování a více pracovních částí přes grafické mezery', () => {
     const parsed = parseCell(lines(['Speed Session', '15 Mins Easy', '4x', '5 Mins at HM Pace', '2 Mins at 10k Pace', '1 Min at 5k Pace', '2 Mins Walk', '10 Mins Easy']));
     expect(parsed.issues).toEqual([]);

@@ -4,11 +4,11 @@ import { CaretDown, CaretLeft, CaretRight, DotsThree } from '@phosphor-icons/rea
 import { useLiveQuery } from 'dexie-react-hooks';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { db } from '@/db/db';
+import { db, sessionKey } from '@/db/db';
 import { archiveActivePlan } from '@/db/repo';
 import { addDays, DOW_SHORT, formatDay, formatWeekRange, weekDates, weekStartOf } from '@/domain/dates';
-import { formatKm, formatDistanceRange } from '@/domain/format';
-import { plannedDistance, projectedDistance } from '@/domain/distance';
+import { formatKm, formatDistanceRange, resolvePaceChart } from '@/domain/format';
+import { plannedDistance, projectedDistance, sameRun } from '@/domain/distance';
 import { dayWorkouts, planRange } from '@/domain/schedule';
 import type { PlanTemplate, ScheduledWorkout } from '@/domain/types';
 import { ActivitySheet, AddActivitySheet } from '@/ui/Activity';
@@ -47,14 +47,14 @@ export default function PlanPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get('navrh')) setOpenDraft(q.get('navrh'));
-    setViewed(sessionStorage.getItem(VIEW_KEY) ?? null);
+    setViewed(sessionStorage.getItem(sessionKey(VIEW_KEY)) ?? null);
   }, []);
   const weekStart = viewed ?? weekStartOf(today);
   const strava = useStrava();
   // Starší týdny se ze Stravy načtou až při otevření; budoucí se neptají.
   const sync = useStravaSync(Boolean(strava?.connection) && weekStart <= today, weekStart, addDays(weekStart, 6));
   const [slide, setSlide] = useState<'next' | 'prev' | null>(null);
-  const go = (ws: string) => { setSlide(ws > weekStart ? 'next' : ws < weekStart ? 'prev' : null); setViewed(ws); sessionStorage.setItem(VIEW_KEY, ws); };
+  const go = (ws: string) => { setSlide(ws > weekStart ? 'next' : ws < weekStart ? 'prev' : null); setViewed(ws); sessionStorage.setItem(sessionKey(VIEW_KEY), ws); };
   // Přejetí palcem mezi týdny; šipky nahoře zůstávají jako viditelná alternativa (§4.3).
   const touch = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; touch.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null; };
@@ -69,7 +69,7 @@ export default function PlanPage() {
   };
 
   if (!plan || !acts || !profile || !drafts || !templates || !strava) return null;
-  const chart = profile.paceChart ?? plan.template?.paceChart;
+  const chart = resolvePaceChart(profile, plan.template?.paceChart);
   const openDrafts = drafts.filter((d) => d.status === 'draft' || d.status === 'ready');
 
   const setup = (
@@ -124,7 +124,7 @@ export default function PlanPage() {
   const weekWorkouts = dates.flatMap((d) => dayWorkouts(plan.workouts, d));
   const weekActs = acts.activities.filter((a) => a.localDate >= weekStart && a.localDate <= dates[6] && a.sport === 'run');
   // Stejný běh nahraný souborem i načtený ze Stravy se nepočítá dvakrát.
-  const weekStrava = strava.runs.filter((r) => r.localDate >= weekStart && r.localDate <= dates[6] && !weekActs.some((a) => a.localDate === r.localDate && Math.abs(a.distanceM - r.distanceM) < 300));
+  const weekStrava = strava.runs.filter((r) => r.localDate >= weekStart && r.localDate <= dates[6] && !weekActs.some((a) => sameRun(a,r)));
   const doneM = weekActs.reduce((s, a) => s + a.distanceM, 0) + weekStrava.reduce((s, r) => s + r.distanceM, 0);
   const estimate = plannedDistance(weekWorkouts.filter(w => w.status !== 'skipped').map(w => w.workout), chart);
   const projection = projectedDistance(weekWorkouts, [...weekActs, ...weekStrava], chart);

@@ -109,6 +109,21 @@ describe('Strava a AI (DATA-01)', () => {
 });
 
 describe('příkazy z chatu (CHAT-02)', () => {
+  it('přijme kompletní vlastní týden z externího chatu a odmítne duplicitní dny', async () => {
+    const ctx = await buildContext();
+    const days = Array.from({length: 7}, (_, dow) => ({ dow, workout: dow === 0 ? {type: 'easy', title: 'Vlastní běh', durationSec: 2100, blocks: []} : {type: 'rest', title: 'Volno', blocks: []} }));
+    const raw = {operation: 'CREATE_PLAN_DRAFT', payload: {...params, weeks: 1, weekEntries: [{index: 1, days}]}};
+    const result = await handleCommand(JSON.stringify(raw), ctx);
+    expect(result.draftId).toBeTruthy();
+    const draft = await db().drafts.get(result.draftId!);
+    const rev = await db().draftRevisions.get(draft!.currentRevisionId);
+    expect(rev!.weeks[0].days[0].workout.durationSec).toBe(2100);
+    days[6].dow = 0;
+    const before = await db().drafts.count();
+    expect((await handleCommand(JSON.stringify(raw), ctx)).proposal?.state).toBe('invalid');
+    expect(await db().drafts.count()).toBe(before);
+    expect((await handleCommand('null', ctx)).proposal?.state).toBe('invalid');
+  });
   it('neplatný nebo vymyšlený příkaz nic nezmění', async () => {
     const created = await createDraft(params, 'Test', 'user', 'test');
     if (!created.ok) throw new Error();

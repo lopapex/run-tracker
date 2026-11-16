@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { addSystemNote, applyProposal, dismissProposal, THREAD_ID } from '@/ai/coach';
 import { ExternalCoach } from '@/ui/ExternalCoach';
-import { db } from '@/db/db';
+import { db, sessionKey } from '@/db/db';
 import { undoRevision } from '@/db/repo';
 import { formatDay } from '@/domain/dates';
 import type { AiUsageEvent, CoachMessage, ContextRef } from '@/domain/types';
@@ -53,13 +53,13 @@ export default function CoachPage() {
   const [draftForm, setDraftForm] = useState(false);
   const [detail, setDetail] = useState<AiUsageEvent | null>(null);
   useEffect(() => {
-    setText(sessionStorage.getItem('rt.coachDraft') ?? '');
+    setText(sessionStorage.getItem(sessionKey('coachDraft')) ?? '');
     const id = new URLSearchParams(window.location.search).get('jednotka');
     if (id) void db().workouts.get(id).then(w => w && setRefs([{kind: 'workout', id: w.id, label: w.workout.title + ', ' + formatDay(w.date)}]));
     const activityId = new URLSearchParams(window.location.search).get('aktivita');
     if (activityId) void db().activities.get(activityId).then(a => a && setRefs([{kind: 'activity', id: a.id, label: a.name + ', ' + formatDay(a.localDate)}]));
   }, []);
-  useEffect(() => { sessionStorage.setItem('rt.coachDraft', text); }, [text]);
+  useEffect(() => { sessionStorage.setItem(sessionKey('coachDraft'), text); }, [text]);
   if (!profile || !messages) return null;
   return <div className="space-y-4">
     <div className="space-y-3 rounded-[20px] border border-line bg-surface p-4">
@@ -67,7 +67,7 @@ export default function CoachPage() {
       <p className="text-[15px] text-muted">Plán držíš tady. Se svým ChatGPT nebo Claudem probereš běhy ze Stravy a návrh vrátíš zpátky. Bez stahování modelů a API klíčů.</p>
       {refs.map(r => <Chip key={r.id}>{r.label}<button type="button" aria-label="Odebrat kontext" onClick={() => setRefs([])} className="min-h-11 px-2">×</button></Chip>)}
       <textarea aria-label="Otázka pro trenéra" rows={3} value={text} onChange={e => setText(e.target.value)} placeholder="Např. v sobotu nemůžu běhat. Jak upravit týden?" className="min-h-24 w-full rounded-[12px] border border-line bg-surface px-3 py-2.5 text-base" />
-      <ExternalCoach refs={refs} question={text} />
+      <ExternalCoach refs={refs} question={text} onImported={() => setText('')} />
       <div className="flex flex-wrap gap-2">{QUICK.map(q => <button key={q} type="button" onClick={() => setText(q)} className="min-h-11 rounded-full border border-line px-3 text-left text-[13px]">{q}</button>)}</div>
     </div>
     <Button className="w-full" onClick={() => setDraftForm(true)}>Navrhnout plán formulářem</Button>

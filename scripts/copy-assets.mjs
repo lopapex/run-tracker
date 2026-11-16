@@ -1,8 +1,9 @@
 // Zkopíruje workery PDF.js a Tesseract.js a jazyková data do public/vendor,
 // aby import fungoval bez cizích CDN a po prvním použití i offline (§13).
-import { cpSync, mkdirSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 const out = 'public/vendor';
 mkdirSync(`${out}/tesseract/lang`, { recursive: true });
+rmSync(`${out}/webllm.worker.js`, { force: true });
 cpSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', `${out}/pdf.worker.min.mjs`);
 cpSync('node_modules/tesseract.js/dist/worker.min.js', `${out}/tesseract/worker.min.js`);
 for (const f of readdirSync('node_modules/tesseract.js-core')) {

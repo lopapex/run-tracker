@@ -1,52 +1,48 @@
 # Run Tracker
 
-Mobilní PWA pro běžecký plán: import plánu z PDF, týdenní kalendář s přesuny a historií změn, aktivity z hodinek, volitelné zobrazení běhů ze Stravy a trenér jako model běžící přímo v telefonu.
+Mobilní PWA pro běžecký plán, skutečné běhy a konzultace ve vlastním Claude/ChatGPT. Stav implementace a zbývající brány jsou v [CHECKLIST.md](CHECKLIST.md).
 
-Stav: první kolo vývoje (lokální aplikace bez účtů). Co je hotové a co čeká, je v [CHECKLIST.md](CHECKLIST.md).
+## Použití
 
-## Jak to funguje
-
-- **Data jsou v zařízení.** Plány, aktivity i chat se ukládají do IndexedDB. Účty a synchronizace zatím nejsou; zálohou je export v profilu.
-- **Import plánu** běží lokálně: PDF.js stránku vykreslí, Tesseract.js přečte text. Umí týdenní tabulky se dny ve sloupcích (anglické názvy dnů). Každou přečtenou buňku jde zkontrolovat proti výřezu originálu.
-- **Změny rozpisu** jdou přes jeden registr příkazů (`src/domain/commands.ts`). Každá změna je vratná revize s autorem a důvodem; stejné příkazy používá kalendář i chat.
-- **Trenér** je WebLLM model ve Web Workeru. Stahuje se až na vyžádání. Změny plánu jen navrhuje; návrh ověří doména a použije ho až uživatel.
-- **Strava** je jen ke čtení a jen k zobrazení (vzdálenost, tempo, splnění, odkaz „View on Strava“). Běhy ze Stravy se drží nejvýš 7 dní a do AI ani do exportu nejdou – to vyžadují podmínky Strava API.
+- PDF se čte lokálně: textová vrstva, OCR výřezu a kontrola proti originálu. Import zná tabulky se dny ve sloupcích; není univerzální převodník libovolného PDF.
+- Jednotka zachovává rozklus, více částí opakování, pauzy i výklus. Vizuální editor opraví jednotlivé hodnoty a pořadí. Původní instrukce zůstává dostupná.
+- Rozsahy tempa přepočítají časové úseky na rozsah kilometrů. Přednost má potvrzená tabulka plánu, případně vlastní tempa z Profilu. Výhled týdne nahradí jednoznačný den skutečným během; neznámé úseky se přiznají.
+- Trenér: otázka → zkontrolovat/kopírovat podklady → vlastní externí chat → vložit JSON návrhu → validace → potvrzení změny. Kompletní návrh vzniká nejprve jako draft.
+- Oficiální osobní Strava konektor je ověřený pro Claude a vyžaduje předplatné Stravy. Oficiální ChatGPT podpora není v aktuálním seznamu Stravy; aplikace ji neslibuje.
+- Lokální inference a přímý API chat byly na pokyn uživatele odstraněny. Žádné stahování modelů ani API klíč uživatele.
+- Bez účtu jsou data v IndexedDB. Google/e-mail přihlášení vytvoří samostatný místní prostor. Synchronizace do Supabase se zapíná výslovně; hostovská data lze převzít jako kopii.
+- Strava API připojení uvnitř PWA je samostatné a slouží k zobrazení. Tokeny/cache nejsou součástí AI podkladů ani cloudového workspace.
 
 ## Vývoj
 
-```bash
-npm install
-npm run dev      # http://localhost:3000
-npm test         # testy domény, úložiště a parseru
-npm run build    # statický export do out/ + service worker
-```
+Node 24. `npm install`, `npm run dev`, `npm run build`.
+Testy: `npm test -- --pool=threads --maxWorkers=1`.
+Typy: `npm run typecheck -- --incremental false`.
+Referenční PDF je soukromé a není v repu; viz `src/import/reference.test.ts`.
 
-Vyžaduje Node 24.
+## Backend a nasazení
 
-## Nasazení (Netlify)
+Netlify: `netlify.toml`, statický export `out`, serverová funkce `/api/strava`.
+Strava vyžaduje `STRAVA_CLIENT_ID` a tajnou `STRAVA_CLIENT_SECRET` v Netlify. Callback doména musí odpovídat produkčnímu webu. Konfigurace je jednorázová pro provozovatele; běžný uživatel pouze projde OAuth. Kapacita aktuální Strava aplikace je jeden sportovec, veřejný přístup vyžaduje schválení.
 
-`netlify.toml` nastavuje build (`npm run build`), složku `out` a funkce v `netlify/functions`.
+Supabase: veřejná klientská konfigurace je v `src/cloud/client.ts`. Publishable klíč je určený pro prohlížeč a nesmí se zaměnit za serverový secret/service_role klíč. Ochranu zajišťuje Auth + RLS. Google klientský secret zůstává v nastavení Supabase, nikoliv v kódu.
 
-Pro Stravu je potřeba vlastní API aplikace na <https://www.strava.com/settings/api>:
+`supabase/migrations/202611160001_workspace.sql` byl na novém projektu aplikovaný přes Dashboard SQL. Před prvním použitím CLI migrací je nutné sladit historii migrací; bootstrap nespouštět podruhé bez kontroly existujících policies.
 
-1. „Authorization Callback Domain“ nastav na doménu webu (bez `https://`).
-2. V Netlify přidej proměnné prostředí `STRAVA_CLIENT_ID` a `STRAVA_CLIENT_SECRET` (viz `.env.example`).
+Synchronizace používá atomický verzovaný snapshot (max. 10 MB JSON), privátní originály dokumentů (max. 40 MB každý) a lokální hash základní verze. Souběžné úpravy zobrazí konflikt. Soukromé originály se stáhnou a ověří checksumem před obnovou. Strava tokeny/cache ani lokální sync metadata do snapshotu nepatří.
 
-Bez nich aplikace běží normálně, jen tlačítko „Propojit se Stravou“ ohlásí, že propojení není nastavené. Nová Strava aplikace smí mít jediného sportovce (vlastníka), dokud ji Strava neschválí.
+Supabase Free má omezení kapacity a může po neaktivitě pozastavit projekt. Výchozí e-mailový transport má omezení příjemců; veřejné e-mailové přihlášení vyžaduje vlastní SMTP. Google OAuth má vlastní stav testování/publikace a případného ověření. Plná veřejná produkční akceptace ještě není uzavřená.
 
-## Struktura
+## Moduly
 
-| Složka | Obsah |
+| Cesta | Účel |
 |---|---|
-| `src/domain` | čisté TypeScript moduly: plán, příkazy, revize, drafty, generátor, aktivity |
-| `src/db` | Dexie schéma a transakční operace nad doménou |
-| `src/import` | rekonstrukce tabulky plánu z obrázku stránky a čtení buněk |
-| `src/ai` | kontrakt `AiEngine`, WebLLM adaptér, trenér |
-| `src/strava` | klient Stravy a dočasná cache |
-| `src/ui`, `src/app` | komponenty a obrazovky (Next.js App Router, statický export) |
-| `netlify/functions` | výměna a obnova tokenů Stravy (client secret nesmí do prohlížeče) |
-| `scripts` | build service workeru, kopie workerů, pomůcky pro ladění parseru |
+| `src/domain` | příkazy, revize, drafty, metriky, rozsahy vzdálenosti |
+| `src/import` | PDF/OCR, tabulka týdnů a temp |
+| `src/ai/coach.ts` | kontrolovaný kontext a validace vrácených návrhů |
+| `src/db` | účetní IndexedDB prostory a validovaný snapshot |
+| `src/cloud` | Supabase Auth, soukromý sync, konflikty a guest převzetí |
+| `src/strava` | OAuth a dočasná oddělená cache |
+| `src/ui`, `src/app` | rozhraní, PWA a průchod externím trenérem |
 
-## Licence
-
-MIT
+MIT.

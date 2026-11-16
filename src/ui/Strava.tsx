@@ -3,6 +3,7 @@
 import { ArrowSquareOut, CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { db } from '@/db/db';
 import { formatDuration, formatKm, formatPace, paceOf } from '@/domain/format';
 import type { IsoDate, ScheduledWorkout } from '@/domain/types';
@@ -49,6 +50,7 @@ export async function connectStrava(): Promise<void> {
   try {
     await beginConnect();
   } catch (e) {
+    if (e instanceof StravaError && e.code === 'not_configured') { location.href = '/profil/#strava'; return; }
     toast(e instanceof StravaError ? e.message : 'Propojení se nepodařilo spustit.', { tone: 'error' });
   }
 }
@@ -101,7 +103,7 @@ export function StravaCard({ view, syncing, error, onRefresh }: { view: StravaVi
       <Card className="space-y-2">
         <h2 className="display text-[24px]">Strava</h2>
         <p className="text-[15px] text-muted">Propoj Stravu a uvidíš tady své běhy: vzdálenost, tempo a jestli máš dnešek odběhaný. Aplikace jen čte tvoje aktivity; nic neupravuje a trenérovi je nepředává.</p>
-        <button type="button" className="min-h-12 w-full rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
+        <Link href="/profil/#strava" className="flex min-h-12 w-full items-center justify-center rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70">Nastavit propojení Stravy</Link>
       </Card>
     );
   }
