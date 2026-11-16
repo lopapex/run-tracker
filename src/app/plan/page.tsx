@@ -1,6 +1,6 @@
 'use client';
 
-import { CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { CaretDown, CaretLeft, CaretRight, DotsThree } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -38,6 +38,7 @@ export default function PlanPage() {
   const [toActivate, setToActivate] = useState<PlanTemplate | null>(null);
   const [openDraft, setOpenDraft] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [weekPicker, setWeekPicker] = useState(false);
   const [addDay, setAddDay] = useState<string | null>(null);
   const [newSpec, setNewSpec] = useState({ type: 'easy' as const, title: 'Volný běh', load: 'low' as const, blocks: [] });
 
@@ -132,21 +133,15 @@ export default function PlanPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-1">
         <button type="button" aria-label="Předchozí týden" className="grid size-11 place-items-center rounded-full hover:bg-surface-2" onClick={() => go(addDays(weekStart, -7))}><CaretLeft size={20} /></button>
-        <div className="flex-1 text-center">
-          <p className="display text-[26px]">{formatWeekRange(weekStart)}</p>
+        <button type="button" onClick={() => setWeekPicker(true)} disabled={!plan.activation} aria-label="Vybrat týden plánu" className="min-h-14 flex-1 rounded-[14px] text-center active:bg-surface-2">
+          <p className="display inline-flex items-center gap-1 text-[26px]">{formatWeekRange(weekStart)}{plan.activation && <CaretDown size={16} weight="bold" className="text-muted" />}</p>
           <p className="label text-muted">{mapping ? (mapping.sourceWeek != null ? `týden ${mapping.sourceWeek}${templateWeek?.phase ? ` · ${templateWeek.phase}` : ''}` : 'pauza') : 'mimo plán'}</p>
-        </div>
+        </button>
         <button type="button" aria-label="Další týden" className="grid size-11 place-items-center rounded-full hover:bg-surface-2" onClick={() => go(addDays(weekStart, 7))}><CaretRight size={20} /></button>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {!isCurrent && <Button variant="primary" onClick={() => go(weekStartOf(today))}>Aktuální týden</Button>}
-        {plan.activation && plan.activation.mapping.length > 1 && (
-          <select aria-label="Přejít na týden plánu" className="min-h-11 rounded-[8px] border border-line bg-surface px-2 text-[14px]" value={mapping ? weekStart : ''} onChange={(e) => e.target.value && go(e.target.value)}>
-            <option value="">Týden plánu…</option>
-            {plan.activation.mapping.map((m) => <option key={m.weekStart} value={m.weekStart}>{m.sourceWeek != null ? `Týden ${m.sourceWeek}` : 'Pauza'} · {formatDay(m.weekStart)}</option>)}
-          </select>
-        )}
-        <Button variant="ghost" className="ml-auto" onClick={() => setMenu(true)}>Možnosti</Button>
+      <div className="flex items-center gap-2">
+        {!isCurrent && <button type="button" onClick={() => go(weekStartOf(today))} className="label inline-flex min-h-11 items-center rounded-full bg-accent px-4 text-accent-ink active:scale-[0.97]">Zpět na dnešek</button>}
+        <button type="button" onClick={() => setMenu(true)} aria-label="Možnosti plánu" className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-surface px-3.5 text-[14px] font-semibold active:scale-[0.97]"><DotsThree size={20} weight="bold" /> Možnosti</button>
       </div>
 
       {/* Proužek dnů: barva = zátěž, tečka = odběháno. Ťuknutím otevřeš den. */}
@@ -219,6 +214,28 @@ export default function PlanPage() {
           {openDrafts.map((d) => <DraftCard key={d.id} draftId={d.id} compact />)}
         </section>
       )}
+
+      <Sheet open={weekPicker} onClose={() => setWeekPicker(false)} title="Týdny plánu">
+        <ul className="space-y-1.5">
+          {(plan.activation?.mapping ?? []).map((m) => {
+            const tw = m.sourceWeek != null ? plan.template?.weeks.find((w) => w.index === m.sourceWeek) : undefined;
+            const now = m.weekStart === weekStartOf(today);
+            const shown = m.weekStart === weekStart;
+            return (
+              <li key={m.weekStart}>
+                <button type="button" onClick={() => { go(m.weekStart); setWeekPicker(false); }} aria-current={shown ? 'true' : undefined} className={cx('flex min-h-14 w-full items-center gap-3 rounded-[14px] px-3 text-left active:scale-[0.99]', shown ? 'bg-accent text-accent-ink' : 'border border-line bg-surface')}>
+                  <span className="display w-9 text-center text-[26px]">{m.sourceWeek ?? '–'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="num block font-semibold">{formatWeekRange(m.weekStart)}</span>
+                    <span className={cx('label block', shown ? 'opacity-80' : 'text-muted')}>{m.sourceWeek == null ? 'pauza' : (tw?.phase ?? 'týden plánu')}</span>
+                  </span>
+                  {now && <span className={cx('label rounded-full px-2 py-0.5', shown ? 'bg-accent-ink text-accent' : 'bg-accent-soft text-text')}>teď</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Sheet>
 
       <Sheet open={menu} onClose={() => setMenu(false)} title="Možnosti plánu">
         <div className="space-y-2">
