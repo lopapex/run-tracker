@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+
+/* Tokeny designu (§4.5): jeden zelený akcent, neutrální plán, stavy mají vždy i text nebo symbol. */
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --surface-2: #eef0ec;
+  --line: #dfe3dc;
+  --text: #171b17;
+  --muted: #5d665c;
+  --accent: #1f7a45;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f1e7;
+  --done: #1f7a45;
+  --warn: #9a6200;
+  --warn-soft: #fbefd6;
+  --danger: #b3261e;
+  --danger-soft: #fbe4e2;
+  --rest: #8a9289;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f120f;
+    --surface: #181c18;
+    --surface-2: #222722;
+    --line: #2e352e;
+    --text: #eef1ec;
+    --muted: #a0a99f;
+    --accent: #5ecb86;
+    --accent-ink: #0b1f12;
+    --accent-soft: #1b3324;
+    --done: #5ecb86;
+    --warn: #f0b955;
+    --warn-soft: #3a2d12;
+    --danger: #ff8a80;
+    --danger-soft: #3d1a17;
+    --rest: #7c857b;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-done: var(--done);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-rest: var(--rest);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --radius-control: 8px;
+  --radius-card: 16px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 34rem;
+  max-height: 92dvh;
+  border: 0;
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+}
+dialog.sheet::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+dialog.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: sheet-in 200ms ease-out;
+}
+@keyframes sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.week-in-next { animation: week-next 180ms ease-out; }
+.week-in-prev { animation: week-prev 180ms ease-out; }
+@keyframes week-next { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes week-prev { from { transform: translateX(-32px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 640px) {
+  dialog.sheet { margin: auto; border-radius: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

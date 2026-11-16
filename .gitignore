@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.netlify/
+*.tsbuildinfo
+next-env.d.ts
+.env*
+!.env.example
+
+# soukromé podklady – nepatří do veřejného repa
+RUN_TRACKER_PRODUCT_PLAN.md
+fixtures/private/
+tmp/
+*.pdf
+
+public/vendor/
+*.traineddata
