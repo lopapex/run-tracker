@@ -12,6 +12,11 @@ export interface WorkoutNote {
   at: string;
 }
 
+/** Revize rozpisu rozšířená o zápis uživatele, aby undo vracelo stav i zápis najednou. */
+export type ConnectorRevision = ScheduleRevision & {
+  note?: { workoutId: string; before: WorkoutNote | null; after: WorkoutNote | null };
+};
+
 /** Rozpracovaný import: týdny se posílají po částech a plán vznikne až při aktivaci. */
 export interface StagedImport {
   name: string;
@@ -28,7 +33,7 @@ export interface Workspace {
   templates: PlanTemplate[];
   activations: PlanActivation[];
   workouts: ScheduledWorkout[];
-  revisions: ScheduleRevision[];
+  revisions: ConnectorRevision[];
   notes: WorkoutNote[];
   staged?: StagedImport;
 }

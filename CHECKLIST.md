@@ -17,7 +17,8 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [x] Kontrola týdenních součtů při importu.
 - [x] Podmíněný zápis proti souběžným změnám; oddělené prostory podle klíče.
 - [x] Testy přes skutečný MCP protokol nad úložištěm v paměti; referenční 12týdenní plán prošel importem i aktivací.
-- [~] Netlify funkce a Blobs za běhu.
+- [x] Zápis pocitu a poznámky je součást vratné změny; přeskočený týden jde vrátit i se zápisy.
+- [x] Netlify funkce a Blobs za běhu: živý průchod importem, aktivací, přesunem, splněním, undo a smazáním dat.
 - [ ] Ověřit v Claude: přidání konektoru bez přihlášení, schvalování zápisových nástrojů, import skutečného PDF, souběh s konektorem Stravy, mobilní aplikace.
 - [ ] Omezení počtu požadavků a velikosti prostoru.
 

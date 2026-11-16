@@ -6,8 +6,8 @@ import { addDays, DOW_LONG, dowOf, formatDay, isIsoDate, todayIso, weekStartOf }
 import { plannedDistance } from '../domain/distance';
 import { blockLines, formatDistanceRange, formatKm, formatPace, resolvePaceChart, workoutSummary } from '../domain/format';
 import { createActivation, newId, planRange } from '../domain/schedule';
-import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduleRevision, ScheduledWorkout, TemplateWeek } from '../domain/types';
-import { MAX_REVISIONS, type Workspace } from './workspace';
+import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
+import { MAX_REVISIONS, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
 export type Outcome = { ok: true; text: string; changed: boolean } | { ok: false; text: string };
 const fail = (text: string): Outcome => ({ ok: false, text });
@@ -79,14 +79,19 @@ function chartOf(ws: Workspace, activation?: PlanActivation): PaceChart {
   return resolvePaceChart(ws.profile, template?.paceChart);
 }
 
-function persist(ws: Workspace, snap: ScheduleSnapshot, rev: ScheduleRevision): void {
+// Zápisy jednotek, které z rozpisu dočasně zmizely (přeskočený týden), se nemažou: undo jednotku vrátí i se zápisem.
+function persist(ws: Workspace, snap: ScheduleSnapshot, rev: ConnectorRevision): void {
   const next = projectRevision(snap, rev);
   ws.workouts = [...ws.workouts.filter((w) => w.activationId !== snap.activation.id), ...next.workouts];
   ws.activations = ws.activations.map((a) => (a.id === next.activation.id ? next.activation : a));
   if (rev.revertsId) ws.revisions = ws.revisions.map((r) => (r.id === rev.revertsId ? { ...r, revertedById: rev.id } : r));
   ws.revisions = [...ws.revisions, rev].slice(-MAX_REVISIONS);
-  const alive = new Set(ws.workouts.map((w) => w.id));
-  ws.notes = ws.notes.filter((n) => alive.has(n.workoutId));
+}
+
+const noteOf = (ws: Workspace, workoutId: string): WorkoutNote | null => ws.notes.find((n) => n.workoutId === workoutId) ?? null;
+const sameNote = (a: WorkoutNote | null, b: WorkoutNote | null): boolean => (a?.feel ?? null) === (b?.feel ?? null) && (a?.pain ?? null) === (b?.pain ?? null) && (a?.note ?? null) === (b?.note ?? null);
+function putNote(ws: Workspace, workoutId: string, note: WorkoutNote | null): void {
+  ws.notes = [...ws.notes.filter((n) => n.workoutId !== workoutId), ...(note ? [note] : [])];
 }
 
 const STATUS_LABEL: Record<ScheduledWorkout['status'], string> = { scheduled: 'v plánu', completed: 'splněno', partial: 'splněno částečně', skipped: 'vynecháno' };
@@ -98,7 +103,7 @@ function workoutLine(ws: Workspace, w: ScheduledWorkout, chart: PaceChart): stri
   const blocks = blockLines(w.workout.blocks, chart);
   if (blocks.length) lines.push(`  Struktura: ${blocks.join('; ')}.`);
   if (w.workout.note) lines.push(`  Poznámka plánu: ${w.workout.note}`);
-  const note = ws.notes.find((n) => n.workoutId === w.id);
+  const note = noteOf(ws, w.id);
   if (note) lines.push(`  Zápis uživatele: ${[note.feel ? `pocit ${note.feel}/5` : '', note.pain && note.pain !== 'none' ? `bolest ${note.pain === 'mild' ? 'mírná' : 'výrazná'}` : '', note.note ?? ''].filter(Boolean).join(', ')}`);
   return lines;
 }
@@ -231,6 +236,8 @@ export function activatePlan(ws: Workspace, input: z.infer<typeof activateInput>
   // Z nahrazeného plánu zůstává jen to, co už proběhlo.
   ws.workouts = [...ws.workouts.filter((w) => !archived.has(w.activationId) || w.date <= endedOn), ...workouts];
   ws.templates = [...ws.templates.filter((t) => ws.activations.some((a) => a.templateId === t.id)), template];
+  const alive = new Set(ws.workouts.map((w) => w.id));
+  ws.notes = ws.notes.filter((n) => alive.has(n.workoutId));
   ws.staged = undefined;
   if (staged.paceChart) ws.profile = { ...ws.profile, paceSource: 'plan' };
   const range = planRange(activation)!;
@@ -258,19 +265,32 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
   if (!activation) return fail('Uživatel nemá aktivní plán.');
   const workout = ws.workouts.find((w) => w.id === input.workoutId && w.activationId === activation.id);
   if (!workout) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
+  const previous = noteOf(ws, workout.id);
+  const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}) };
+  const noteChanged = !sameNote(previous, next);
+  const statusChanged = workout.status !== input.status;
+  if (!statusChanged && !noteChanged) return done('Beze změny, jednotka už tenhle stav i zápis má.', false);
+
+  // Stav i zápis jsou jedna vratná změna; samotný zápis dostane vlastní revizi bez dotčených jednotek.
+  const snap = snapshotOf(ws, activation);
   const lines: string[] = [];
-  if (workout.status !== input.status) {
-    const result = scheduleCommand(ws, 'SET_STATUS', { workoutId: input.workoutId, status: input.status }, '', now);
-    if (!result.ok) return result;
-    lines.push(result.text);
+  let revision: ConnectorRevision;
+  if (statusChanged) {
+    const result = applyScheduleCommand(snap, { id: newId(), operation: 'SET_STATUS', payload: { workoutId: workout.id, status: input.status }, reason: '' }, { author: 'coach', now });
+    if (!result.ok) return fail(result.message);
+    revision = result.revision;
+    lines.push(...result.summary);
+  } else {
+    revision = { id: newId(), activationId: activation.id, seq: activation.revisionSeq + 1, at: now, author: 'coach', operation: 'SET_NOTE', reason: '', commandId: newId(), before: [], after: [] };
   }
-  if (input.feel != null || input.pain != null || input.note != null) {
-    const previous = ws.notes.find((n) => n.workoutId === workout.id);
-    const next = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}) };
-    ws.notes = [...ws.notes.filter((n) => n.workoutId !== workout.id), next];
+  if (noteChanged) {
+    revision = { ...revision, note: { workoutId: workout.id, before: previous, after: next } };
+    putNote(ws, workout.id, next);
     lines.push('Zápis k jednotce uložen.');
   }
-  return lines.length ? done(lines.join('\n')) : done('Beze změny, jednotka už tenhle stav má.', false);
+  persist(ws, snap, revision);
+  lines.push(`Změna ${revision.id} je uložená a jde vrátit přes undo_change.`);
+  return done(lines.join('\n'));
 }
 
 export function undoChange(ws: Workspace, revisionId: string | undefined, now: string): Outcome {
@@ -282,6 +302,13 @@ export function undoChange(ws: Workspace, revisionId: string | undefined, now: s
   const snap = snapshotOf(ws, activation);
   const result = revertRevision(snap, rev, { author: 'coach', now });
   if (!result.ok) return fail(result.message);
-  persist(ws, snap, result.revision);
+  let revision: ConnectorRevision = result.revision;
+  if (rev.note) {
+    // Stejné pravidlo jako u jednotek: vrátit jde jen to, co mezitím nikdo nepřepsal.
+    if (!sameNote(noteOf(ws, rev.note.workoutId), rev.note.after)) return fail('Zápis k jednotce se od té doby znovu změnil. Vrať nejdřív novější změnu.');
+    putNote(ws, rev.note.workoutId, rev.note.before);
+    revision = { ...revision, note: { workoutId: rev.note.workoutId, before: rev.note.after, after: rev.note.before } };
+  }
+  persist(ws, snap, revision);
   return done(`${result.summary.join('\n')}${rev.reason ? ` (${rev.reason})` : ''}`);
 }

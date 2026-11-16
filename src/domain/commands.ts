@@ -337,6 +337,7 @@ export const OPERATION_LABEL: Record<string, string> = {
   RESTORE_ORIGINAL: 'obnovení originálu',
   SET_LOCK: 'zámek',
   SET_STATUS: 'stav splnění',
+  SET_NOTE: 'zápis k jednotce',
   REMAP_PLAN: 'změna mapování týdnů',
   REVERT: 'vrácení změny',
 };

@@ -141,6 +141,65 @@ describe('konektor Run Tracker', () => {
     expect(idOf(plan, '2026-11-22', 'Long Run')).toBe(longRun);
     expect(idOf(plan, '2026-11-21', 'Easy Run')).toBe(saturday);
     expect(plan).not.toContain('vynecháno');
+    expect(plan).not.toContain('splněno');
+    expect(plan).not.toContain('Zápis uživatele');
+  });
+
+  it('zápis k jednotce je součást vratné změny', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const range = { from: '2026-11-16', to: '2026-11-29' };
+    const monday = idOf((await call('get_plan', range)).text, '2026-11-16', 'Easy Run');
+    const revisionOf = (text: string) => /Změna (\S+) je uložená/.exec(text)![1];
+
+    // splnění se zápisem je jedna změna
+    const first = await call('set_status', { workoutId: monday, status: 'completed', feel: 4, note: 'lehké nohy' });
+    expect(first.text.match(/Změna /g)).toHaveLength(1);
+    // samotná úprava zápisu je taky změna, kterou jde vrátit
+    const second = await call('set_status', { workoutId: monday, status: 'completed', feel: 2, pain: 'mild', note: 'táhlo lýtko' });
+    expect(second.isError).toBe(false);
+    expect((await call('get_plan', range)).text).toContain('pocit 2/5, bolest mírná, táhlo lýtko');
+    expect((await call('set_status', { workoutId: monday, status: 'completed', feel: 2 })).text).toContain('Beze změny');
+
+    // starší změnu nejde vrátit, dokud na ní stojí novější zápis
+    const blocked = await call('undo_change', { revisionId: revisionOf(first.text) });
+    expect(blocked.isError).toBe(true);
+    expect(blocked.text).toContain('Zápis k jednotce se od té doby znovu změnil');
+
+    expect((await call('undo_change')).text).toContain('Vráceno: zápis k jednotce');
+    let plan = (await call('get_plan', range)).text;
+    expect(plan).toContain('pocit 4/5, lehké nohy');
+    expect(plan).not.toContain('táhlo lýtko');
+    expect(plan).toContain('| Easy Run | 10 km | splněno');
+
+    expect((await call('undo_change')).text).toContain('Vráceno: stav splnění');
+    plan = (await call('get_plan', range)).text;
+    expect(plan).not.toContain('Zápis uživatele');
+    expect(plan).not.toContain('splněno');
+
+    // vrácení vrácení (výslovně podle id) obnoví stav i zápis
+    const reverts = plan.split('\n').filter((l) => l.includes('vrácení změny'));
+    expect(reverts).toHaveLength(2);
+    expect((await call('undo_change', { revisionId: reverts[0].split(' | ')[0] })).isError).toBe(false);
+    plan = (await call('get_plan', range)).text;
+    expect(plan).toContain('pocit 4/5, lehké nohy');
+    expect(plan).toContain('| Easy Run | 10 km | splněno');
+  });
+
+  it('přeskočený týden jde vrátit i se zápisy jeho jednotek', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const range = { from: '2026-11-16', to: '2026-11-29' };
+    const nextMonday = idOf((await call('get_plan', range)).text, '2026-11-23', 'Easy Run');
+    await call('set_status', { workoutId: nextMonday, status: 'scheduled', note: 'chci běžet ráno' });
+    expect((await call('shift_plan', { mode: 'skip_week', weekStart: '2026-11-23', reason: 'dovolená' })).isError).toBe(false);
+    expect((await call('get_plan', range)).text).not.toContain('chci běžet ráno');
+    expect((await call('undo_change')).isError).toBe(false);
+    const plan = (await call('get_plan', range)).text;
+    expect(idOf(plan, '2026-11-23', 'Easy Run')).toBe(nextMonday);
+    expect(plan).toContain('chci běžet ráno');
   });
 
   it('pauza posune zbytek plánu o týden a nový plán archivuje starý', async () => {
