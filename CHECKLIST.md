@@ -39,6 +39,7 @@ Stav: `[x]` hotovo a ověřeno (test nebo průchod v prohlížeči) · `[~]` nap
 - [x] Pauza a přeskočení týdne v běžícím plánu, vratně – testy
 - [x] Dnes: dnešní jednotka, hlavní akce, poslední běh, další 3 dny (R-02)
 - [x] Plán: týdenní agenda, předchozí/další, výběr týdne, `Aktuální týden`; otevřený týden nezávislý na pozici (PLAN-03)
+- [~] Přejetí palcem mezi týdny: napsáno, na dotykovém zařízení nezkoušeno
 - [x] Detail jednotky: přesun (s prohozením), úprava, vynechání, zámek, obnovení originálu, historie
 - [~] Import obrázku (PNG/JPG): stejná cesta jako PDF, samostatně nezkoušeno
 - [ ] Pace chart se z PDF nenačítá (OCR tabulky temp je nespolehlivé); tempa se zadávají v profilu
@@ -88,9 +89,10 @@ Stav: `[x]` hotovo a ověřeno (test nebo průchod v prohlížeči) · `[~]` nap
 
 ## Vydání
 
-- [ ] GitHub repo vytvořeno a pushnuto
-- [ ] Netlify web založen a napojen na repo
-- [ ] Živá URL ověřena
+- [x] GitHub repo: https://github.com/lopapex/run-tracker
+- [x] Netlify web napojený na repo (push do `main` nasadí): https://run-tracker-613.netlify.app
+- [x] Živá URL ověřena: stránky, service worker, worker lokální AI i funkce `/api/strava` odpovídají
+- [ ] Aplikaci jsem na ostré adrese neproklikával v telefonu ani neinstaloval jako PWA
 
 ## Co potřebuje tebe
 
