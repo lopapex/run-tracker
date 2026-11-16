@@ -159,7 +159,7 @@ export default function CoachPage() {
         <div ref={endRef} />
       </div>
 
-      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] -mx-4 mt-3 space-y-2 border-t border-line bg-bg px-4 pb-2 pt-2">
+      <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] -mx-4 mt-3 space-y-2 border-t border-line bg-bg px-4 pb-2 pt-2">
         <div className="flex flex-wrap gap-2">
           {refs.map((r) => <Chip key={r.id} tone="accent" onRemove={() => setRefs(refs.filter((x) => x.id !== r.id))}>{r.label}</Chip>)}
           <button type="button" className="min-h-8 text-[13px] font-medium text-accent underline" onClick={() => setDraftForm(true)}>Navrhnout plán formulářem</button>

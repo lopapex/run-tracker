@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { db } from '@/db/db';
 import { archiveActivePlan } from '@/db/repo';
-import { addDays, formatDay, formatWeekRange, weekDates, weekStartOf } from '@/domain/dates';
+import { addDays, DOW_SHORT, formatDay, formatWeekRange, weekDates, weekStartOf } from '@/domain/dates';
 import { formatKm, weekTotalM } from '@/domain/format';
 import { dayWorkouts, planRange } from '@/domain/schedule';
 import type { PlanTemplate, ScheduledWorkout } from '@/domain/types';
@@ -14,9 +14,9 @@ import { ActivitySheet, AddActivitySheet } from '@/ui/Activity';
 import { DraftCard } from '@/ui/DraftCard';
 import { runWithUndo, useActivities, usePlan, useProfile, useToday } from '@/ui/hooks';
 import { ActivateSheet, DraftFormSheet, ManualWeekSheet } from '@/ui/PlanSetup';
-import { Button, Card, Chip, EmptyState, Sheet, toast } from '@/ui/primitives';
+import { Button, Chip, cx, EmptyState, Sheet, toast } from '@/ui/primitives';
 import { StravaRun, useStrava, useStravaSync } from '@/ui/Strava';
-import { WorkoutEditor, WorkoutRow, WorkoutSheet, isValidSpec } from '@/ui/Workout';
+import { LOAD_DOT, WorkoutEditor, WorkoutRow, WorkoutSheet, isValidSpec } from '@/ui/Workout';
 
 const VIEW_KEY = 'rt.viewedWeek';
 
@@ -72,7 +72,7 @@ export default function PlanPage() {
 
   const setup = (
     <div className="grid gap-2">
-      <Link href="/import/" className="flex min-h-12 items-center justify-center rounded-[8px] bg-accent px-4 font-semibold text-accent-ink">Importovat z PDF nebo obrázku</Link>
+      <Link href="/import/" className="flex min-h-12 items-center justify-center rounded-full bg-accent px-4 font-semibold text-accent-ink">Importovat z PDF nebo obrázku</Link>
       <Button onClick={() => setManual(true)}>Zapsat týden ručně</Button>
       <Button onClick={() => setDraftForm(true)}>Navrhnout plán</Button>
     </div>
@@ -96,13 +96,13 @@ export default function PlanPage() {
         </EmptyState>
         {openDrafts.length > 0 && (
           <section className="space-y-2">
-            <h2 className="font-semibold">Rozpracované návrhy</h2>
+            <h2 className="display text-[24px]">Rozpracované návrhy</h2>
             {openDrafts.map((d) => <DraftCard key={d.id} draftId={d.id} compact />)}
           </section>
         )}
         {templates.length > 0 && (
           <section className="space-y-2">
-            <h2 className="font-semibold">Ověřené plány</h2>
+            <h2 className="display text-[24px]">Ověřené plány</h2>
             {templates.map((t) => (
               <button key={t.id} type="button" onClick={() => setToActivate(t)} className="flex min-h-12 w-full items-center justify-between rounded-[12px] border border-line bg-surface px-3 text-left">
                 <span className="font-medium">{t.name}</span>
@@ -133,8 +133,8 @@ export default function PlanPage() {
       <div className="flex items-center gap-1">
         <button type="button" aria-label="Předchozí týden" className="grid size-11 place-items-center rounded-full hover:bg-surface-2" onClick={() => go(addDays(weekStart, -7))}><CaretLeft size={20} /></button>
         <div className="flex-1 text-center">
-          <p className="num font-semibold">{formatWeekRange(weekStart)}</p>
-          <p className="text-[13px] text-muted">{mapping ? (mapping.sourceWeek != null ? `týden ${mapping.sourceWeek}${templateWeek?.phase ? ` · ${templateWeek.phase}` : ''}` : 'pauza') : 'mimo plán'}</p>
+          <p className="display text-[26px]">{formatWeekRange(weekStart)}</p>
+          <p className="label text-muted">{mapping ? (mapping.sourceWeek != null ? `týden ${mapping.sourceWeek}${templateWeek?.phase ? ` · ${templateWeek.phase}` : ''}` : 'pauza') : 'mimo plán'}</p>
         </div>
         <button type="button" aria-label="Další týden" className="grid size-11 place-items-center rounded-full hover:bg-surface-2" onClick={() => go(addDays(weekStart, 7))}><CaretRight size={20} /></button>
       </div>
@@ -149,10 +149,31 @@ export default function PlanPage() {
         <Button variant="ghost" className="ml-auto" onClick={() => setMenu(true)}>Možnosti</Button>
       </div>
 
-      <Card className="num flex items-center justify-between gap-3 py-3 text-[15px]">
-        <span><span className="text-muted">Plán</span> <strong>{formatKm(planned.totalM)}</strong>{planned.unknown ? <span className="text-muted"> + {planned.unknown}× dle času</span> : null}</span>
-        <span><span className="text-muted">Odběháno</span> <strong>{formatKm(doneM)}</strong></span>
-      </Card>
+      {/* Proužek dnů: barva = zátěž, tečka = odběháno. Ťuknutím otevřeš den. */}
+      <div key={`strip-${weekStart}`} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="grid touch-pan-y grid-cols-7 gap-1.5">
+        {dates.map((d, i) => {
+          const w = dayWorkouts(plan.workouts, d).find((x) => x.workout.type !== 'rest');
+          const ran = weekActs.some((a) => a.localDate === d) || weekStrava.some((r) => r.localDate === d) || w?.status === 'completed';
+          return (
+            <button key={d} type="button" disabled={!w} onClick={() => w && setOpen(w)} aria-label={`${formatDay(d, { weekday: true })}${w ? `: ${w.workout.title}` : ': volno'}${ran ? ', odběháno' : ''}`} className={cx('relative flex min-h-[4.5rem] flex-col items-center justify-center rounded-[14px] transition-transform active:scale-95', d === today ? 'bg-ink text-white' : 'bg-surface border border-line', !w && d !== today && 'border-dashed bg-transparent')}>
+              <span className={cx('label text-[11px]', d === today ? 'text-volt' : 'text-muted')}>{DOW_SHORT[i]}</span>
+              <span className="display text-[22px]">{Number(d.slice(8))}</span>
+              <span className={cx('mt-0.5 h-1.5 w-6 rounded-full', w ? LOAD_DOT[w.workout.load ?? 'low'] : 'bg-transparent', w?.status === 'skipped' && 'opacity-30')} />
+              {ran && <span className="absolute right-1 top-1 size-2.5 rounded-full bg-done ring-2 ring-surface" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="rounded-[20px] border border-line bg-surface p-4">
+        <div className="flex items-end justify-between gap-3">
+          <p><span className="display text-[34px]">{String(Math.round(doneM / 100) / 10).replace('.', ',')}</span><span className="display text-[20px] text-muted"> / {String(Math.round(planned.totalM / 100) / 10).replace('.', ',')} km</span></p>
+          <p className="label text-muted">{planned.unknown ? `+ ${planned.unknown}× dle času` : 'odběháno / plán'}</p>
+        </div>
+        <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface-2">
+          <div className="h-full rounded-full bg-load-low transition-[width] duration-300" style={{ width: `${planned.totalM > 0 ? Math.min(100, (doneM / planned.totalM) * 100) : 0}%` }} />
+        </div>
+      </div>
 
       <ul key={weekStart} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className={`touch-pan-y space-y-2 ${slide === 'next' ? 'week-in-next' : slide === 'prev' ? 'week-in-prev' : ''}`}>
         {dates.map((d) => {
@@ -171,7 +192,7 @@ export default function PlanPage() {
                 <div key={r.id} className="ml-12"><StravaRun run={r} planned={ws.find((w) => w.workout.type !== 'rest')} compact /></div>
               ))}
               {dayActs.map((a) => (
-                <button key={a.id} type="button" onClick={() => setActivityId(a.id)} className="num ml-12 flex min-h-11 w-[calc(100%-3rem)] items-center justify-between rounded-[8px] bg-accent-soft px-3 text-left text-[14px] text-accent">
+                <button key={a.id} type="button" onClick={() => setActivityId(a.id)} className="num ml-12 flex min-h-11 w-[calc(100%-3rem)] items-center justify-between rounded-[12px] bg-accent-soft px-3 text-left text-[14px] font-medium text-text">
                   <span>Odběháno {formatKm(a.distanceM, 1)}</span>
                   <span>{acts.matches.some((m) => m.activityId === a.id) ? 'spárováno' : 'nespárováno'}</span>
                 </button>
@@ -194,7 +215,7 @@ export default function PlanPage() {
 
       {openDrafts.length > 0 && (
         <section className="space-y-2">
-          <h2 className="font-semibold">Rozpracované návrhy</h2>
+          <h2 className="display text-[24px]">Rozpracované návrhy</h2>
           {openDrafts.map((d) => <DraftCard key={d.id} draftId={d.id} compact />)}
         </section>
       )}

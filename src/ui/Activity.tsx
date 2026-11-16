@@ -38,7 +38,7 @@ async function parseFile(file: File): Promise<{ parsed: ParsedActivity; source: 
 export function AddActivitySheet({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (a: Activity) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(() => todayIso());
   const [km, setKm] = useState('');
   const [time, setTime] = useState('');
 
@@ -66,7 +66,7 @@ export function AddActivitySheet({ open, onClose, onAdded }: { open: boolean; on
     const distanceM = Math.round(Number(km.replace(',', '.')) * 1000);
     const parts = time.split(':').map(Number);
     const sec = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts.length === 2 ? parts[0] * 60 + parts[1] : parts[0] * 60;
-    if (!(distanceM > 0) || !(sec > 0) || parts.some(Number.isNaN)) { toast('Vyplň vzdálenost a čas (např. 52:30).', { tone: 'error' }); return; }
+    if (!(distanceM > 0) || !(sec > 0) || parts.some(Number.isNaN)) { toast('Vyplň vzdálenost v km a čas jako minuty:sekundy.', { tone: 'error' }); return; }
     const day = date || todayIso(profile.timezone);
     const startUtc = new Date(`${day}T12:00:00`).toISOString();
     const res = await addActivity({
@@ -89,13 +89,14 @@ export function AddActivitySheet({ open, onClose, onAdded }: { open: boolean; on
           <p className="mt-2 text-[13px] text-muted">GPX, TCX nebo FIT. Soubor se zpracuje v zařízení a nikam se neodesílá.</p>
         </div>
         <div className="space-y-3 border-t border-line pt-4">
-          <h3 className="font-semibold">Zapsat ručně</h3>
-          <div className="grid grid-cols-3 gap-2">
+          <h3 className="display text-[20px]">Zapsat ručně</h3>
+          <div className="grid grid-cols-[1.5fr_1fr_1fr] gap-2">
             <Field label="Den"><input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-            <Field label="Km"><input inputMode="decimal" className={inputClass} value={km} onChange={(e) => setKm(e.target.value)} placeholder="10" /></Field>
-            <Field label="Čas"><input inputMode="numeric" className={inputClass} value={time} onChange={(e) => setTime(e.target.value)} placeholder="52:30" /></Field>
+            <Field label="Vzdálenost"><input inputMode="decimal" className={inputClass} value={km} onChange={(e) => setKm(e.target.value)} placeholder="km" aria-label="Vzdálenost v km" /></Field>
+            <Field label="Čas"><input className={inputClass} value={time} onChange={(e) => setTime(e.target.value)} placeholder="min:s" aria-label="Čas ve tvaru minuty:sekundy" /></Field>
           </div>
-          <Button className="w-full" onClick={addManual}>Zapsat</Button>
+          <p className="text-[13px] text-muted">Například 10 km za 52:30.</p>
+          <Button className="w-full" onClick={addManual}>Zapsat běh</Button>
         </div>
       </div>
     </Sheet>

@@ -81,6 +81,20 @@ Stav: `[x]` hotovo a ověřeno (test nebo průchod v prohlížeči) · `[~]` nap
 - [ ] Tokeny jsou do M5 uložené v zařízení uživatele, ne šifrovaně na serveru (odchylka od §10.2)
 - [ ] Webhooky Stravy (revoke/delete) nejsou; zrušený přístup se pozná až při dalším načtení
 
+## Vzhled (přepracováno po zpětné vazbě)
+
+- [x] Vlastní identita místo šedých karet: tmavé „startovní číslo“ dne s neonovým akcentem, kondenzované kurzívní číslice (Barlow Condensed), plovoucí navigace
+- [x] Plán: proužek dnů s barvou zátěže a tečkou odběhnutí, souhrn týdne s ukazatelem, přejíždění mezi týdny
+- [x] Přidání aktivity: den předvyplněný dneškem, nápovědy už nevypadají jako vyplněné hodnoty
+- [~] Zkontrolováno Dnes a Plán ve světlém režimu na šířce telefonu; Trenér, Profil, Import a listy jsem po změně vzhledu znovu neprocházel
+- [ ] Odchylka od §4.5 zadání (tam byl „klidný deník“ s jedním zeleným akcentem); platí novější pokyn uživatele
+
+## Otevřené rozhodnutí: ChatGPT a Claude
+
+- [ ] Uživatel chce v nastavení propojení s ChatGPT i s Claudem. Předplatné ChatGPT/Claude se do cizí aplikace připojit nedá
+      (ChatGPT jen přes schválený program „Sign in with ChatGPT“, Claude to nenabízí vůbec). Reálná cesta je vlastní API klíč
+      od OpenAI / Anthropic, placený zvlášť podle spotřeby – zadání (§9.3) ji ale výslovně nevybralo. Čeká na rozhodnutí.
+
 ## Ověření
 
 - [x] 26 testů (doména, úložiště, Strava izolace) + test referenčního PDF (spouští se jen s lokálním souborem)

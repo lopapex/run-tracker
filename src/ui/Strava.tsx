@@ -75,11 +75,12 @@ export function StravaRun({ run, planned, compact }: { run: StravaActivity; plan
   const c = completionOf(run, planned);
   const pace = formatPace(paceOf(run.distanceM, run.movingSec));
   return (
-    <div className={cx('rounded-[12px] border border-line bg-surface', compact ? 'px-3 py-2' : 'p-4')}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3">
-        <span className="num text-[15px]">
-          <strong>{formatKm(run.distanceM, 2)}</strong> · {formatDuration(run.movingSec)} · <strong>{pace}/km</strong>
-          {run.avgHr ? ` · tep ${Math.round(run.avgHr)}` : ''}
+    <div className={cx('rounded-[16px] border border-line bg-surface', compact ? 'px-3 py-2' : 'p-4')}>
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        <span className="flex items-baseline gap-3">
+          <span><span className={cx('display', compact ? 'text-[22px]' : 'text-[34px]')}>{formatKm(run.distanceM, 2).replace(' km', '')}</span> <span className="label text-muted">km</span></span>
+          <span><span className={cx('display', compact ? 'text-[22px]' : 'text-[34px]')}>{pace}</span> <span className="label text-muted">/km</span></span>
+          <span className="num text-[13px] text-muted">{formatDuration(run.movingSec)}{run.avgHr ? ` · tep ${Math.round(run.avgHr)}` : ''}</span>
         </span>
         {c === 'done' && <span className="inline-flex items-center gap-1 text-[13px] font-medium text-done"><CheckCircle size={16} weight="fill" />odběháno</span>}
         {c === 'short' && <span className="inline-flex items-center gap-1 text-[13px] font-medium text-warn"><WarningCircle size={16} weight="fill" />kratší než plán{planned?.workout.distanceM ? ` (${formatKm(planned.workout.distanceM)})` : ''}</span>}
@@ -98,9 +99,9 @@ export function StravaCard({ view, syncing, error, onRefresh }: { view: StravaVi
   if (!view.connection) {
     return (
       <Card className="space-y-2">
-        <h2 className="font-semibold">Strava</h2>
+        <h2 className="display text-[24px]">Strava</h2>
         <p className="text-[15px] text-muted">Propoj Stravu a uvidíš tady své běhy: vzdálenost, tempo a jestli máš dnešek odběhaný. Aplikace jen čte tvoje aktivity; nic neupravuje a trenérovi je nepředává.</p>
-        <button type="button" className="min-h-11 w-full rounded-[8px] bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
+        <button type="button" className="min-h-12 w-full rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
       </Card>
     );
   }
@@ -121,7 +122,7 @@ export function StravaSettings({ view }: { view: StravaView }) {
     return (
       <div className="space-y-2">
         <p className="text-[14px] text-muted">Čtení tvých aktivit ze Stravy k zobrazení v přehledu a v plánu. Žádá se jen oprávnění číst aktivity (bez soukromých „jen já“).</p>
-        <button type="button" className="min-h-11 w-full rounded-[8px] bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
+        <button type="button" className="min-h-12 w-full rounded-full bg-[#FC5200] px-4 font-semibold text-white active:opacity-70" onClick={connectStrava}>Propojit se Stravou</button>
       </div>
     );
   }

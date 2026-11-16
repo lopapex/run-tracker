@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
+import { Barlow_Condensed } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/ui/AppShell';
 import './globals.css';
+
+const display = Barlow_Condensed({ subsets: ['latin', 'latin-ext'], weight: ['600', '700'], style: ['normal', 'italic'], variable: '--font-barlow', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Run Tracker',
@@ -18,14 +21,14 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   interactiveWidget: 'resizes-content',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f6f7f5' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f120f' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f1ea' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c0f0a' },
   ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="cs" className={GeistSans.variable}>
+    <html lang="cs" className={`${GeistSans.variable} ${display.variable}`}>
       <body>
         <AppShell>{children}</AppShell>
       </body>

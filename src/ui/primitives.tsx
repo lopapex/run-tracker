@@ -8,8 +8,8 @@ export { cx };
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-ink font-semibold',
-  secondary: 'bg-surface-2 text-text font-medium',
+  primary: 'bg-accent text-accent-ink font-semibold shadow-[0_2px_0_rgb(0_0_0/0.18)]',
+  secondary: 'border border-line bg-surface text-text font-medium',
   ghost: 'text-text font-medium hover:bg-surface-2',
   danger: 'bg-danger-soft text-danger font-medium',
 };
@@ -20,7 +20,7 @@ export function Button({ variant = 'secondary', className, ...rest }: ButtonHTML
       type="button"
       {...rest}
       className={cx(
-        'inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] px-4 text-[15px] transition-opacity active:opacity-70 disabled:opacity-40',
+        'inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 text-[15px] transition-transform active:scale-[0.97] disabled:opacity-40',
         VARIANTS[variant],
         className,
       )}
@@ -29,7 +29,7 @@ export function Button({ variant = 'secondary', className, ...rest }: ButtonHTML
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cx('rounded-[16px] border border-line bg-surface p-4', className)}>{children}</section>;
+  return <section className={cx('rounded-[20px] border border-line bg-surface p-4', className)}>{children}</section>;
 }
 
 export function Chip({ children, tone = 'neutral', onRemove }: { children: ReactNode; tone?: 'neutral' | 'accent' | 'warn' | 'danger'; onRemove?: () => void }) {
@@ -49,18 +49,18 @@ export function Chip({ children, tone = 'neutral', onRemove }: { children: React
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[13px] font-medium text-muted">{label}</span>
+      <span className="label mb-1 block text-muted">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-[13px] text-muted">{hint}</span>}
     </label>
   );
 }
 
-export const inputClass = 'min-h-11 w-full rounded-[8px] border border-line bg-surface px-3 text-base text-text placeholder:text-muted';
+export const inputClass = 'min-h-12 w-full rounded-[12px] border border-line bg-surface px-3 text-base text-text placeholder:text-rest placeholder:italic';
 
 export function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: Array<{ value: T; label: string }>; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-[8px] bg-surface-2 p-1">
+    <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-full bg-surface-2 p-1">
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -68,7 +68,7 @@ export function Segmented<T extends string | number>({ value, options, onChange,
           role="radio"
           aria-checked={o.value === value}
           onClick={() => onChange(o.value)}
-          className={cx('min-h-10 flex-1 rounded-[6px] px-2 text-[14px] font-medium', o.value === value ? 'bg-surface text-text shadow-sm' : 'text-muted')}
+          className={cx('min-h-10 flex-1 rounded-full px-2 text-[14px] font-semibold', o.value === value ? 'bg-accent text-accent-ink' : 'text-muted')}
         >
           {o.label}
         </button>
@@ -89,7 +89,7 @@ export function DayToggles({ value, onChange, label }: { value: number[]; onChan
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? value.filter((d) => d !== i) : [...value, i].sort())}
-            className={cx('min-h-11 flex-1 rounded-[8px] text-[14px] font-medium', on ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted')}
+            className={cx('label min-h-11 flex-1 rounded-[12px]', on ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-muted')}
           >
             {n}
           </button>
@@ -121,7 +121,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
       {open && (
         <>
           <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
-            <h2 className="text-[17px] font-semibold">{title}</h2>
+            <h2 className="display text-[24px]">{title}</h2>
             <button type="button" onClick={onClose} aria-label="Zavřít" className="grid size-11 place-items-center rounded-full hover:bg-surface-2">
               <X size={20} />
             </button>
@@ -168,9 +168,9 @@ export function Toaster() {
     () => EMPTY,
   );
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-center gap-2 px-4">
+    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-center gap-2 px-4">
       {list.map((t) => (
-        <div key={t.id} className={cx('pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[12px] px-4 py-2 text-[15px] shadow-lg', t.tone === 'error' ? 'bg-danger-soft text-danger' : 'bg-text text-bg')}>
+        <div key={t.id} className={cx('pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[16px] px-4 py-2 text-[15px] shadow-lg', t.tone === 'error' ? 'bg-danger-soft text-danger' : 'bg-ink text-white')}>
           <span className="flex-1">{t.text}</span>
           {t.action && (
             <button
@@ -194,7 +194,7 @@ export function Toaster() {
 export function EmptyState({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="text-center">
-      <h2 className="text-[17px] font-semibold">{title}</h2>
+      <h2 className="display text-[26px]">{title}</h2>
       <div className="mt-2 space-y-3 text-[15px] text-muted">{children}</div>
     </Card>
   );

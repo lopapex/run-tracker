@@ -174,7 +174,7 @@ export default function ImportPage() {
           })}
 
           {weeks.length > 0 && (
-            <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] flex gap-2 rounded-[12px] border border-line bg-surface p-2 shadow-lg">
+            <div className="sticky bottom-[calc(5.5rem+env(safe-area-inset-bottom))] flex gap-2 rounded-[12px] border border-line bg-surface p-2 shadow-lg">
               <Button onClick={() => setStage('pick')}>Zahodit</Button>
               <Button variant="primary" className="flex-1" disabled={open.length > 0} onClick={publish}>{open.length ? `Nejdřív zkontroluj ${open.length}` : 'Potvrdit a zařadit do kalendáře'}</Button>
             </div>

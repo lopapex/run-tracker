@@ -13,7 +13,7 @@ import type { Load, PaceChart, ScheduledWorkout, WorkoutSpec, WorkoutType } from
 import { runWithUndo } from './hooks';
 import { Button, Chip, cx, Field, inputClass, Sheet, toast } from './primitives';
 
-const LOAD_DOT: Record<Load, string> = { rest: 'bg-rest', low: 'bg-accent', medium: 'bg-warn', high: 'bg-danger' };
+export const LOAD_DOT: Record<Load, string> = { rest: 'bg-rest', low: 'bg-load-low', medium: 'bg-load-medium', high: 'bg-load-high' };
 
 export function LoadBadge({ load }: { load?: Load }) {
   if (!load) return null;
@@ -40,7 +40,7 @@ export function WorkoutBody({ workout, chart }: { workout: WorkoutSpec; chart?: 
       {lines.length > 0 && (
         <ol className="space-y-1">
           {lines.map((l, i) => (
-            <li key={i} className="num rounded-[8px] bg-surface-2 px-3 py-1.5">{l}</li>
+            <li key={i} className="num rounded-[10px] bg-surface-2 px-3 py-1.5">{l}</li>
           ))}
         </ol>
       )}
@@ -60,20 +60,26 @@ export function WorkoutRow({ w, onOpen, today }: { w: ScheduledWorkout; onOpen: 
   const rest = w.workout.type === 'rest';
   const moved = w.date !== w.originDate;
   return (
-    <button type="button" onClick={onOpen} className={cx('flex min-h-14 w-full items-center gap-3 rounded-[12px] border px-3 py-2 text-left', w.date === today ? 'border-accent bg-surface' : 'border-line bg-surface', w.status === 'skipped' && 'opacity-60')}>
+    <button type="button" onClick={onOpen} className={cx('relative flex w-full items-center gap-3 overflow-hidden rounded-[16px] text-left transition-transform active:scale-[0.99]', rest ? 'min-h-11 px-3 py-1' : 'min-h-16 border border-line bg-surface py-2 pl-4 pr-3', w.date === today && !rest && 'ring-2 ring-accent', w.status === 'skipped' && 'opacity-60')}>
+      {!rest && <span aria-hidden className={cx('absolute inset-y-0 left-0 w-1.5', LOAD_DOT[w.workout.load ?? 'low'])} />}
       <span className="w-9 shrink-0 text-center">
-        <span className="block text-[12px] font-medium text-muted">{DOW_SHORT[dowOf(w.date)]}</span>
-        <span className="num block text-[15px] font-semibold">{Number(w.date.slice(8))}.</span>
+        <span className={cx('label block', w.date === today ? 'text-text' : 'text-muted')}>{DOW_SHORT[dowOf(w.date)]}</span>
+        <span className={cx('display block text-[22px]', rest && 'text-muted')}>{Number(w.date.slice(8))}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cx('block truncate font-medium', rest && 'text-muted', w.status === 'skipped' && 'line-through')}>{w.workout.title}</span>
+        <span className={cx('block truncate', rest ? 'text-[14px] text-muted' : 'font-semibold', w.status === 'skipped' && 'line-through')}>{w.workout.title}</span>
         {!rest && <span className="num block truncate text-[13px] text-muted">{workoutSummary(w.workout)}</span>}
       </span>
+      {!rest && w.workout.distanceM != null && (
+        <span className="shrink-0 text-right">
+          <span className="display block text-[26px]">{String(Math.round(w.workout.distanceM / 100) / 10).replace('.', ',')}</span>
+          <span className="label block text-[11px] text-muted">km</span>
+        </span>
+      )}
       <span className="flex shrink-0 flex-col items-end gap-0.5">
         <StatusMark w={w} />
         {moved && !rest && w.status === 'scheduled' && <span className="inline-flex items-center gap-1 text-[12px] text-warn"><ArrowsLeftRight size={14} />přesunuto</span>}
         {w.locked && <Lock size={14} className="text-muted" aria-label="zamčeno" />}
-        {!rest && w.workout.load && <span className={cx('size-2 rounded-full', LOAD_DOT[w.workout.load])} title={LOAD_LABEL[w.workout.load]} />}
       </span>
     </button>
   );
@@ -213,7 +219,7 @@ export function WorkoutSheet({ workout, onClose, chart, today }: { workout: Sche
               {(changed || moved || w.status === 'skipped') && w.original && <Button className="col-span-2" disabled={w.locked} onClick={() => runWithUndo({ operation: 'RESTORE_ORIGINAL', payload: { workoutId: w.id }, reason: 'Návrat k plánu' })}>Obnovit původní předpis</Button>}
             </div>
           )}
-          <Link href={`/trener/?jednotka=${w.id}`} className="flex min-h-11 items-center justify-center rounded-[8px] bg-accent-soft font-medium text-accent">Probrat s trenérem</Link>
+          <Link href={`/trener/?jednotka=${w.id}`} className="flex min-h-12 items-center justify-center rounded-full bg-accent-soft font-semibold text-text">Probrat s trenérem</Link>
           {(history?.length ?? 0) > 0 && (
             <details className="text-[14px]">
               <summary className="min-h-11 cursor-pointer py-2 font-medium text-muted">Historie změn ({history!.length})</summary>
