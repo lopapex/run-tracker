@@ -22,6 +22,16 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [ ] Ověřit v Claude: přidání konektoru bez přihlášení, schvalování zápisových nástrojů, import skutečného PDF, souběh s konektorem Stravy, mobilní aplikace.
 - [ ] Omezení počtu požadavků a velikosti prostoru.
 
+## Vizualizace a UI v konverzaci
+
+- [x] Widget s pohledy týden, celý plán, pomocník temp a běh proti plánu; světlý i tmavý režim, tabulková podoba grafů.
+- [x] Každá změna rozpisu vykreslí aktualizovaný týden s možností vrácení; bez plánu widget ukáže, jak začít.
+- [x] Záložky a navigace po týdnech přímým voláním nástrojů, akce u jednotek a nápovědy promptů jako zprávy do konverzace.
+- [x] Ikona konektoru v informacích serveru a favicon webu.
+- [x] Úspora tokenů: krátká id, stručnější výpis plánu, méně opakování v popisech nástrojů.
+- [~] Ověřeno jen proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, zprávy z widgetu, přímé volání nástrojů a zobrazení ikony.
+- [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
+
 ## Web
 
 - [x] Úvodní stránka: vytvoření adresy v prohlížeči, návod, soukromí.
@@ -29,6 +39,6 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 
 ## Později
 
-- [ ] Týden přímo v konverzaci (MCP Apps).
+- [ ] Export jednotky do hodinek Garmin (FIT workout).
 - [ ] OAuth a adresář Claude.
 - [ ] ChatGPT (dnes bez Stravy a se zápisem jen na firemních tarifech).

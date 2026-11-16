@@ -1,6 +1,7 @@
 // Průchod konektorem přes skutečný MCP protokol: klient SDK → handleMcp → nástroje → úložiště v paměti.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { handleMcp } from './http';
 import { MemoryStore, workspaceId } from './store';
@@ -12,13 +13,13 @@ const KEY_B = 'b'.repeat(43);
 async function connect(store: MemoryStore, key = KEY_A) {
   const client = new Client({ name: 'test', version: '1' });
   const transport = new StreamableHTTPClientTransport(new URL(`https://example.test/mcp/${key}`), {
-    fetch: (url, init) => handleMcp(new Request(url, init), key, store),
+    fetch: (url, init) => handleMcp(new Request(url, init), key, store, async () => readFileSync('public/widget.html', 'utf8')),
   });
   await client.connect(transport);
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     const result = await client.callTool({ name, arguments: args });
     const text = (result.content as Array<{ type: string; text: string }>).map((c) => c.text).join('\n');
-    return { text, isError: result.isError === true };
+    return { text, isError: result.isError === true, data: result.structuredContent as any };
   };
   return { client, call };
 }
@@ -57,11 +58,15 @@ describe('konektor Run Tracker', () => {
   it('nabídne nástroje s popsaným tvarem jednotky a instrukce pro model', async () => {
     const { client } = await connect(new MemoryStore());
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'delete_all_data', 'edit_workout', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'shift_plan', 'skip_workout', 'undo_change']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'delete_all_data', 'edit_workout', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'shift_plan', 'show_paces', 'show_plan', 'show_run_comparison', 'show_week', 'skip_workout', 'undo_change']);
     expect(tools.find((t) => t.name === 'get_plan')?.annotations?.readOnlyHint).toBe(true);
     const edit = JSON.stringify(tools.find((t) => t.name === 'edit_workout')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
     expect(client.getInstructions()).toContain('oficiální konektor Strava');
+    // ikona a web konektoru jdou z adresy, na které běží
+    const info = client.getServerVersion() as { websiteUrl?: string; icons?: Array<{ src: string }> };
+    expect(info.websiteUrl).toBe('https://example.test');
+    expect(info.icons?.map((i) => i.src)).toContain('https://example.test/icon-192.png');
   });
 
   it('bez plánu řekne, jak ho založit, a nic neuloží', async () => {
@@ -116,6 +121,11 @@ describe('konektor Run Tracker', () => {
     expect(blocked.text).toContain('prohodit');
     const swapped = await call('move_workout', { workoutId: longRun, toDate: '2026-11-21', swap: true, reason: 'v neděli nemůžu' });
     expect(swapped.isError).toBe(false);
+    // změna rovnou vykreslí týden s pruhem a možností vrácení; id ve výpisech jsou krátká
+    expect(swapped.data).toMatchObject({ view: 'week', weekStart: '2026-11-16', banner: { canUndo: true } });
+    expect(swapped.data.banner.text).toContain('Long Run');
+    expect(swapped.data.banner.text).not.toContain('Změna');
+    expect(longRun).toHaveLength(8);
     let plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text;
     expect(idOf(plan, '2026-11-21', 'Long Run')).toBe(longRun);
     expect(idOf(plan, '2026-11-22', 'Easy Run')).toBe(saturday);
@@ -250,6 +260,68 @@ describe('konektor Run Tracker', () => {
     await a.call('set_profile', { weeklyKm: 50 });
     expect(await store.save(id, stale!.ws, stale!.etag)).toBe(false);
     expect((await store.load(id))!.ws.profile.weeklyKm).toBe(50);
+  });
+
+  it('vizualizace: nástroje odkazují na widget a vracejí data pro vykreslení', async () => {
+    const { client, call } = await connect(new MemoryStore());
+    const { tools } = await client.listTools();
+    for (const name of ['show_week', 'show_plan', 'show_paces', 'show_run_comparison']) {
+      const tool = tools.find((t) => t.name === name)!;
+      expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe('ui://run-tracker/view.html');
+      expect(tool.annotations?.readOnlyHint).toBe(true);
+    }
+    const resource = await client.readResource({ uri: 'ui://run-tracker/view.html' });
+    expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
+    expect(String((resource.contents[0] as { text?: string }).text)).toContain('ui/initialize');
+
+    expect((await call('show_week')).data.view).toBe('empty');
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)], paceChart: { easy: { fromSec: 304, toSec: 336 }, '5k_pace': { fromSec: 240, toSec: 250 } } });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text;
+    const monday = idOf(plan, '2026-11-16', 'Easy Run');
+    const tuesday = idOf(plan, '2026-11-17', 'Speed Session');
+    await call('set_status', { workoutId: monday, status: 'completed', feel: 4 });
+
+    const weekData = (await call('show_week', { date: '2026-11-18' })).data;
+    expect(weekData.view).toBe('week');
+    expect(weekData.weekStart).toBe('2026-11-16');
+    expect(weekData.days).toHaveLength(7);
+    expect(weekData.stats).toMatchObject({ units: 5, unitsDone: 1, doneKm: 10 });
+    expect(weekData.days[0].workouts[0]).toMatchObject({ status: 'completed', feel: 4, kmMin: 10 });
+
+    const planData = (await call('show_plan')).data;
+    expect(planData.weeks).toHaveLength(2);
+    expect(planData.weeks[0]).toMatchObject({ sourceWeek: 1, phase: 'PREP', unitsDone: 1, longRunKm: 16 });
+    expect(planData.totals).toMatchObject({ units: 10, unitsDone: 1, doneKm: 10 });
+
+    // 3 minuty v tempu 4:00–4:10 jsou 720–750 m
+    const paceData = (await call('show_paces', { workoutId: tuesday })).data;
+    expect(paceData.paces.map((p: { key: string }) => p.key)).toEqual(['easy', '5k_pace']);
+    expect(paceData.workout.rows.find((r: { label: string }) => r.label === 'Rychlý úsek')).toMatchObject({ reps: 6, distMinM: 720, distMaxM: 750 });
+    expect(paceData.workout.rows.find((r: { label: string }) => r.label === 'Pauza')).toMatchObject({ reps: 5 });
+  });
+
+  it('porovná běh s plánem a nic z něj neuloží', async () => {
+    const store = new MemoryStore();
+    const { call } = await connect(store);
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)], paceChart: { easy: { fromSec: 304, toSec: 336 } } });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const monday = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run');
+    const before = JSON.stringify((await store.load(await workspaceId(KEY_A)))!.ws);
+
+    const laps = Array.from({ length: 10 }, (_, i) => ({ distanceM: 1000, durationSec: i < 8 ? 320 : 290, avgHr: 140 + i }));
+    const result = await call('show_run_comparison', { workoutId: monday, run: { name: 'Ranní běh', distanceM: 10020, movingSec: 3140, avgHr: 146, laps } });
+    expect(result.isError).toBe(false);
+    expect(result.data.view).toBe('run');
+    expect(result.data.run.avgPaceSec).toBe(313);
+    expect(result.data.target).toMatchObject({ key: 'easy', fastSec: 304, slowSec: 336 });
+    expect(result.data.verdict).toMatchObject({ distance: 'ok', pace: 'in', lapsInTarget: 8 });
+    expect(result.text).toContain('Run Tracker je neuložil');
+
+    const short = await call('show_run_comparison', { workoutId: monday, run: { distanceM: 6000, movingSec: 1700 } });
+    expect(short.data.verdict).toMatchObject({ distance: 'short', pace: 'faster' });
+    expect(JSON.stringify((await store.load(await workspaceId(KEY_A)))!.ws)).toBe(before);
+    expect(before).not.toContain('Ranní běh');
   });
 
   it('smaže všechna data jen s výslovným potvrzením', async () => {

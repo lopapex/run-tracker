@@ -6,6 +6,8 @@
   <title>Run Tracker – běžecký plán v Claude</title>
   <meta name="description" content="Konektor pro Claude, který drží tvůj běžecký plán: nahraješ PDF, Claude plán založí a pak ho s tebou přeplánuje podle toho, jak běháš.">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -43,10 +45,12 @@
       </li>
       <li>
         <h2>Nahraj plán a mluv s trenérem</h2>
-        <p>Do konverzace přilož plán v PDF, obrázku nebo tabulce a napiš, kdy začínáš nebo kdy máš závod.</p>
+        <p>Do konverzace přilož plán v PDF, obrázku nebo tabulce a napiš, kdy začínáš nebo kdy máš závod. Týden, celý plán, tempa i porovnání běhu se ukazují přímo v konverzaci jako karty s tlačítky pro další kroky.</p>
         <ul class="prompts">
           <li>Založ můj plán z přiloženého PDF. Závod mám 7. února.</li>
-          <li>Jak vypadá můj týden?</li>
+          <li>Ukaž mi tento týden.</li>
+          <li>Ukaž celý plán a jak jsem na tom.</li>
+          <li>Jak rychle mám běžet zítřejší trénink?</li>
           <li>O víkendu nemůžu běhat, přeplánuj to.</li>
           <li>Podívej se na můj úterní běh ve Stravě a zapiš, jak jsem ho splnil.</li>
           <li>Vrať poslední změnu.</li>
@@ -59,13 +63,12 @@
       <ul>
         <li>Žádný účet ani e-mail. Jediné, co tě s daty spojuje, je adresa konektoru.</li>
         <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění a tvoje krátké poznámky.</li>
-        <li>Data aktivit ze Stravy Run Tracker nedostává ani neukládá. Čte je jen Claude přes oficiální konektor Stravy.</li>
+        <li>Data aktivit ze Stravy Run Tracker neukládá. Čte je Claude přes oficiální konektor Stravy; když si necháš běh porovnat s plánem, jeho čísla se jen vykreslí a zahodí.</li>
         <li>Všechno smažeš větou „Smaž všechna moje data v Run Trackeru“. Smazání je nevratné.</li>
       </ul>
     </section>
 
     <footer>
-      <p>Run Tracker není lékařská služba. Při bolesti nebo zdravotních potížích se poraď s lékařem.</p>
       <p><a href="https://github.com/lopapex/run-tracker" rel="noopener noreferrer">Zdrojový kód</a> · MIT</p>
     </footer>
   </main>

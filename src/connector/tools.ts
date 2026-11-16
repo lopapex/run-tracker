@@ -94,12 +94,20 @@ function putNote(ws: Workspace, workoutId: string, note: WorkoutNote | null): vo
   ws.notes = [...ws.notes.filter((n) => n.workoutId !== workoutId), ...(note ? [note] : [])];
 }
 
+/** Krátké id do výpisů: celé UUID stojí zbytečné tokeny. Nástroje přijmou krátké i celé. */
+export const shortId = (id: string): string => id.slice(0, 8);
+export function resolveId<T extends { id: string }>(items: T[], ref: string): string {
+  if (items.some((i) => i.id === ref)) return ref;
+  const hits = ref.length >= 6 ? items.filter((i) => i.id.startsWith(ref)) : [];
+  return hits.length === 1 ? hits[0].id : ref;
+}
+
 const STATUS_LABEL: Record<ScheduledWorkout['status'], string> = { scheduled: 'v plánu', completed: 'splněno', partial: 'splněno částečně', skipped: 'vynecháno' };
 
 function workoutLine(ws: Workspace, w: ScheduledWorkout, chart: PaceChart): string[] {
   const week = w.sourceWeek != null ? `T${w.sourceWeek}` : 'mimo plán';
   const flags = [STATUS_LABEL[w.status], w.locked ? 'zamčeno' : '', w.date !== w.originDate ? `přesunuto z ${w.originDate}` : '', w.skipReason ? `důvod: ${w.skipReason}` : ''].filter(Boolean).join(', ');
-  const lines = [`${w.id} | ${w.date} ${DOW_LONG[dowOf(w.date)]} | ${week} | ${w.workout.title} | ${workoutSummary(w.workout)} | ${flags}`];
+  const lines = [`${shortId(w.id)} | ${w.date} ${DOW_LONG[dowOf(w.date)]} | ${week} | ${w.workout.title} | ${workoutSummary(w.workout)} | ${flags}`];
   const blocks = blockLines(w.workout.blocks, chart);
   if (blocks.length) lines.push(`  Struktura: ${blocks.join('; ')}.`);
   if (w.workout.note) lines.push(`  Poznámka plánu: ${w.workout.note}`);
@@ -158,10 +166,11 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
     const label = !mapping ? 'mimo plán' : mapping.sourceWeek == null ? 'pauza' : `týden ${mapping.sourceWeek} plánu${source?.phase ? ` (${source.phase})` : ''}`;
     const days = all.filter((w) => w.date >= start && w.date <= addDays(start, 6) && w.date >= from && w.date <= to).sort((a, b) => a.date.localeCompare(b.date));
     lines.push('', `Týden od ${start}: ${label}${start === weekStartOf(today) ? ' – probíhá' : ''}`);
-    if (source?.note) lines.push(`Poznámka autora plánu: ${source.note}`);
+    if (source?.note && start === weekStartOf(today)) lines.push(`Poznámka autora plánu: ${source.note.length > 300 ? `${source.note.slice(0, 300)}…` : source.note}`);
     if (!days.length) { lines.push('Žádné jednotky.'); continue; }
-    lines.push('id | datum | týden plánu | jednotka | obsah | stav');
-    for (const w of days) lines.push(...workoutLine(ws, w, chart));
+    const rest = days.filter((w) => w.workout.type === 'rest' && w.status === 'scheduled');
+    for (const w of days) if (!rest.includes(w)) lines.push(...workoutLine(ws, w, chart));
+    if (rest.length) lines.push(`Volno: ${rest.map((w) => `${DOW_LONG[dowOf(w.date)]} ${w.date.slice(5)} (${shortId(w.id)})`).join(', ')}.`);
     const planned = days.filter((w) => w.status !== 'skipped').map((w) => w.workout);
     lines.push(`Součet naplánovaného: ${formatDistanceRange(plannedDistance(planned, chart))}.`);
   }
@@ -169,7 +178,7 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
   const recent = ws.revisions.filter((r) => r.activationId === activation.id).slice(-5).reverse();
   if (recent.length) {
     lines.push('', 'Poslední změny (id pro undo_change):');
-    for (const r of recent) lines.push(`${r.id} | ${r.at.slice(0, 16)} | ${OPERATION_LABEL[r.operation] ?? r.operation}${r.reason ? ` – ${r.reason}` : ''}${r.revertedById ? ' (vráceno)' : ''}`);
+    for (const r of recent) lines.push(`${shortId(r.id)} | ${r.at.slice(0, 16)} | ${OPERATION_LABEL[r.operation] ?? r.operation}${r.reason ? ` – ${r.reason}` : ''}${r.revertedById ? ' (vráceno)' : ''}`);
   }
   return done(lines.join('\n'), false);
 }
@@ -254,16 +263,19 @@ export function scheduleCommand(ws: Workspace, operation: ScheduleOperation, pay
   const activation = activeOf(ws);
   if (!activation) return fail('Uživatel nemá aktivní plán.');
   const snap = snapshotOf(ws, activation);
+  const p = payload as { workoutId?: unknown };
+  if (p && typeof p.workoutId === 'string') payload = { ...p, workoutId: resolveId(snap.workouts, p.workoutId) };
   const result = applyScheduleCommand(snap, { id: newId(), operation, payload, reason }, { author: 'coach', now });
   if (!result.ok) return fail(result.message);
   persist(ws, snap, result.revision);
-  return done([...result.summary, ...result.warnings.map((w) => `Pozor: ${w}`), `Změna ${result.revision.id} je uložená a jde vrátit přes undo_change.`].join('\n'));
+  return done([...result.summary, ...result.warnings.map((w) => `Pozor: ${w}`), `Změna ${shortId(result.revision.id)} je uložená a jde vrátit přes undo_change.`].join('\n'));
 }
 
 export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now: string): Outcome {
   const activation = activeOf(ws);
   if (!activation) return fail('Uživatel nemá aktivní plán.');
-  const workout = ws.workouts.find((w) => w.id === input.workoutId && w.activationId === activation.id);
+  const wanted = resolveId(ws.workouts.filter((w) => w.activationId === activation.id), input.workoutId);
+  const workout = ws.workouts.find((w) => w.id === wanted && w.activationId === activation.id);
   if (!workout) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
   const previous = noteOf(ws, workout.id);
   const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}) };
@@ -289,7 +301,7 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
     lines.push('Zápis k jednotce uložen.');
   }
   persist(ws, snap, revision);
-  lines.push(`Změna ${revision.id} je uložená a jde vrátit přes undo_change.`);
+  lines.push(`Změna ${shortId(revision.id)} je uložená a jde vrátit přes undo_change.`);
   return done(lines.join('\n'));
 }
 
@@ -297,7 +309,7 @@ export function undoChange(ws: Workspace, revisionId: string | undefined, now: s
   const activation = activeOf(ws);
   if (!activation) return fail('Uživatel nemá aktivní plán.');
   const own = ws.revisions.filter((r) => r.activationId === activation.id);
-  const rev = revisionId ? own.find((r) => r.id === revisionId) : [...own].reverse().find((r) => !r.revertedById && r.operation !== 'REVERT');
+  const rev = revisionId ? own.find((r) => r.id === resolveId(own, revisionId)) : [...own].reverse().find((r) => !r.revertedById && r.operation !== 'REVERT');
   if (!rev) return fail(revisionId ? 'Změna s tímhle id není v historii aktivního plánu.' : 'Není žádná změna k vrácení.');
   const snap = snapshotOf(ws, activation);
   const result = revertRevision(snap, rev, { author: 'coach', now });
