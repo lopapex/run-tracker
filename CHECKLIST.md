@@ -42,6 +42,13 @@ Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [~] Ověřeno proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, přímé volání nástrojů z widgetu a zprávy do konverzace.
 - [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
 
+## ChatGPT
+
+- [x] Widget umí rozhraní `window.openai` (výška, odkazy, barevný režim, data) vedle standardu MCP Apps; ověřeno v napodobeném hostiteli.
+- [x] Bez Stravy: widget nabízí zadání čísel běhu, instrukce vedou model k dotazu nebo výpočtu z GPX, TCX či FIT.
+- [x] Metadata pro ChatGPT: `openai/outputTemplate` a `openai/widgetCSP` s doménou pro soubor do hodinek.
+- [ ] Ověřit ve skutečném ChatGPT: dostupnost vlastního MCP serveru na tvém tarifu, schvalování zápisu, vykreslení a výšku karty, mobil.
+
 ## Web
 
 - [x] Úvodní stránka: vytvoření adresy v prohlížeči, návod, příklady, snímky karet, soukromí; na 360 px bez přetékání.
@@ -49,4 +56,4 @@ Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 ## Později
 
 - [ ] OAuth a adresář Claude.
-- [ ] ChatGPT (dnes bez Stravy a se zápisem jen na firemních tarifech).
+- [ ] Data pro widget přesunout do `_meta` (v ChatGPT je model čte), až se ověří, že je Claude widgetu předává.

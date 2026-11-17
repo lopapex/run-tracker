@@ -15,6 +15,10 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 7. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
 8. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`; prošlé soubory se při dalším exportu smažou a `delete_all_data` smaže i soubory daného prostoru. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
 
+## ChatGPT
+
+Stejná adresa funguje i v ChatGPT jako vlastní MCP server (vývojářský režim; OpenAI ho se zápisem nabízí hlavně na tarifech Business a Enterprise). Widget používá standard MCP Apps a navíc rozhraní `window.openai` pro výšku karty, odkazy, barevný režim a data; nástroje nesou alias `openai/outputTemplate` a zdroj widgetu `openai/widgetCSP` s povolenou doménou pro odkaz na soubor do hodinek. Oficiální konektor Stravy v ChatGPT není: widget tam místo „Zhodnotit podle Stravy“ nabízí zadání čísel a model má v instrukcích, že se na čísla zeptá nebo je spočítá z nahraného GPX, TCX či FIT. ChatGPT podle dokumentace OpenAI čte `structuredContent` i modelem, takže každá karta tam stojí víc tokenů než text.
+
 ## Hranice vůči Stravě
 
 Podmínky Strava API (platné od 1. 6. 2026) zakazují posílat data z API do AI a provozovat vlastní MCP server se Strava daty. Run Tracker proto Strava API nepoužívá vůbec a data aktivit neukládá. `set_status` přijímá jen stav jednotky a krátkou poznámku uživatele. Výjimka je `show_result`: čísla běhu, která model přečetl přes oficiální konektor Stravy, přepočítá a vrátí widgetu, aniž by je uložil. Pro osobní použití vlastních dat to odpovídá účelu oficiálního konektoru; u veřejné služby pro cizí uživatele je to šedá zóna a před zveřejněním je potřeba si ji u Stravy ověřit.

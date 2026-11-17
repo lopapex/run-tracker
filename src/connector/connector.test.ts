@@ -63,6 +63,7 @@ describe('konektor Run Tracker', () => {
     const edit = JSON.stringify(tools.find((t) => t.name === 'import_plan_weeks')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
     expect(client.getInstructions()).toContain('oficiální konektor Strava');
+    expect(client.getInstructions()).toContain('export GPX');
     // ikona a web konektoru jdou z adresy, na které běží
     const info = client.getServerVersion() as { websiteUrl?: string; icons?: Array<{ src: string }> };
     expect(info.websiteUrl).toBe('https://example.test');
@@ -272,12 +273,14 @@ describe('konektor Run Tracker', () => {
     for (const name of ['show_week', 'show_plan', 'show_paces', 'show_result', 'export_garmin']) {
       const tool = tools.find((t) => t.name === name)!;
       expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe('ui://run-tracker/view.html');
+      // alias pro ChatGPT
+      expect((tool._meta as Record<string, unknown>)['openai/outputTemplate']).toBe('ui://run-tracker/view.html');
       expect(tool.annotations?.readOnlyHint).toBe(name !== 'export_garmin');
     }
     const resource = await client.readResource({ uri: 'ui://run-tracker/view.html' });
     expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
     // widget má vlastní kartu; hostitel ji nemá orámovat podruhé
-    expect(resource.contents[0]._meta).toEqual({ ui: { prefersBorder: false } });
+    expect(resource.contents[0]._meta).toMatchObject({ ui: { prefersBorder: false }, 'openai/widgetCSP': { redirect_domains: ['https://example.test'] } });
     expect(String((resource.contents[0] as { text?: string }).text)).toContain('ui/initialize');
 
     expect((await call('show_week')).data.view).toBe('empty');

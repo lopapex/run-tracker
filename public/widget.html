@@ -175,6 +175,11 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
   // Nástroje, které mění data: model se o změně z widgetu dozví přes kontext.
   var CHANGES = { move_workout: 1, skip_workout: 1, restore_workout: 1, undo_change: 1, set_status: 1 };
   var noop = function () {};
+  // ChatGPT k standardu MCP Apps přidává vlastní rozhraní window.openai: výška karty, odkazy, barevný režim a data.
+  var oai = window.openai || null;
+  // Oficiální konektor Stravy je v Claude, v ChatGPT ne: tam se čísla běhu zadávají ručně nebo souborem.
+  var strava = !oai;
+  var lastOutput = '';
 
   // Stav widgetu
   var data = null;        // data posledního pohledu
@@ -204,9 +209,10 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     });
   }
   function notify(method, params) { post({ jsonrpc: '2.0', method: method, params: params || {} }); }
+  function applyTheme(theme) { if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme); }
   function applyHost(ctx) {
     if (!ctx) return;
-    if (ctx.theme === 'dark' || ctx.theme === 'light') document.documentElement.setAttribute('data-theme', ctx.theme);
+    applyTheme(ctx.theme);
     var vars = ctx.styles && ctx.styles.variables;
     if (vars && vars['--font-sans']) document.documentElement.style.setProperty('--font-sans', vars['--font-sans']);
   }
@@ -215,7 +221,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     var m = e.data;
     if (!m || m.jsonrpc !== '2.0') return;
     if (m.method) {
-      if (m.method === 'ui/notifications/tool-result') showResult(m.params);
+      if (m.method === 'ui/notifications/tool-result') showResult(m.params, true);
       else if (m.method === 'ui/notifications/host-context-changed') applyHost(m.params);
       else if (m.method === 'ui/notifications/tool-cancelled') { data = null; plain = 'Zobrazení bylo zrušeno.'; render(); }
       if (m.id != null) post({ jsonrpc: '2.0', id: m.id, result: {} });
@@ -250,8 +256,12 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
       .then(function () { busy = false; app.classList.remove('busy'); });
   }
 
-  function showResult(result) {
+  function showResult(result, fromHost) {
     var d = result && result.structuredContent;
+    // Stejná data od hostitele mohou přijít standardní cestou i přes window.openai; podruhé se nepřekreslují.
+    var key = d ? JSON.stringify(d) : '';
+    if (fromHost && key && key === lastOutput) return;
+    lastOutput = key;
     if (widgetChange && d && d.banner) {
       // Změnu udělal uživatel klepnutím, ne model: dát mu vědět, aby radil nad aktuálním stavem.
       var what = widgetChange === true ? d.banner.text : widgetChange;
@@ -331,6 +341,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     if (link) {
       // V izolovaném rámu nemusí jít otevřít nové okno; hostitel to umí na požádání.
       e.preventDefault();
+      if (oai && typeof oai.openExternal === 'function') { try { oai.openExternal({ href: link.getAttribute('href') }); return; } catch (err) { /* zkusí se standardní cesta */ } }
       request('ui/open-link', { url: link.getAttribute('href') }, 10000).then(function (r) { if (r && r.isError) throw new Error('rejected'); }).catch(function () { window.open(link.getAttribute('href'), '_blank', 'noopener'); });
       return;
     }
@@ -402,7 +413,9 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
       h += opener('Upravit zápis', 'show_result', { workoutId: w.id }, 'Chci upravit zápis k jednotce ' + name + '.');
       links.push(link('Vrátit na „v plánu“', 'Vrať jednotku ' + name + ' na stav v plánu.'));
     }
-    if (w.status !== 'skipped') links.push(link('Zhodnotit podle Stravy', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.'));
+    if (w.status !== 'skipped') links.push(strava
+      ? link('Zhodnotit podle Stravy', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.')
+      : link('Zhodnotit běh', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.'));
     links.push(opener('Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
     if (w.status === 'scheduled') links.push(opener('Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
     return h + '<div class="links">' + links.join('') + '</div></div>';
@@ -437,7 +450,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     });
     h += '</ul><div class="foot">Klepni na trénink pro rozpis a akce.</div>';
     if (d.authorNote) h += '<details><summary>Poznámka autora plánu</summary><p class="sub">' + esc(d.authorNote) + '</p></details>';
-    return h + hints(['O víkendu nemůžu běhat, přeplánuj mi týden.', 'Podívej se do Stravy a zhodnoť, co jsem tento týden odběhl.']);
+    return h + hints(['O víkendu nemůžu běhat, přeplánuj mi týden.', strava ? 'Podívej se do Stravy a zhodnoť, co jsem tento týden odběhl.' : 'Zhodnoť můj týden. Řeknu ti, co jsem odběhl.']);
   }
 
   // ---------- Celý plán ----------
@@ -593,7 +606,9 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     var condOpen = form.showCond || form.conditions.length > 0;
     h += '<details class="cond" data-cond="1"' + (condOpen ? ' open' : '') + '><summary>Okolnosti' + (form.conditions.length ? ' (' + form.conditions.length + ')' : ': zima, vítr, spánek, alkohol…') + '</summary>' + pickRow('cond', Object.keys(d.conditionLabels).map(function (k) { return [k, d.conditionLabels[k]]; }), form.conditions, 'Okolnosti') + '</details>';
     h += '<button type="button" class="primary" data-save="1">Uložit zápis</button></div>';
-    if (!r) h += '<div class="acts">' + '<button type="button" data-say="' + esc('Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.') + '">Zhodnotit podle Stravy</button></div>';
+    if (!r) h += '<div class="acts">' + (strava
+      ? '<button type="button" data-say="' + esc('Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.') + '">Zhodnotit podle Stravy</button>'
+      : '<button type="button" data-say="' + esc('Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + w.title + '. Zeptej se mě na vzdálenost, čas a případně kola.') + '">Zadat čísla běhu</button>') + '</div>';
     else h += '<div class="foot">Čísla běhu se jen vykreslila. Run Tracker je neukládá.</div>';
     if (w.lines.length) h += '<details><summary>Předpis jednotky</summary><ul class="sub">' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></details>';
     return h + hints(['Co z toho plyne pro další dny?']);
@@ -626,7 +641,9 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     lastWidth = app.clientWidth;
     if (!data) app.innerHTML = head('', null) + '<p class="empty">' + esc(plain) + '</p>';
     else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
+    // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);
+    setTimeout(reportSize, 60);
   }
   // Výška se měří z karty, ne z dokumentu: dokument nikdy neklesne pod výšku, kterou mu hostitel dal,
   // takže by po zmenšení obsahu zůstalo dole prázdné místo.
@@ -635,6 +652,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     if (Math.abs(h - lastHeight) < 1) return;
     lastHeight = h;
     notify('ui/notifications/size-changed', { height: h });
+    if (oai && typeof oai.notifyIntrinsicHeight === 'function') { try { oai.notifyIntrinsicHeight(h); } catch (err) { /* hostitel výšku neumí */ } }
   }
   if (window.ResizeObserver) {
     new ResizeObserver(function () { if ((data || plain) && Math.abs(app.clientWidth - lastWidth) > 4) render(); reportSize(); }).observe(document.body);
@@ -642,8 +660,18 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
   }
   app.addEventListener('toggle', function (e) { if (form && e.target.hasAttribute && e.target.hasAttribute('data-cond')) form.showCond = e.target.open; reportSize(); }, true);
 
-  if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude, když je připojený konektor Run Tracker.</p>'; return; }
-  request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.4.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' }, 10000)
+  if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude nebo ChatGPT, když je připojený konektor Run Tracker.</p>'; return; }
+  if (oai) {
+    applyTheme(oai.theme);
+    if (oai.toolOutput && oai.toolOutput.view) showResult({ structuredContent: oai.toolOutput }, true);
+    window.addEventListener('openai:set_globals', function (e) {
+      var g = e.detail && e.detail.globals;
+      if (!g) return;
+      if (g.theme) applyTheme(g.theme);
+      if (g.toolOutput && g.toolOutput.view) showResult({ structuredContent: g.toolOutput }, true);
+    });
+  }
+  request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.5.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' }, 10000)
     .then(function (result) { applyHost(result && result.hostContext); notify('ui/notifications/initialized'); })
     .catch(function () { notify('ui/notifications/initialized'); });
 })();
