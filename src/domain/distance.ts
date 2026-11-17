@@ -1,11 +1,6 @@
-import type { PaceChart, Segment, WorkoutSpec, ScheduledWorkout } from './types';
+import type { PaceChart, Segment, WorkoutSpec } from './types';
 
 export interface DistanceRange { minM: number; maxM: number; estimated: boolean; unknown: number }
-/** Stejná vzdálenost ve stejný den nestačí: dva samostatné běhy se nesmějí slít. */
-export function sameRun(a: {startUtc: string; distanceM: number}, b: {startUtc: string; distanceM: number}): boolean {
-  const delta = Math.abs(Date.parse(a.startUtc) - Date.parse(b.startUtc));
-  return Number.isFinite(delta) && delta <= 120000 && Math.abs(a.distanceM - b.distanceM) <= Math.max(100, Math.max(a.distanceM,b.distanceM) * .03);
-}
 const zero = (): DistanceRange => ({ minM: 0, maxM: 0, estimated: false, unknown: 0 });
 function add(a: DistanceRange, b: DistanceRange, count = 1): DistanceRange {
   return { minM: a.minM + b.minM * count, maxM: a.maxM + b.maxM * count, estimated: a.estimated || b.estimated, unknown: a.unknown + b.unknown * count };
@@ -42,23 +37,4 @@ export function workoutDistance(w: WorkoutSpec, chart?: PaceChart): DistanceRang
 
 export function plannedDistance(workouts: WorkoutSpec[], chart?: PaceChart): DistanceRange {
   return workouts.reduce((sum, w) => add(sum, workoutDistance(w, chart)), zero());
-}
-
-/** Jen zobrazení: skutečnost nahradí odhad jednoznačně přiřazeného dne.
- * U více jednotek v den bez explicitního párování ponechá plán a přizná nejasnost. */
-export function projectedDistance(workouts: ScheduledWorkout[], runs: Array<{localDate: string; distanceM: number}>, chart?: PaceChart): DistanceRange {
-  let total = zero();
-  const dates = new Set([...workouts.map(w => w.date), ...runs.map(r => r.localDate)]);
-  for (const date of dates) {
-    const day = workouts.filter(w => w.date === date && w.status !== 'skipped' && !['rest', 'strength', 'cross'].includes(w.workout.type));
-    const actual = runs.filter(r => r.localDate === date);
-    if (actual.length && day.length <= 1) {
-      const m = actual.reduce((s, r) => s + r.distanceM, 0);
-      total = add(total, { ...zero(), minM: m, maxM: m });
-    } else {
-      total = add(total, plannedDistance(day.map(w => w.workout), chart));
-      if (actual.length) total.unknown += 1;
-    }
-  }
-  return total;
 }

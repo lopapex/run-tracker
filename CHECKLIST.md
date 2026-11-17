@@ -18,8 +18,11 @@ Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [x] Podmíněný zápis proti souběžným změnám; oddělené prostory podle klíče; strop velikosti prostoru 3 MB.
 - [x] Testy přes skutečný MCP protokol nad úložištěm v paměti; referenční 12týdenní plán prošel importem i aktivací.
 - [x] Netlify funkce a Blobs za běhu: živý průchod importem, aktivací, přesunem, splněním, undo, exportem a smazáním dat.
+- [x] Hromadný zápis splnění (`set_statuses`) jako jedna vratná změna; úseky intervalů se hodnotí proti cílovému pásmu.
+- [x] Paměť mezi plány: poznámky trenéra v profilu, historie plánů v `get_plan`, karta dokončeného plánu, kostra dalšího plánu přes `draft_plan`, prompty pro nový plán a týdenní kontrolu.
+- [x] Odstraněny zbytky původní aplikace (parsování souborů aktivit, drafty, typy chatu a AI).
 - [x] Tvar jednotky je v popisech nástrojů jen jednou (u importu); úprava a přidání vracejí chybu s cestou k poli. Popisy nástrojů 22,7 kB místo 28,6 kB.
-- [ ] Ověřit v Claude: přidání konektoru bez přihlášení, schvalování zápisových nástrojů, import skutečného PDF, souběh s konektorem Stravy, mobilní aplikace.
+- [x] Ověřeno v Claude: přidání konektoru bez přihlášení, import skutečného PDF, souběh s konektorem Stravy, karty v mobilní aplikaci.
 - Omezení počtu požadavků vědomě není: provoz chodí ze serverů Claude, takže limit podle IP by omezil všechny uživatele najednou.
 
 ## Přesnost
@@ -39,7 +42,9 @@ Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [x] Řádky týdne jsou skutečná tlačítka (čtečky obrazovky), dotykové plochy 44 px, ověřeno na 360 a 420 px.
 - [x] Export do Garminu jako nenápadný odkaz „Soubor do hodinek“; soubor čte nezávislý dekodér. Na hodinkách neověřeno. Prošlé soubory se mažou, smazání dat smaže i vlastní soubory.
 - [~] Nová ikona pod novými názvy souborů; ověřit po odpojení a připojení konektoru.
-- [~] Ověřeno proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, přímé volání nástrojů z widgetu a zprávy do konverzace.
+- [x] Karty se vykreslují v Claude na webu i v mobilní aplikaci (tmavý režim).
+- [~] Přímé volání nástrojů z widgetu a zprávy do konverzace ověřené proti napodobenému hostiteli; v Claude ověřit po každé větší změně widgetu.
+- [x] Nezapsané proběhlé tréninky mají štítek a tlačítko Doplnit; zápis stavu u doběhnutého běhu je sbalený; záložky, dlaždice a akce jsou na mobilu přes celou šířku.
 - [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
 
 ## ChatGPT

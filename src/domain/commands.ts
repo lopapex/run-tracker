@@ -2,7 +2,7 @@
 // Funkce jsou čisté: dostanou snímek, vrátí vratnou revizi nebo vysvětlitelnou chybu.
 import { z } from 'zod';
 import { addDays, diffDays, formatDay, isIsoDate, weekStartOf } from './dates';
-import { isHard, TYPE_LABEL } from './format';
+import { isHard } from './format';
 import { newId } from './schedule';
 import type { Author, PlanActivation, ScheduledWorkout, ScheduleRevision, WeekMapping, WorkoutSpec } from './types';
 
@@ -67,7 +67,6 @@ export const scheduleCommandSchema = z.object({
   /** Očekávané pořadí revize; chrání před použitím zastaralého návrhu (INV-11). */
   expectedRevisionSeq: z.number().int().optional(),
 });
-export type ScheduleCommand = z.infer<typeof scheduleCommandSchema>;
 
 export interface ScheduleSnapshot {
   activation: PlanActivation;
@@ -341,7 +340,3 @@ export const OPERATION_LABEL: Record<string, string> = {
   REMAP_PLAN: 'změna mapování týdnů',
   REVERT: 'vrácení změny',
 };
-
-export function describeWorkout(w: WorkoutSpec): string {
-  return w.title || TYPE_LABEL[w.type];
-}

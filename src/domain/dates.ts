@@ -40,11 +40,6 @@ export function weekStartOf(d: IsoDate): IsoDate {
   return addDays(d, -dowOf(d));
 }
 
-export function weekDates(weekStart: IsoDate): IsoDate[] {
-  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-}
-
-export const DOW_SHORT = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'] as const;
 export const DOW_LONG = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'] as const;
 
 export function formatDay(d: IsoDate, opts: { weekday?: boolean; year?: boolean } = {}): string {
@@ -52,10 +47,6 @@ export function formatDay(d: IsoDate, opts: { weekday?: boolean; year?: boolean 
   const base = `${t.getUTCDate()}. ${t.getUTCMonth() + 1}.`;
   const withYear = opts.year ? `${base} ${t.getUTCFullYear()}` : base;
   return opts.weekday ? `${DOW_LONG[dowOf(d)]} ${withYear}` : withYear;
-}
-
-export function formatWeekRange(weekStart: IsoDate): string {
-  return `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`;
 }
 
 export function isIsoDate(s: unknown): s is IsoDate {

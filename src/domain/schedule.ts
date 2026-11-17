@@ -1,6 +1,5 @@
 import { addDays, weekStartOf } from './dates';
 import type {
-  Dow,
   Id,
   IsoDate,
   PlanActivation,
@@ -91,20 +90,10 @@ export function createActivation(template: PlanTemplate, opts: MappingOptions, n
   return { activation, workouts: instantiate(template, activation.id, mapping) };
 }
 
-/** `activeProgressWeek` (§5.2): pozice v plánu podle mapování, nikoli podle otevřeného týdne. */
-export function progressWeek(activation: PlanActivation, today: IsoDate): WeekMapping | undefined {
-  const ws = weekStartOf(today);
-  return activation.mapping.find((m) => m.weekStart === ws);
-}
-
 export function planRange(activation: PlanActivation): { first: IsoDate; last: IsoDate } | undefined {
   if (activation.mapping.length === 0) return undefined;
   const starts = activation.mapping.map((m) => m.weekStart).sort();
   return { first: starts[0], last: addDays(starts[starts.length - 1], 6) };
-}
-
-export function isVisible(activation: PlanActivation, date: IsoDate): boolean {
-  return activation.status === 'active' || (activation.endedOn != null && date <= activation.endedOn);
 }
 
 /** Jednotky dne: volno se skryje, pokud je ten den i skutečná jednotka. */
@@ -112,17 +101,4 @@ export function dayWorkouts(all: ScheduledWorkout[], date: IsoDate): ScheduledWo
   const day = all.filter((w) => w.date === date);
   const real = day.filter((w) => w.workout.type !== 'rest');
   return real.length > 0 ? real : day.slice(0, 1);
-}
-
-export function emptyWeek(index: number, restDows: Dow[] = []): TemplateWeek {
-  return {
-    index,
-    days: ([0, 1, 2, 3, 4, 5, 6] as Dow[]).map((dow) => ({
-      dow,
-      workout: restDows.includes(dow)
-        ? structuredClone(REST)
-        : { type: 'easy', title: 'Volný běh', load: 'low', blocks: [] },
-      source: { method: 'manual', review: 'confirmed', issues: [] },
-    })),
-  };
 }

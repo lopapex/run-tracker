@@ -8,12 +8,13 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 
 1. Uživatel si na úvodní stránce vytvoří adresu `https://<web>/mcp/<klíč>`. Klíč vzniká v prohlížeči.
 2. Adresu přidá v Claude jako vlastní konektor. Účet ani přihlášení neexistují; adresa je jediné oprávnění.
-3. V konverzaci přiloží plán (PDF, obrázek, tabulka). Claude ho přepíše po týdnech přes `import_plan_weeks`, nástroj vrátí kontrolu týdenních součtů a `activate_plan` plán zařadí do kalendáře.
-4. Další změny jdou přes `move_workout`, `skip_workout`, `edit_workout`, `add_workout`, `restore_workout`, `shift_plan` a `set_status`. Každá je vratná přes `undo_change`. `get_plan` vrací aktuální stav, `delete_all_data` smaže vše.
-5. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_result` (doběhnuto: odhad splnění proti plánu a zápis stavu, pocitu a okolností) vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny rozpisu posílá jako zprávu do konverzace a zápis doběhnuté jednotky ukládá přímo.
-6. `calculate_paces` spočítá tempa a předpovědi závodů z jednoho výkonu vzorci VDOT (`src/domain/vdot.ts`, test proti tabulkám Danielse); instrukce konektoru říkají modelu, aby tempa neodhadoval.
-7. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
-8. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`; prošlé soubory se při dalším exportu smažou a `delete_all_data` smaže i soubory daného prostoru. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
+3. V konverzaci přiloží plán (PDF, obrázek, tabulka). Claude ho přepíše po týdnech přes `import_plan_weeks`, nástroj vrátí kontrolu týdenních součtů a `activate_plan` plán zařadí do kalendáře. Bez dokumentu postaví kostru `draft_plan` z objemu podle Stravy (`src/domain/generator.ts`: růst objemu, lehčí každý 4. týden, ubrání před závodem).
+4. Další změny jdou přes `move_workout`, `skip_workout`, `edit_workout`, `add_workout`, `restore_workout`, `shift_plan`, `set_status` a `set_statuses` (celý týden splnění jedním zápisem). Každá je vratná přes `undo_change`. `get_plan` vrací aktuální stav včetně poznámek trenéra a historie předchozích plánů, `delete_all_data` smaže vše.
+5. Paměť mezi plány: `set_profile` ukládá poznámky trenéra o běžci (zranění, volné dny, cíle). Po posledním týdnu plánu ukáže `show_week` shrnutí a další plán naváže na historii. Prompty `novy-plan` a `tydenni-kontrola` připraví obvyklé postupy.
+6. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_result` (doběhnuto: odhad splnění proti plánu a zápis stavu, pocitu a okolností) vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny rozpisu posílá jako zprávu do konverzace a zápis doběhnuté jednotky ukládá přímo.
+7. `calculate_paces` spočítá tempa a předpovědi závodů z jednoho výkonu vzorci VDOT (`src/domain/vdot.ts`, test proti tabulkám Danielse); instrukce konektoru říkají modelu, aby tempa neodhadoval.
+8. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
+9. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`; prošlé soubory se při dalším exportu smažou a `delete_all_data` smaže i soubory daného prostoru. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
 
 ## ChatGPT
 
@@ -37,7 +38,7 @@ Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functio
 
 | Cesta | Účel |
 |---|---|
-| `src/domain` | příkazy nad rozpisem, revize a undo, mapování týdnů, vzdálenosti a tempa |
+| `src/domain` | příkazy nad rozpisem, revize a undo, mapování týdnů, generátor kostry plánu, vzdálenosti a tempa |
 | `src/connector/tools.ts` | operace konektoru nad prostorem uživatele |
 | `src/connector/views.ts` | data pro vizualizace (týden, plán, tempa, doběhnuto) a export do Garminu |
 | `src/connector/fit.ts` | kódování tréninku do formátu FIT |
@@ -47,8 +48,6 @@ Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functio
 | `src/connector/store.ts`, `blobStore.ts` | úložiště s podmíněným zápisem |
 | `public/widget.html` | widget pro konverzaci; samostatný soubor bez závislostí, mluví protokolem MCP Apps |
 | `public/` | úvodní stránka s vytvořením adresy a návodem, ikony |
-
-`src/domain` obsahuje i části původní aplikace, které konektor zatím nepoužívá (`activities.ts`, `drafts.ts`, `generator.ts`).
 
 Původní PWA je v historii gitu do commitu `6fcdf7d`.
 

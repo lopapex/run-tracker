@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Run Tracker – běžecký plán v Claude</title>
-  <meta name="description" content="Konektor pro Claude, který drží tvůj běžecký plán: nahraješ PDF, Claude plán založí a pak ho s tebou přeplánuje podle toho, jak běháš.">
+  <meta name="description" content="Konektor pro Claude, který drží tvůj běžecký plán: nahraješ PDF nebo si ho necháš postavit podle Stravy a Claude ho s tebou přeplánuje podle toho, jak běháš.">
   <link rel="icon" href="/favicon.ico?v=2" sizes="any">
   <link rel="icon" href="/brand/run-tracker-v2.svg" type="image/svg+xml">
   <link rel="icon" href="/brand/run-tracker-v2-192.png" type="image/png" sizes="192x192">
@@ -16,7 +16,7 @@
     <header>
       <img src="/brand/run-tracker-v2.svg" alt="" width="48" height="48">
       <h1>Běžecký plán, který s tebou řeší Claude</h1>
-      <p class="lead">Nahraješ plán v PDF, Claude ho založí a pak mu stačí napsat „o víkendu nemůžu“. Run Tracker si pamatuje plán, přesuny a splnění. Běhy si Claude čte z tvé Stravy.</p>
+      <p class="lead">Nahraješ plán v PDF, nebo si ho necháš postavit podle Stravy. Pak Claudovi stačí napsat „o víkendu nemůžu“. Run Tracker si pamatuje plán, přesuny, splnění i to, co o tobě Claude ví.</p>
     </header>
 
     <ol class="steps">
@@ -45,16 +45,16 @@
         <p>Ve stejném nastavení vyhledej oficiální konektor Strava a přihlas se. Vyžaduje předplatné Stravy. Bez něj Run Tracker funguje taky, jen Claude neuvidí tvoje běhy a splnění mu řekneš sám.</p>
       </li>
       <li>
-        <h2>Nahraj plán a mluv s trenérem</h2>
-        <p>Do konverzace přilož plán v PDF, obrázku nebo tabulce a napiš, kdy začínáš nebo kdy máš závod. Týden, celý plán, tempa i hodnocení běhu se ukazují přímo v konverzaci jako karty. Přesunout nebo vynechat trénink jde klepnutím v kartě týdne.</p>
+        <h2>Založ plán a mluv s trenérem</h2>
+        <p>Přilož plán v PDF, obrázku nebo tabulce, nebo si nech postavit nový podle Stravy. Napiš, kdy začínáš nebo kdy máš závod. Týden, celý plán, tempa i hodnocení běhu se ukazují přímo v konverzaci jako karty a trénink přesuneš nebo vynecháš klepnutím.</p>
+        <p>Až plán doběhneš, Claude ukáže shrnutí a další plán postaví z historie, Stravy a poznámek o tobě (zranění, volné dny, cíle). Nic se nezačíná od nuly.</p>
         <ul class="prompts">
           <li>Založ můj plán z přiloženého PDF. Závod mám 7. února.</li>
-          <li>Ukaž mi tento týden.</li>
+          <li>Postav mi plán na půlmaraton 11. dubna podle mé Stravy. V pondělí neběhám.</li>
           <li>O víkendu nemůžu běhat, přeplánuj to.</li>
-          <li>Doběhl jsem. Podívej se do Stravy a zhodnoť to proti plánu.</li>
+          <li>Doplň splnění tohoto týdne podle Stravy.</li>
           <li>Byla zima a foukalo, včera jsem byl v hospodě a málo pil. Vezmi to v úvahu.</li>
           <li>Můj poslední půlmaraton byl za 1:45. Spočítej mi tempa.</li>
-          <li>Vrať poslední změnu.</li>
         </ul>
       </li>
     </ol>
@@ -66,7 +66,7 @@
         <figure><img src="/shots/tyden.png" width="420" height="760" loading="lazy" alt="Karta týdne: dny s tréninky a jejich stavem, šipky na předchozí a další týden, upozornění na nezapsaný trénink a rozbalený dnešní trénink s tlačítky Doběhnuto, Přesunout a Vynechat"><figcaption><b>Týden.</b> Co je splněno, co zbývá zapsat a co tě čeká. Dnešní trénink: doběhnuto, přesun i vynechání jedním klepnutím.</figcaption></figure>
         <figure><img src="/shots/dobehnuto.png" width="420" height="760" loading="lazy" alt="Karta doběhnuto: odhad splnění 99 procent, vzdálenost, tempo a graf tempa po kolech proti cílovému pásmu"><figcaption><b>Doběhnuto.</b> Běh ze Stravy proti plánu, odhad splnění a zápis pocitu, bolesti a okolností. Zima, vítr nebo večer v hospodě se do hodnocení počítají.</figcaption></figure>
         <figure><img src="/shots/plan.png" width="420" height="640" loading="lazy" alt="Karta plánu: týdenní objem po fázích, splněné kilometry, dlouhé běhy a dny do závodu"><figcaption><b>Celý plán.</b> Týdenní objem po fázích, kde právě jsi a kolik dní zbývá do závodu. Klepnutím na sloupec otevřeš týden.</figcaption></figure>
-        <figure><img src="/shots/tempa.png" width="420" height="642" loading="lazy" alt="Karta temp: předpověď závodů a tréninková pásma spočítaná z půlmaratonu za 1:30, s tlačítkem Uložit tato tempa"><figcaption><b>Tempa.</b> Spočítaná z tvého výkonu vzorci Jacka Danielse, ne odhadem. Předpověď závodů a pásma; uložíš je jedním klepnutím.</figcaption></figure>
+        <figure><img src="/shots/tempa.png" width="420" height="642" loading="lazy" alt="Karta temp: předpověď závodů a tréninková pásma spočítaná z půlmaratonu za 1:45, s tlačítkem Uložit tato tempa"><figcaption><b>Tempa.</b> Spočítaná z tvého výkonu vzorci Jacka Danielse, ne odhadem. Předpověď závodů a pásma; uložíš je jedním klepnutím.</figcaption></figure>
       </div>
     </section>
 
@@ -84,7 +84,7 @@
       <h2 id="privacy">Soukromí</h2>
       <ul>
         <li>Žádný účet ani e-mail. Jediné, co tě s daty spojuje, je adresa konektoru.</li>
-        <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění, pocit, okolnosti běhu a tvoje krátké poznámky.</li>
+        <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění, pocit, okolnosti běhu, krátké poznámky k tréninkům a poznámky, které si o tobě Claude vede (zranění, volné dny, cíle). Ty si můžeš kdykoli nechat ukázat nebo smazat.</li>
         <li>Soubor pro Garmin je ke stažení na odkazu, který platí 24 hodin.</li>
         <li>Data aktivit ze Stravy Run Tracker neukládá. Čte je Claude přes oficiální konektor Stravy; když si necháš běh porovnat s plánem, jeho čísla se jen vykreslí a zahodí.</li>
         <li>Všechno smažeš větou „Smaž všechna moje data v Run Trackeru“. Smazání je nevratné.</li>

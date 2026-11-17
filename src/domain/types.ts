@@ -1,4 +1,4 @@
-// Logický datový model (§12). Platí pro IndexedDB i pozdější serverové tabulky.
+// Datový model konektoru, uložený jako JSON workspace v Netlify Blobs.
 // Interně: metry, sekundy, tempo v s/km (§6.3).
 
 export type Id = string;
@@ -6,14 +6,6 @@ export type Id = string;
 export type IsoDate = string;
 /** 0 = pondělí … 6 = neděle. */
 export type Dow = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-export type Provenance =
-  | 'USER_ENTERED'
-  | 'USER_FILE_UPLOAD'
-  | 'PLAN_DOCUMENT'
-  | 'STRAVA_API_RESTRICTED'
-  | 'DERIVED_DETERMINISTIC'
-  | 'AI_GENERATED';
 
 // ---------- Jednotka ----------
 
@@ -109,28 +101,12 @@ export type PaceChart = Partial<Record<Exclude<IntensityRef, 'strides' | 'walk' 
 export interface PlanTemplate {
   id: Id;
   name: string;
-  origin: 'import' | 'manual' | 'draft';
-  documentId?: Id;
-  draftRevisionId?: Id;
+  origin: 'import' | 'manual';
   createdAt: string;
   verifiedAt: string;
   units: 'km' | 'mi';
-  goalLabel?: string;
-  goalDistanceM?: number;
   paceChart?: PaceChart;
   weeks: TemplateWeek[];
-}
-
-export interface PlanDocument {
-  id: Id;
-  name: string;
-  mime: string;
-  size: number;
-  checksum: string;
-  createdAt: string;
-  blob: Blob;
-  provenance: 'PLAN_DOCUMENT';
-  author?: string;
 }
 
 // ---------- Aktivace a rozpis ----------
@@ -212,27 +188,6 @@ export interface DraftParams {
   assumptions: string[];
 }
 
-export interface PlanDraft {
-  id: Id;
-  title: string;
-  status: 'generating' | 'draft' | 'ready' | 'accepted' | 'archived' | 'failed';
-  createdAt: string;
-  currentRevisionId: Id;
-  acceptedActivationId?: Id;
-}
-
-export interface PlanDraftRevision {
-  id: Id;
-  draftId: Id;
-  seq: number;
-  parentId: Id | null;
-  at: string;
-  author: Author;
-  reason: string;
-  params: DraftParams;
-  weeks: TemplateWeek[];
-}
-
 // ---------- Profil ----------
 
 export interface AthleteProfile {
@@ -242,7 +197,6 @@ export interface AthleteProfile {
   locale: 'cs';
   units: 'km';
   timezone: string;
-  onboardedAt?: string;
   name?: string;
   intent?: TrainingIntent;
   weeklyKm?: number;
@@ -253,125 +207,5 @@ export interface AthleteProfile {
   raceDistanceM?: number;
   raceTargetSec?: number;
   paceChart?: PaceChart;
-  aiModelId?: string;
   paceSource?: 'plan' | 'profile';
-}
-
-// ---------- Aktivity ----------
-
-export interface Lap {
-  index: number;
-  distanceM: number;
-  durationSec: number;
-  avgHr?: number;
-  elevGainM?: number;
-  /** `device` = z hodinek, `auto_km` = spočítáno po kilometrech. */
-  kind: 'device' | 'auto_km';
-}
-
-export interface Activity {
-  id: Id;
-  source: 'file_gpx' | 'file_tcx' | 'file_fit' | 'manual';
-  provenance: Extract<Provenance, 'USER_ENTERED' | 'USER_FILE_UPLOAD'>;
-  checksum?: string;
-  fileName?: string;
-  name: string;
-  sport: 'run' | 'other';
-  startUtc: string;
-  /** Den v zóně uživatele, pro párování a týdenní součty. */
-  localDate: IsoDate;
-  distanceM: number;
-  movingSec: number;
-  elapsedSec: number;
-  elevGainM?: number;
-  avgHr?: number;
-  maxHr?: number;
-  avgCadence?: number;
-  laps: Lap[];
-  /** Co v záznamu chybí; hodnocení to musí přiznat (INV-12). */
-  missing: Array<'hr' | 'laps' | 'elevation' | 'gps'>;
-  /** Odkaz, který zadal uživatel (např. na aktivitu ve Stravě). */
-  externalUrl?: string;
-  createdAt: string;
-}
-
-export interface WorkoutMatch {
-  id: Id;
-  activityId: Id;
-  workoutId: Id;
-  state: 'auto' | 'confirmed';
-  at: string;
-}
-
-export interface CheckIn {
-  id: Id;
-  date: IsoDate;
-  activityId?: Id;
-  workoutId?: Id;
-  /** 1 = hodně těžké … 5 = výborné */
-  feel: 1 | 2 | 3 | 4 | 5;
-  pain: 'none' | 'mild' | 'significant';
-  painNote?: string;
-  rpe?: number;
-  note?: string;
-  at: string;
-}
-
-// ---------- Chat a AI ----------
-
-export interface ContextRef {
-  kind: 'workout' | 'activity' | 'week' | 'draft';
-  id: string;
-  label: string;
-}
-
-export interface CoachProposal {
-  commandJson: string;
-  state: 'pending' | 'applied' | 'dismissed' | 'invalid' | 'stale';
-  error?: string;
-  summary?: string[];
-  revisionId?: Id;
-}
-
-export interface CoachMessage {
-  id: Id;
-  threadId: Id;
-  seq: number;
-  role: 'user' | 'assistant' | 'system';
-  text: string;
-  at: string;
-  contextRefs?: ContextRef[];
-  status?: 'streaming' | 'done' | 'stopped' | 'error';
-  draftId?: Id;
-  proposal?: CoachProposal;
-  usageEventId?: Id;
-}
-
-export type MeasurementKind = 'reported' | 'tokenized' | 'estimated';
-
-/** §9.4. Bez promptů a tréninkových dat. Chybějící hodnota je null, ne nula. */
-export interface AiUsageEvent {
-  requestId: Id;
-  threadId?: Id;
-  provider: 'webllm' | 'openai' | 'anthropic';
-  model: string;
-  mode: 'local' | 'cloud';
-  status: 'completed' | 'stopped' | 'failed';
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-  measurementKind: MeasurementKind | null;
-  startedAt: string;
-  durationMs: number;
-  usageScope: 'app_request';
-}
-
-export interface AuditEvent {
-  id: Id;
-  at: string;
-  author: Author;
-  operation: string;
-  targetId?: string;
-  ok: boolean;
-  detail?: string;
 }

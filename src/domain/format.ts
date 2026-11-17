@@ -1,4 +1,4 @@
-import type { Block, IntensityRef, Load, PaceChart, Segment, WorkoutSpec, WorkoutType } from './types';
+import type { Block, IntensityRef, PaceChart, Segment, WorkoutSpec, WorkoutType } from './types';
 import type { DistanceRange } from './distance';
 
 export function resolvePaceChart(profile: {paceChart?: PaceChart; paceSource?: 'plan'|'profile'}, plan?: PaceChart): PaceChart {
@@ -35,13 +35,6 @@ export const TYPE_LABEL: Record<WorkoutType, string> = {
   other: 'Trénink',
 };
 
-export const LOAD_LABEL: Record<Load, string> = {
-  rest: 'volno',
-  low: 'nízká zátěž',
-  medium: 'střední zátěž',
-  high: 'vysoká zátěž',
-};
-
 export function formatKm(m: number | undefined, digits = 1): string {
   if (m == null) return '–';
   const km = m / 1000;
@@ -69,13 +62,6 @@ export function formatPace(secPerKm: number | undefined): string {
   if (secPerKm == null || !Number.isFinite(secPerKm) || secPerKm <= 0) return '–';
   const s = Math.round(secPerKm);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-export function parsePace(text: string): number | null {
-  const m = /^\s*(\d{1,2})[:.,](\d{2})\s*$/.exec(text);
-  if (!m) return null;
-  const sec = Number(m[1]) * 60 + Number(m[2]);
-  return sec >= 120 && sec <= 900 ? sec : null;
 }
 
 export function paceOf(distanceM: number, durationSec: number): number | undefined {
@@ -125,17 +111,6 @@ export function workoutSummary(w: WorkoutSpec): string {
 export function workoutDistanceM(w: WorkoutSpec): number | undefined {
   if (w.type === 'rest' || w.type === 'strength') return 0;
   return w.distanceM;
-}
-
-export function weekTotalM(workouts: WorkoutSpec[]): { totalM: number; unknown: number } {
-  let totalM = 0;
-  let unknown = 0;
-  for (const w of workouts) {
-    const d = workoutDistanceM(w);
-    if (d == null) unknown += 1;
-    else totalM += d;
-  }
-  return { totalM, unknown };
 }
 
 export function isHard(w: WorkoutSpec): boolean {

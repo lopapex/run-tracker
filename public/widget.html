@@ -17,7 +17,7 @@
     color-scheme: dark;
     --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
-    --s1: #3987e5; --s1-soft: #184f95; --s2: #d95926; --band: rgba(57,135,229,.18);
+    --s1: #3987e5; --s1-soft: #23405f; --s2: #d95926; --band: rgba(57,135,229,.18);
     --good: #0ca30c; --good-ink: #0ca30c; --warn: #fab219; --warn-ink: #fab219; --crit: #e66767;
   }
 }
@@ -25,7 +25,7 @@
   color-scheme: dark;
   --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
-  --s1: #3987e5; --s1-soft: #184f95; --s2: #d95926; --band: rgba(57,135,229,.18);
+  --s1: #3987e5; --s1-soft: #23405f; --s2: #d95926; --band: rgba(57,135,229,.18);
   --good: #0ca30c; --good-ink: #0ca30c; --warn: #fab219; --warn-ink: #fab219; --crit: #e66767;
 }
 * { box-sizing: border-box; }
@@ -37,7 +37,7 @@ button { font: inherit; color: inherit; }
 button:focus-visible, a:focus-visible, summary:focus-visible, [data-open]:focus-visible, [data-tip]:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
 
 /* záhlaví */
-.tabs { display: flex; gap: 4px; max-width: 300px; margin: -2px 0 12px; padding: 3px; border-radius: 10px; background: var(--wash); }
+.tabs { display: flex; gap: 4px; margin: -2px 0 12px; padding: 3px; border-radius: 10px; background: var(--wash); }
 .tabs button { flex: 1; min-height: 40px; border: 0; border-radius: 8px; background: none; color: var(--ink2); font-weight: 600; cursor: pointer; }
 .tabs button[aria-current="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
 .eyebrow { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
@@ -59,8 +59,8 @@ h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink2); 
 .note button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-weight: 600; cursor: pointer; }
 
 /* dlaždice */
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
-.tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; margin-top: 10px; }
+.tiles.two { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tile { min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .tile .k { color: var(--ink2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .v { font-size: 18px; font-weight: 650; line-height: 1.15; letter-spacing: -.01em; }
@@ -126,6 +126,8 @@ table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 12.5
 th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
 th { color: var(--ink2); font-weight: 600; }
 th:first-child, td:first-child { text-align: left; white-space: normal; }
+td small { color: var(--ink2); font-size: 11.5px; }
+table.weeks tr.now td { font-weight: 650; }
 .zones { display: grid; grid-template-columns: minmax(84px, auto) minmax(60px, 1fr) auto; gap: 7px 10px; align-items: center; }
 .zones .zl { font-weight: 600; font-size: 13px; }
 .zones .zr { color: var(--ink2); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -548,9 +550,10 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       }
     }
     h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
-    h += '<details><summary>Tabulka</summary><table><thead><tr><th>Týden</th><th>Od</th><th>Plán km</th><th>Splněno km</th><th>Běhy</th><th>Dlouhý km</th></tr></thead><tbody>';
+    h += '<details><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
-      h += '<tr><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.phase ? ' · ' + esc(w.phase) : '') + (w.isCurrent ? ' (teď)' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + kmRange(w.plannedKmMin, w.plannedKmMax) + '</td><td>' + num(w.doneKm) + '</td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
+      // Úzká tabulka: fáze jsou v grafu, km jako splněno z plánu zaokrouhleně.
+      h += '<tr' + (w.isCurrent ? ' class="now"' : '') + '><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.isCurrent ? ' · teď' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + Math.round(w.doneKm) + ' <small>z ' + Math.round(w.plannedKmMax) + '</small></td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
     });
     return h + '</tbody></table></details>';
   }

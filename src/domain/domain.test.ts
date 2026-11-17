@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyScheduleCommand, projectRevision, revertRevision, type ScheduleSnapshot } from './commands';
 import { addDays, dowOf, weekStartOf } from './dates';
-import { applyDraftChanges, createDraftRevision, validateDraftRevision } from './drafts';
 import { generateWeeks, pickRunDays } from './generator';
 import { buildMapping, createActivation, newId, REST } from './schedule';
-import { autoMatch, buildActivity, matchCandidates, parseGpx } from './activities';
 import { isHard } from './format';
 import type { Dow, DraftParams, PlanTemplate, TemplateWeek, WorkoutSpec } from './types';
 
@@ -154,87 +152,6 @@ describe('generátor', () => {
     expect(raceWeek.days[dowOf('2026-12-20')].workout.type).toBe('race');
     const total = (w: TemplateWeek) => w.days.reduce((a, d) => a + (d.workout.type === 'race' ? 0 : (d.workout.distanceM ?? 0)), 0);
     expect(total(raceWeek)).toBeLessThan(total(weeks[0]));
-  });
-});
-
-describe('iterace draftu (§5.5, PLAN-05)', () => {
-  it('projde příklad ze zadání a zůstane jedním draftem', () => {
-    const v1 = createDraftRevision('d1', params, { ...meta, reason: 'Navrhni čtyři týdny na udržování.' });
-    if (!v1.ok) throw new Error(v1.message);
-    const history = [v1.revision];
-    const step = (changes: unknown, reason: string) => {
-      const r = applyDraftChanges(history[history.length - 1], changes, history, { ...meta, reason });
-      if (!r.ok) throw new Error(r.message);
-      history.push(r.revision);
-      return r.revision;
-    };
-    const v2 = step([{ op: 'set_params', params: { runsPerWeek: 4, restDows: [6], longRunDow: 5 } }], 'Jen čtyři běhy a neděle volné.');
-    expect(v2.weeks.every((w) => w.days[6].workout.type === 'rest')).toBe(true);
-    expect(v2.weeks[0].days.filter((d) => d.workout.type !== 'rest')).toHaveLength(4);
-    const v3 = step([{ op: 'scale_week', week: 1, factor: 0.7 }], 'První týden jsem na horách, dej ho lehčí.');
-    const sum = (w: TemplateWeek) => w.days.reduce((a, d) => a + (d.workout.distanceM ?? 0), 0);
-    expect(sum(v3.weeks[0])).toBeLessThan(sum(v2.weeks[0]));
-    const v4 = step([{ op: 'restore_part', fromRevisionId: v2.id, type: 'long' }], 'Vrať long run ze druhé verze, ostatní nech.');
-    const longOf = (w: TemplateWeek) => w.days.find((d) => d.workout.type === 'long')!.workout.distanceM;
-    expect(longOf(v4.weeks[0])).toBe(longOf(v2.weeks[0]));
-    expect(v4.weeks[0].days[0].workout).toEqual(v3.weeks[0].days[0].workout);
-    expect(history.map((r) => r.seq)).toEqual([1, 2, 3, 4]);
-    expect(new Set(history.map((r) => r.draftId)).size).toBe(1);
-    expect(validateDraftRevision(v4)).toEqual([]);
-  });
-
-  it('zamčený den přežije přegenerování a starší verze je stale', () => {
-    const v1 = createDraftRevision('d1', params, { ...meta, reason: 'x' });
-    if (!v1.ok) throw new Error();
-    const special = run('Trail s partou', 18, 'long');
-    const v2 = applyDraftChanges(v1.revision, [{ op: 'set_day', week: 2, dow: 2, workout: special }, { op: 'lock_day', week: 2, dow: 2, locked: true }], [v1.revision], { ...meta, reason: 'x' });
-    if (!v2.ok) throw new Error(v2.message);
-    const v3 = applyDraftChanges(v2.revision, [{ op: 'set_params', params: { weeklyKm: 40 } }], [v1.revision, v2.revision], { ...meta, reason: 'x' });
-    if (!v3.ok) throw new Error(v3.message);
-    expect(v3.revision.weeks[1].days[2].workout.title).toBe('Trail s partou');
-    const stale = applyDraftChanges(v3.revision, [{ op: 'scale_week', week: 1, factor: 0.9 }], [], { ...meta, reason: 'x', expectedRevisionId: v1.revision.id });
-    expect(stale).toMatchObject({ ok: false, code: 'stale' });
-    const locked = applyDraftChanges(v3.revision, [{ op: 'set_day', week: 2, dow: 2, workout: run('Jiný', 5) }], [], { ...meta, reason: 'x' });
-    expect(locked).toMatchObject({ ok: false, code: 'locked' });
-  });
-});
-
-describe('aktivity', () => {
-  const gpx = () => {
-    const pts: string[] = [];
-    const t0 = Date.parse('2026-11-16T06:00:00Z');
-    // ~10 km po poledníku, 5:00/km, bod každých 5 s.
-    for (let i = 0; i <= 600; i++) {
-      const lat = 50 + (i * (10_000 / 600)) / 111_195;
-      pts.push(`<trkpt lat="${lat.toFixed(7)}" lon="16.47"><ele>${400 + Math.round(i / 20)}</ele><time>${new Date(t0 + i * 5000).toISOString()}</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${140 + (i % 10)}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>`);
-    }
-    return `<gpx><trk><name>Ranní běh</name><type>running</type><trkseg>${pts.join('')}</trkseg></trk></gpx>`;
-  };
-
-  it('spočítá vzdálenost, tempo a kilometrová kola z GPX', () => {
-    const a = buildActivity(parseGpx(gpx()), { source: 'file_gpx', timezone: 'Europe/Prague', now: NOW });
-    if ('error' in a) throw new Error(a.error);
-    expect(a.distanceM).toBeGreaterThan(9950);
-    expect(a.distanceM).toBeLessThan(10_050);
-    expect(a.movingSec).toBe(3000);
-    expect(a.laps).toHaveLength(10);
-    expect(a.avgHr).toBeGreaterThan(139);
-    expect(a.localDate).toBe('2026-11-16');
-    expect(a.missing).toEqual([]);
-    expect(a.name).toBe('Ranní běh');
-  });
-
-  it('páruje automaticky jen jednoznačného kandidáta (§7.2)', () => {
-    const s = snapshot();
-    const a = buildActivity(parseGpx(gpx()), { source: 'file_gpx', timezone: 'Europe/Prague', now: NOW });
-    if ('error' in a) throw new Error(a.error);
-    const candidates = matchCandidates(a, s.workouts, new Set());
-    expect(autoMatch(candidates)?.date).toBe('2026-11-16');
-    expect(autoMatch(matchCandidates(a, s.workouts, new Set([at(s, '2026-11-16').id])))).toBeUndefined();
-  });
-
-  it('soubor bez dat vrátí chybu místo odhadu', () => {
-    expect(buildActivity(parseGpx('<gpx></gpx>'), { source: 'file_gpx', now: NOW })).toHaveProperty('error');
   });
 });
 
