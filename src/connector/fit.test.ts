@@ -22,15 +22,17 @@ describe('export pro Garmin', () => {
   it('rozloží jednotku na kroky včetně opakování a cílových temp', () => {
     const steps = workoutSteps(speed, chart);
     expect(steps.map(describeStep)).toEqual([
-      'Rozklus volne · 15 min · 5:04–5:36 /km',
-      'Usek tempo na 5 · 400 m · 4:00–4:10 /km',
-      'Pauza chuze · 2 min',
+      'Rozklus volně · 15 min · 5:04–5:36 /km',
+      'Úsek tempo na 5 km · 400 m · 4:00–4:10 /km',
+      'Pauza chůze · 2 min',
       'Opakuj 6× od kroku 2',
       'Rovinka · 20 s',
-      'Volne · 1 min',
+      'Volně · 1 min',
       'Opakuj 4× od kroku 5',
-      'Vyklus volne · 10 min · 5:04–5:36 /km',
+      'Výklus volně · 10 min · 5:04–5:36 /km',
     ]);
+    // názvy v hodinkách jsou ASCII a krátké
+    expect(steps.map((s) => s.name)).toEqual(['Rozklus volne', 'Usek tempo 5k', 'Pauza chuze', '', 'Rovinka', 'Volne', '', 'Vyklus volne']);
     expect(steps[1]).toMatchObject({ durationType: 1, durationValue: 40000, targetType: 0, speedLow: 4000, speedHigh: 4167 });
     expect(workoutSteps({ type: 'easy', title: 'Easy Run', distanceM: 10000, blocks: [] }, chart)).toMatchObject([{ durationType: 1, durationValue: 1_000_000, speedLow: 2976 }]);
   });
@@ -42,6 +44,8 @@ describe('export pro Garmin', () => {
     const data = await decode(bytes);
     expect(data.file_ids[0]).toMatchObject({ type: 'workout' });
     expect(data.workout).toMatchObject({ sport: 'running', num_valid_steps: 8, wkt_name: 'Speed Session' });
+    // delší název tréninku se nezkracuje na 15 znaků
+    expect((await decode(encodeWorkoutFit('Speed Session 14.12.', steps))).workout.wkt_name).toBe('Speed Session 14.12.');
     // dekodér vrací poslední krok souboru; postupným zkracováním se ověří každý druh kroku
     const last = async (count: number) => (await decode(encodeWorkoutFit('x', steps.slice(0, count)))).workout_step;
     expect(await last(8)).toMatchObject({ message_index: { value: 7 }, wkt_step_name: 'Vyklus volne', duration_type: 'time', duration_value: 600000, target_type: 'speed', custom_target_value_low: 2976, custom_target_value_high: 3289, intensity: 'cooldown' });

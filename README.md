@@ -13,7 +13,7 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 5. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_result` (doběhnuto: odhad splnění proti plánu a zápis stavu, pocitu a okolností) vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny rozpisu posílá jako zprávu do konverzace a zápis doběhnuté jednotky ukládá přímo.
 6. `calculate_paces` spočítá tempa a předpovědi závodů z jednoho výkonu vzorci VDOT (`src/domain/vdot.ts`, test proti tabulkám Danielse); instrukce konektoru říkají modelu, aby tempa neodhadoval.
 7. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
-8. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
+8. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`; prošlé soubory se při dalším exportu smažou a `delete_all_data` smaže i soubory daného prostoru. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
 
 ## Hranice vůči Stravě
 
@@ -37,6 +37,7 @@ Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functio
 | `src/connector/tools.ts` | operace konektoru nad prostorem uživatele |
 | `src/connector/views.ts` | data pro vizualizace (týden, plán, tempa, doběhnuto) a export do Garminu |
 | `src/connector/fit.ts` | kódování tréninku do formátu FIT |
+| `src/domain/vdot.ts` | tempa a předpovědi závodů podle VDOT |
 | `src/connector/server.ts` | registrace nástrojů, UI metadat a instrukcí pro model |
 | `src/connector/http.ts` | bezstavový HTTP vstup MCP |
 | `src/connector/store.ts`, `blobStore.ts` | úložiště s podmíněným zápisem |

@@ -9,5 +9,5 @@ fixtures/private/
 tmp/
 *.pdf
 
-.taste-skill/
-shots/
+/.taste-skill/
+/shots/

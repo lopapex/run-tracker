@@ -15,9 +15,13 @@ export interface WorkspaceStore {
   /** Dočasný soubor ke stažení (export do hodinek); odkaz platí omezenou dobu. */
   putFile(token: string, file: TempFile): Promise<void>;
   getFile(token: string): Promise<TempFile | null>;
+  /** Smaže soubory po platnosti a s `owner` i všechny soubory daného prostoru. Vrací počet smazaných. */
+  sweepFiles(now: Date, owner?: string): Promise<number>;
 }
 
 export interface TempFile {
+  /** Otisk prostoru, kterému soubor patří; smazání dat smaže i jeho soubory. */
+  owner: string;
   name: string;
   mime: string;
   base64: string;
@@ -60,4 +64,9 @@ export class MemoryStore implements WorkspaceStore {
   private files = new Map<string, TempFile>();
   async putFile(token: string, file: TempFile): Promise<void> { this.files.set(token, file); }
   async getFile(token: string): Promise<TempFile | null> { return this.files.get(token) ?? null; }
+  async sweepFiles(now: Date, owner?: string): Promise<number> {
+    let removed = 0;
+    for (const [token, file] of this.files) if (fileExpired(file, now) || (owner && file.owner === owner)) { this.files.delete(token); removed++; }
+    return removed;
+  }
 }

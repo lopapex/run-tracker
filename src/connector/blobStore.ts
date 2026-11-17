@@ -24,9 +24,23 @@ export class BlobStore implements WorkspaceStore {
 
   private files = getStore({ name: 'exports', consistency: 'strong' });
   async putFile(token: string, file: TempFile): Promise<void> {
-    await this.files.setJSON(token, file);
+    await this.files.setJSON(token, file, { metadata: { owner: file.owner, expiresAt: file.expiresAt } });
   }
   async getFile(token: string): Promise<TempFile | null> {
     return (await this.files.get(token, { type: 'json' })) as TempFile | null;
+  }
+
+  async sweepFiles(now: Date, owner?: string): Promise<number> {
+    const { blobs } = await this.files.list();
+    let removed = 0;
+    for (const { key } of blobs) {
+      const meta = (await this.files.getMetadata(key))?.metadata as { owner?: string; expiresAt?: string } | undefined;
+      // Soubory bez metadat jsou ze starší verze a jejich platnost už dávno vypršela.
+      if (!meta?.expiresAt || meta.expiresAt < now.toISOString() || (owner && meta.owner === owner)) {
+        await this.files.delete(key);
+        removed++;
+      }
+    }
+    return removed;
   }
 }

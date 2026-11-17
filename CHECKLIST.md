@@ -1,6 +1,6 @@
 # Run Tracker – stav konektoru
 
-Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověření v provozu · `[ ]` zbývá.
+Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověření v provozu · `[ ]` zbývá.
 
 ## Platná rozhodnutí
 
@@ -13,39 +13,38 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 ## Konektor
 
 - [x] Nástroje pro čtení plánu, profil, import po týdnech, aktivaci, přesun, vynechání, úpravu, přidání, obnovu, pauzu/přeskočení týdne, splnění, undo a smazání dat.
-- [x] Změny rozpisu jdou přes registr příkazů z domény a jsou vratné.
+- [x] Změny rozpisu jdou přes registr příkazů z domény a jsou vratné; zápis pocitu, bolesti a okolností je součást vratné změny.
 - [x] Kontrola týdenních součtů při importu.
-- [x] Podmíněný zápis proti souběžným změnám; oddělené prostory podle klíče.
+- [x] Podmíněný zápis proti souběžným změnám; oddělené prostory podle klíče; strop velikosti prostoru 3 MB.
 - [x] Testy přes skutečný MCP protokol nad úložištěm v paměti; referenční 12týdenní plán prošel importem i aktivací.
-- [x] Zápis pocitu a poznámky je součást vratné změny; přeskočený týden jde vrátit i se zápisy.
-- [x] Netlify funkce a Blobs za běhu: živý průchod importem, aktivací, přesunem, splněním, undo a smazáním dat.
+- [x] Netlify funkce a Blobs za běhu: živý průchod importem, aktivací, přesunem, splněním, undo, exportem a smazáním dat.
+- [x] Tvar jednotky je v popisech nástrojů jen jednou (u importu); úprava a přidání vracejí chybu s cestou k poli. Popisy nástrojů 22,7 kB místo 28,6 kB.
 - [ ] Ověřit v Claude: přidání konektoru bez přihlášení, schvalování zápisových nástrojů, import skutečného PDF, souběh s konektorem Stravy, mobilní aplikace.
-- [ ] Omezení počtu požadavků a velikosti prostoru.
+- Omezení počtu požadavků vědomě není: provoz chodí ze serverů Claude, takže limit podle IP by omezil všechny uživatele najednou.
+
+## Přesnost
+
+- [x] Tempa a předpovědi z výkonu podle VDOT (Daniels); ověřeno proti tabulkám a proti tempům referenčního plánu.
+- [x] Hodnocení splnění: jednotka s rychlými úseky (i dlouhý běh s úseky v tempu půlmaratonu) se nesoudí průměrným tempem celého běhu; úseky jen na čas bez tempa netrestají delší běh.
+- [x] Kilometry ve widgetu jsou výslovně „podle plánu“, ne naměřené.
+- [x] Okolnosti běhu (zima, vítr, alkohol den předem…) se ukládají k jednotce a zmírňují hodnocení pomalejšího tempa.
 
 ## Vizualizace a UI v konverzaci
 
-- [x] Widget s pohledy týden, celý plán, tempa a doběhnuto (odhad splnění, zápis stavu, pocitu a okolností); světlý i tmavý režim, tabulková podoba grafů.
-- [x] Každá změna rozpisu vykreslí aktualizovaný týden s možností vrácení; bez plánu widget ukáže, jak začít.
-- [x] Záložky a navigace po týdnech přímým voláním nástrojů, akce u jednotek a nápovědy promptů jako zprávy do konverzace.
-- [x] Okolnosti běhu (zima, vítr, alkohol den předem, málo tekutin…) se ukládají k jednotce, jdou vrátit a zmírňují hodnocení pomalejšího tempa.
-- [x] Export jednotky do Garminu jako FIT trénink; soubor čte nezávislý dekodér. Na hodinkách neověřeno.
-- [x] Ikona konektoru v informacích serveru a favicon webu.
-- [~] Nová ikona pod novými názvy souborů (Claude si drží ikonu podle adresy); ověřit po odpojení a připojení konektoru.
-- [x] Úspora tokenů: krátká id, stručnější výpis plánu, méně opakování v popisech nástrojů.
-- [~] Ověřeno jen proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, zprávy z widgetu, přímé volání nástrojů a zobrazení ikony.
+- [x] Widget s pohledy týden, celý plán, tempa a doběhnuto; světlý i tmavý režim, tabulková podoba grafů; vlastní karta bez rámečku hostitele.
+- [x] Nejbližší trénink je v týdnu rozbalený; doběhnuto, přesun výběrem dne, vynechání, obnovení a vrácení jdou klepnutím přímo do konektoru.
+- [x] Tlačítko Vrátit vrací právě změnu, ke které patří; po vrácení se už nenabízí.
+- [x] Sloupec v grafu plánu otevře týden; záložky a šipky přepínají pohledy bez zprávy v chatu.
+- [x] Když hostitel neodpoví do 20 s, akce se pošle jako zpráva do konverzace a widget nezamrzne; chyby nástroje se ukazují jako chyba, ne jako text k opsání.
+- [x] Řádky týdne jsou skutečná tlačítka (čtečky obrazovky), dotykové plochy 44 px, ověřeno na 360 a 420 px.
+- [x] Export do Garminu jako nenápadný odkaz „Soubor do hodinek“; soubor čte nezávislý dekodér. Na hodinkách neověřeno. Prošlé soubory se mažou, smazání dat smaže i vlastní soubory.
+- [~] Nová ikona pod novými názvy souborů; ověřit po odpojení a připojení konektoru.
+- [~] Ověřeno proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, přímé volání nástrojů z widgetu a zprávy do konverzace.
 - [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
-
-## Přesnost a plánování
-
-- [x] Tempa a předpovědi z výkonu podle VDOT (Daniels); ověřeno proti tabulkám a proti tempům referenčního plánu.
-- [x] Přesun výběrem dne, vynechání, obnovení a vrácení klepnutím ve widgetu, bez modelu.
-- [x] Export do Garminu zkompaktněný do odkazu „Soubor do hodinek“.
-- [~] Hostitel musí povolit widgetu volat nástroje; jinak se akce pošle jako zpráva do konverzace. Ověřit v Claude.
 
 ## Web
 
-- [x] Úvodní stránka: vytvoření adresy v prohlížeči, návod, soukromí.
-- [ ] Ověřit na telefonu.
+- [x] Úvodní stránka: vytvoření adresy v prohlížeči, návod, příklady, snímky karet, soukromí; na 360 px bez přetékání.
 
 ## Později
 

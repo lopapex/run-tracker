@@ -1,10 +1,13 @@
 // Export jednotky jako strukturovaný trénink pro hodinky Garmin (soubor FIT typu „workout“).
 // Kóduje jen tři zprávy z profilu FIT: file_id, workout a workout_step.
 import { INTENSITY_LABEL } from '../domain/format';
-import type { Block, PaceChart, Segment, WorkoutSpec } from '../domain/types';
+import type { Block, IntensityRef, PaceChart, Segment, WorkoutSpec } from '../domain/types';
 
 export interface FitStep {
+  /** Název v hodinkách (ASCII). */
   name: string;
+  /** Český popis pro náhled. */
+  label?: string;
   /** 0 = čas (ms), 1 = vzdálenost (cm), 5 = bez omezení (do stisku Lap), 6 = opakuj od kroku */
   durationType: 0 | 1 | 5 | 6;
   durationValue: number;
@@ -21,15 +24,19 @@ export interface FitStep {
 
 const ROLE_INTENSITY: Record<Segment['role'], FitStep['intensity']> = { warmup: 2, cooldown: 3, recovery: 4, work: 0, steady: 0 };
 const ROLE_NAME: Record<Segment['role'], string> = { warmup: 'Rozklus', cooldown: 'Vyklus', recovery: 'Pauza', work: 'Usek', steady: 'Beh' };
+const ROLE_LABEL: Record<Segment['role'], string> = { warmup: 'Rozklus', cooldown: 'Výklus', recovery: 'Pauza', work: 'Úsek', steady: 'Běh' };
+/** Krátké názvy intenzit, aby se název kroku vešel na displej hodinek. */
+const SHORT: Record<IntensityRef, string> = { easy: 'volne', steady: 'svizne', mp: 'MP', hm_pace: 'tempo PM', '10k_pace': 'tempo 10k', '5k_pace': 'tempo 5k', strides: 'rovinky', walk: 'chuze', free: 'volne' };
 // Hodinky umí v názvech spolehlivě jen ASCII.
-const ascii = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '').slice(0, 15);
+const ascii = (s: string, max = 23) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '').trim().slice(0, max);
 
-function step(s: Segment, chart: PaceChart, name?: string): FitStep {
+function step(s: Segment, chart: PaceChart, name?: string, label?: string): FitStep {
   const range = chart[s.intensity as keyof PaceChart];
   const fast = range ? Math.min(range.fromSec, range.toSec) : 0;
   const slow = range ? Math.max(range.fromSec, range.toSec) : 0;
   return {
-    name: ascii(name ?? `${ROLE_NAME[s.role]} ${INTENSITY_LABEL[s.intensity]}`),
+    name: ascii(name ?? `${ROLE_NAME[s.role]} ${SHORT[s.intensity]}`),
+    label: label ?? name ?? `${ROLE_LABEL[s.role]} ${INTENSITY_LABEL[s.intensity]}`,
     durationType: s.durationSec != null ? 0 : s.distanceM != null ? 1 : 5,
     durationValue: s.durationSec != null ? Math.round(s.durationSec * 1000) : s.distanceM != null ? Math.round(s.distanceM * 100) : 0,
     targetType: range ? 0 : 2,
@@ -57,7 +64,7 @@ export function workoutSteps(w: WorkoutSpec, chart: PaceChart): FitStep[] {
       } else if (b.kind === 'strides') {
         const first = steps.length;
         steps.push(step({ role: 'work', durationSec: b.durationSec, intensity: 'strides' }, chart, 'Rovinka'));
-        steps.push(step({ role: 'recovery', durationSec: 60, intensity: 'easy' }, {}, 'Volne'));
+        steps.push(step({ role: 'recovery', durationSec: 60, intensity: 'easy' }, {}, 'Volne', 'Volně'));
         if (b.count > 1) steps.push(repeat(first, b.count));
       }
     }
@@ -65,7 +72,7 @@ export function workoutSteps(w: WorkoutSpec, chart: PaceChart): FitStep[] {
   add(w.blocks);
   if (!steps.length) {
     const intensity = w.type === 'easy' || w.type === 'long' ? 'easy' : 'free';
-    steps.push(step({ role: 'steady', distanceM: w.distanceM, durationSec: w.distanceM == null ? w.durationSec : undefined, intensity }, chart, w.title));
+    steps.push(step({ role: 'steady', distanceM: w.distanceM, durationSec: w.distanceM == null ? w.durationSec : undefined, intensity }, chart, w.title, w.title));
   }
   return steps;
 }
@@ -122,12 +129,12 @@ export function encodeWorkoutFit(name: string, steps: FitStep[], now: Date = new
   body.push(...message(1, 26, [
     { num: 4, type: 'enum', value: 1 }, // sport: running
     { num: 6, type: 'uint16', value: steps.length },
-    { num: 8, type: 'string', size: 24, value: ascii(name).padEnd(1, 'W') },
+    { num: 8, type: 'string', size: 24, value: ascii(name) || 'Trenink' },
   ], true));
   steps.forEach((s, i) => {
     body.push(...message(2, 27, [
       { num: 254, type: 'uint16', value: i },
-      { num: 0, type: 'string', size: 16, value: s.name },
+      { num: 0, type: 'string', size: 24, value: s.name },
       { num: 1, type: 'enum', value: s.durationType },
       { num: 2, type: 'uint32', value: s.durationType === 5 ? NONE : s.durationValue },
       { num: 3, type: 'enum', value: s.durationType === 6 ? 0xff : s.targetType },
@@ -148,5 +155,5 @@ export function describeStep(s: FitStep): string {
   if (s.durationType === 6) return `Opakuj ${s.targetValue}× od kroku ${s.durationValue + 1}`;
   const amount = s.durationType === 0 ? (s.durationValue % 60000 === 0 ? `${s.durationValue / 60000} min` : `${Math.round(s.durationValue / 1000)} s`) : s.durationType === 1 ? (s.durationValue >= 100000 ? `${String(s.durationValue / 100000).replace('.', ',')} km` : `${s.durationValue / 100} m`) : 'do stisku Lap';
   const pace = (mmPerSec: number) => { const sec = Math.round(1_000_000 / mmPerSec); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; };
-  return `${s.name || 'Krok'} · ${amount}${s.speedLow && s.speedHigh ? ` · ${pace(s.speedHigh)}–${pace(s.speedLow)} /km` : ''}`;
+  return `${s.label || s.name || 'Krok'} · ${amount}${s.speedLow && s.speedHigh ? ` · ${pace(s.speedHigh)}–${pace(s.speedLow)} /km` : ''}`;
 }

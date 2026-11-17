@@ -260,6 +260,14 @@ export function activatePlan(ws: Workspace, input: z.infer<typeof activateInput>
 
 // ---------- Změny rozpisu ----------
 
+/** Ověří předpis jednotky a chybu vrátí s cestou k poli, ať ji model umí opravit. */
+export function checkWorkout(raw: unknown): { ok: true; workout: z.infer<typeof workoutSpecSchema> } | { ok: false; text: string } {
+  const parsed = workoutSpecSchema.safeParse(raw);
+  if (parsed.success) return { ok: true, workout: parsed.data };
+  const issues = parsed.error.issues.slice(0, 3).map((i) => `${i.path.join('.') || 'workout'}: ${i.message}`).join('; ');
+  return { ok: false, text: `Předpis jednotky nemá platný tvar (${issues}). Tvar je stejný jako u dnů v import_plan_weeks.` };
+}
+
 export function scheduleCommand(ws: Workspace, operation: ScheduleOperation, payload: unknown, reason: string, now: string): Outcome {
   const activation = activeOf(ws);
   if (!activation) return fail('Uživatel nemá aktivní plán.');
