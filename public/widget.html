@@ -29,7 +29,7 @@
   --good: #0ca30c; --good-ink: #0ca30c; --warn: #fab219; --warn-ink: #fab219; --crit: #e66767;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: transparent; }
+html, body { height: auto; min-height: 0; margin: 0; background: transparent; overflow: hidden; }
 body { color: var(--ink); font: 14px/1.45 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif); }
 #app { position: relative; max-width: 540px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 .eyebrow { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
@@ -593,14 +593,23 @@ button:focus-visible, .day:focus-visible { outline: 2px solid var(--s1); outline
     tips = []; hideTip();
     var width = app.clientWidth - 28;
     lastWidth = app.clientWidth;
+    requestAnimationFrame(reportSize);
     app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
   }
-  if (window.ResizeObserver) {
-    new ResizeObserver(function () {
-      if (Math.abs(app.clientWidth - lastWidth) > 4) render();
-      notify('ui/notifications/size-changed', { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) });
-    }).observe(document.documentElement);
+  // Výška se měří z karty, ne z dokumentu: dokument nikdy neklesne pod výšku, kterou mu hostitel dal,
+  // takže by po zmenšení obsahu zůstalo dole prázdné místo.
+  var lastHeight = 0;
+  function reportSize() {
+    var h = Math.ceil(app.getBoundingClientRect().height);
+    if (Math.abs(h - lastHeight) < 1) return;
+    lastHeight = h;
+    notify('ui/notifications/size-changed', { height: h });
   }
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { if (Math.abs(app.clientWidth - lastWidth) > 4) render(); reportSize(); }).observe(document.body);
+    new ResizeObserver(reportSize).observe(app);
+  }
+  app.addEventListener('toggle', reportSize, true);
 
   if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude, když je připojený konektor Run Tracker.</p>'; return; }
   request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.3.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' })
