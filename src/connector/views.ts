@@ -8,6 +8,7 @@ import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
 import { resolveId } from './tools';
 import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
+import { trainingPaces } from '../domain/vdot';
 import { CONDITIONS, type Condition, type Workspace } from './workspace';
 
 export type View = { ok: true; text: string; data: Record<string, unknown> } | { ok: false; text: string };
@@ -16,6 +17,11 @@ const fail = (text: string): View => ({ ok: false, text });
 const isoDate = z.string().refine(isIsoDate, 'Datum musí být RRRR-MM-DD.');
 export const weekViewInput = z.object({ date: isoDate.optional().describe('Libovolný den týdne; bez něj probíhající týden.') });
 export const paceViewInput = z.object({ workoutId: z.string().optional().describe('Id jednotky z get_plan; přidá rozpis jejích úseků s cílovými tempy.') });
+export const calcInput = z.object({
+  distanceM: z.number().min(1000).max(50_000).describe('Vzdálenost výkonu v metrech (5000, 10000, 21097.5, 42195 nebo jiná).'),
+  timeSec: z.number().int().min(180).max(8 * 3600).describe('Čas výkonu v sekundách.'),
+  save: z.boolean().default(false).describe('Uložit vypočtená tempa do profilu. Jen když s tím uživatel souhlasí.'),
+});
 export const garminInput = z.object({ workoutId: z.string().min(1).describe('Id běžecké jednotky z get_plan.') });
 export const resultViewInput = z.object({
   workoutId: z.string().min(1).describe('Id naplánované jednotky z get_plan, se kterou se běh porovná.'),
@@ -268,6 +274,20 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
       run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps },
       score, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
+  };
+}
+
+// ---------- Tempa z výkonu (VDOT) ----------
+
+export function calcView(ws: Workspace, input: z.infer<typeof calcInput>, now: Date = new Date()): View {
+  const r = trainingPaces(input.distanceM, input.timeSec);
+  const paces = paceRows(r.chart);
+  const current = paceRows(resolvePaceChart(ws.profile, context(ws, now) ? ws.templates.find((t) => t.id === context(ws, now)!.activation.templateId)?.paceChart : undefined));
+  const fmt = (sec: number) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`; };
+  return {
+    ok: true,
+    text: `Tempa podle VDOT ${String(r.vdot).replace('.', ',')} z výkonu ${formatKm(input.distanceM)} za ${fmt(input.timeSec)} (vzorce Danielse a Gilberta): ${paces.map((p) => `${p.label} ${formatPace(p.fromSec)}–${formatPace(p.toSec)}`).join('; ')}. Předpověď: ${r.predictions.map((p) => `${p.label} ${fmt(p.timeSec)}`).join(', ')}. Předpověď platí pro odpovídající trénink na danou vzdálenost. ${input.save ? 'Tempa jsou uložená v profilu.' : 'Tempa nejsou uložená; ulož je jen se souhlasem uživatele (save: true).'} Používej tato čísla, neodhaduj vlastní.`,
+    data: { view: 'paces', paces, workout: null, calc: { vdot: r.vdot, distanceM: input.distanceM, timeSec: input.timeSec, predictions: r.predictions, saved: input.save, current } },
   };
 }
 

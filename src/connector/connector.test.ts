@@ -58,7 +58,7 @@ describe('konektor Run Tracker', () => {
   it('nabídne nástroje s popsaným tvarem jednotky a instrukce pro model', async () => {
     const { client } = await connect(new MemoryStore());
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'delete_all_data', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'shift_plan', 'show_paces', 'show_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'shift_plan', 'show_paces', 'show_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
     expect(tools.find((t) => t.name === 'get_plan')?.annotations?.readOnlyHint).toBe(true);
     const edit = JSON.stringify(tools.find((t) => t.name === 'edit_workout')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
@@ -377,6 +377,25 @@ describe('konektor Run Tracker', () => {
     expect((await handleFile('y'.repeat(48), store)).status).toBe(404);
     // volný den do hodinek poslat nejde
     expect((await call('export_garmin', { workoutId: idOf(plan, '2026-11-16', 'Easy Run').slice(0, 3) })).isError).toBe(true);
+  });
+
+  it('tempa spočítá z výkonu a uloží je jen na vyžádání', async () => {
+    const store = new MemoryStore();
+    const { call } = await connect(store);
+    const preview = await call('calculate_paces', { distanceM: 21097.5, timeSec: 5400 });
+    expect(preview.isError).toBe(false);
+    expect(preview.data).toMatchObject({ view: 'paces', calc: { saved: false } });
+    expect(preview.data.calc.vdot).toBeGreaterThan(50);
+    expect(preview.data.paces.find((p: { key: string }) => p.key === 'hm_pace')).toMatchObject({ fromSec: 254, toSec: 258 });
+    expect(preview.text).toContain('neodhaduj');
+    expect(await store.load(await workspaceId(KEY_A))).toBeNull();
+
+    const saved = await call('calculate_paces', { distanceM: 21097.5, timeSec: 5400, save: true });
+    expect(saved.data).toMatchObject({ calc: { saved: true }, banner: { text: 'Tempa uložena do profilu.' } });
+    expect((await call('get_plan')).text).toContain('nemá aktivní plán');
+    const ws = (await store.load(await workspaceId(KEY_A)))!.ws;
+    expect(ws.profile.paceChart?.hm_pace).toEqual({ fromSec: 254, toSec: 258 });
+    expect(ws.profile.paceSource).toBe('profile');
   });
 
   it('smaže všechna data jen s výslovným potvrzením', async () => {

@@ -35,6 +35,13 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [~] Ověřeno jen proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, zprávy z widgetu, přímé volání nástrojů a zobrazení ikony.
 - [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
 
+## Přesnost a plánování
+
+- [x] Tempa a předpovědi z výkonu podle VDOT (Daniels); ověřeno proti tabulkám a proti tempům referenčního plánu.
+- [x] Přesun výběrem dne, vynechání, obnovení a vrácení klepnutím ve widgetu, bez modelu.
+- [x] Export do Garminu zkompaktněný do odkazu „Soubor do hodinek“.
+- [~] Hostitel musí povolit widgetu volat nástroje; jinak se akce pošle jako zpráva do konverzace. Ověřit v Claude.
+
 ## Web
 
 - [x] Úvodní stránka: vytvoření adresy v prohlížeči, návod, soukromí.

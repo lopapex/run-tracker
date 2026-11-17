@@ -11,7 +11,9 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 3. V konverzaci přiloží plán (PDF, obrázek, tabulka). Claude ho přepíše po týdnech přes `import_plan_weeks`, nástroj vrátí kontrolu týdenních součtů a `activate_plan` plán zařadí do kalendáře.
 4. Další změny jdou přes `move_workout`, `skip_workout`, `edit_workout`, `add_workout`, `restore_workout`, `shift_plan` a `set_status`. Každá je vratná přes `undo_change`. `get_plan` vrací aktuální stav, `delete_all_data` smaže vše.
 5. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_result` (doběhnuto: odhad splnění proti plánu a zápis stavu, pocitu a okolností) vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny rozpisu posílá jako zprávu do konverzace a zápis doběhnuté jednotky ukládá přímo.
-6. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
+6. `calculate_paces` spočítá tempa a předpovědi závodů z jednoho výkonu vzorci VDOT (`src/domain/vdot.ts`, test proti tabulkám Danielse); instrukce konektoru říkají modelu, aby tempa neodhadoval.
+7. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
+8. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
 
 ## Hranice vůči Stravě
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { workoutSpecSchema } from '../domain/commands';
 import type { WorkspaceStore } from './store';
 import { activateInput, activatePlan, describePlan, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
-import { garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View } from './views';
+import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View } from './views';
 import { emptyWorkspace, type Workspace } from './workspace';
 
 /** Jeden widget pro všechny pohledy; který se vykreslí, určuje pole `view` ve výsledku nástroje. */
@@ -20,7 +20,7 @@ const INSTRUCTIONS = `Run Tracker drží běžecký plán uživatele: ověřený
 Jak pracovat:
 - Než budeš radit nebo cokoli měnit, načti aktuální stav přes get_plan. Id jednotek ber jen z jeho výstupu.
 - Rozpis měň jen tehdy, když o to uživatel stojí. Před změnou řekni, co uděláš; po ní shrň výsledek. Každou změnu jde vrátit přes undo_change.
-- Co v datech není, nevíš: řekni to a zeptej se. Čísla neodhaduj.
+- Co v datech není, nevíš: řekni to a zeptej se. Čísla neodhaduj: tempa a předpovědi počítá calculate_paces, vzdálenosti a splnění nástroje Run Trackeru, skutečné běhy čti ze Stravy. Když číslo nemáš z nástroje, řekni, že je to tvůj odhad.
 - Skutečné běhy čti přes oficiální konektor Strava, pokud ho uživatel má připojený. Run Tracker data aktivit neukládá: do set_status patří jen stav jednotky a krátký zápis vlastními slovy uživatele. Jediná výjimka je show_result, které čísla běhu jen vykreslí a zahodí.
 - Okolnosti běhu: když uživatel řekne, proč běh dopadl jinak (zima, vítr, horko, kopce, špatný spánek, alkohol den předem, málo tekutin, únava, nemoc, stres, bolavé nohy), zapiš je jako conditions přes set_status a ber je v úvahu při hodnocení. Pomalejší tempo za takových podmínek není nesplnění. Když okolnosti ovlivní i další dny (nemoc, velká únava), navrhni úpravu rozpisu a počkej na souhlas.
 - Nejsi lékař. Při bolesti, otoku nebo kulhání doporuč ubrat a nechat se vyšetřit; při bolesti na hrudi, dušnosti nebo mdlobě doporuč okamžitou lékařskou pomoc.
@@ -229,6 +229,24 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
     annotations: readOnly,
     _meta: ui,
   }, (input) => show((ws) => paceView(ws, input)));
+
+  server.registerTool('calculate_paces', {
+    title: 'Spočítat tempa z výkonu',
+    description: 'Spočítá tréninková tempa a předpovědi závodních časů z jednoho výkonu (vzorce VDOT Jacka Danielse) a vykreslí je. Použij vždy, když se mluví o tempech nebo cílovém čase, místo vlastního odhadu. S save: true je uloží do profilu, jen se souhlasem uživatele.',
+    inputSchema: calcInput.shape,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    _meta: ui,
+  }, async (input) => {
+    if (!input.save) return show((ws) => calcView(ws, input));
+    let view: View | undefined;
+    const saved = await write((ws) => {
+      view = calcView(ws, input);
+      const chart = (view.ok ? (view.data.paces as Array<{ key: string; fromSec: number; toSec: number }>) : []).reduce((acc, p) => ({ ...acc, [p.key]: { fromSec: p.fromSec, toSec: p.toSec } }), {});
+      return setProfile(ws, { paceChart: chart });
+    });
+    if (('isError' in saved && saved.isError) || !view?.ok) return saved;
+    return { content: text(view.text), structuredContent: { ...view.data, banner: { text: 'Tempa uložena do profilu.', canUndo: false } } };
+  });
 
   server.registerTool('show_result', {
     title: 'Doběhnuto: hodnocení a zápis',

@@ -8,3 +8,6 @@ RUN_TRACKER_PRODUCT_PLAN.md
 fixtures/private/
 tmp/
 *.pdf
+
+.taste-skill/
+shots/
