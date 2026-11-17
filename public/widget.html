@@ -78,7 +78,8 @@ h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink2); 
 .row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; width: 100%; min-height: 52px; padding: 8px 6px; border: 0; border-radius: 8px; background: none; text-align: left; }
 button.row { cursor: pointer; }
 button.row[aria-expanded="true"] { background: var(--wash); }
-.day.today .row { box-shadow: inset 3px 0 0 var(--s1); }
+.day.next .row { box-shadow: inset 3px 0 0 var(--s1); }
+.chip.next { color: var(--s1); border-color: var(--s1); }
 .row .when, .row .what, .row .t, .row .s, .row .bar { display: block; }
 .row .when { color: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
 .row .when b { display: block; color: var(--ink); font-size: 13px; text-transform: capitalize; }
@@ -287,8 +288,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     widgetChange = null;
     moveId = null;
     if (d && d.view) {
-      // Nejbližší jednotka je rozbalená hned: je vidět, co běžet a co s ní jde udělat.
-      if (d.view === 'week') openId = !d.banner && d.isCurrent ? d.nextId : null;
+      // Týden se ukáže sbalený; nejbližší jednotka je jen zvýrazněná.
+      if (d.view === 'week') openId = null;
       if (d.view !== 'result') form = null;
       data = d;
     } else {
@@ -475,7 +476,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var prev = addDays(d.weekStart, -7), nxt = addDays(d.weekStart, 7);
     // Šipky po stranách nadpisu, jak je u přepínání období zvykem.
     h += '<div class="head"><div class="nav">' + opener('‹', 'show_week', { date: prev }, 'Ukaž mi týden od ' + prev + '.', ' aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled')) + '</div>';
-    h += '<div class="title"><div class="eyebrow">' + esc(d.planName) + (d.phase ? ' · ' + esc(d.phase) : '') + '</div>';
+    h += '<div class="title">' + (d.phase ? '<div class="eyebrow">' + esc(d.phase) + '</div>' : '');
     h += '<h2>' + esc(d.label.charAt(0).toUpperCase() + d.label.slice(1)) + '</h2>';
     h += '<div class="sub">' + dm(d.weekStart) + ' – ' + dm(addDays(d.weekStart, 6)) + '</div></div>';
     h += '<div class="nav">' + opener('›', 'show_week', { date: nxt }, 'Ukaž mi týden od ' + nxt + '.', ' aria-label="Další týden"' + (d.hasNext ? '' : ' disabled')) + '</div></div>';
@@ -490,11 +491,12 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       day.workouts.forEach(function (w) {
         var rest = w.type === 'rest', opened = openId === w.id;
         var whenCell = '<span class="when"><b>' + DOW[day.dow] + '</b>' + (day.isToday ? 'dnes' : dm(day.date)) + '</span>';
-        h += '<li class="day' + (day.isToday ? ' today' : '') + (rest ? ' rest' : '') + '">';
+        var isNext = w.id === d.nextId;
+        h += '<li class="day' + (day.isToday ? ' today' : '') + (isNext ? ' next' : '') + (rest ? ' rest' : '') + '">';
         if (rest) { h += '<div class="row">' + whenCell + '<span class="what"><span class="t">Volno</span></span><span></span></div></li>'; return; }
         var sub = [w.summary, w.moved ? 'přesunuto' : '', w.feel ? 'pocit ' + w.feel + '/5' : '', (w.conditions || []).join(', '), w.userNote || ''].filter(Boolean).join(' · ');
         h += '<button type="button" class="row" data-row="' + w.id + '" aria-expanded="' + opened + '">' + whenCell;
-        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + chip(w.status, day.isPast);
+        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + (isNext ? '<span class="chip next"><span aria-hidden="true">→</span>Na řadě</span>' : chip(w.status, day.isPast));
         if (w.kmMax > 0) h += '<span class="bar ' + (w.status === 'completed' || w.status === 'partial' ? 'done' : w.status === 'skipped' ? 'skip' : '') + '" style="width:' + Math.max(4, Math.round(w.kmMax / max * 70)) + '%"></span>';
         h += '</button>' + (opened ? actions(w) : '') + '</li>';
       });
