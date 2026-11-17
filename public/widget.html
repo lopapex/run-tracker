@@ -389,7 +389,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   }
   function head(current, d) {
     var t = [['week', 'Týden', 'show_week', 'Ukaž mi tento týden.'], ['plan', 'Plán', 'show_plan', 'Ukaž mi celý plán.'], ['paces', 'Tempa', 'show_paces', 'Ukaž mi moje tempa.']];
-    var h = '<div class="tabs" role="navigation" aria-label="Pohledy">' + t.map(function (x) { return opener(x[1], x[2], {}, x[3], current === x[0] ? ' aria-current="true"' : ''); }).join('') + '</div>';
+    var h = current === null ? '' : '<div class="tabs" role="navigation" aria-label="Pohledy">' + t.map(function (x) { return opener(x[1], x[2], {}, x[3], current === x[0] ? ' aria-current="true"' : ''); }).join('') + '</div>';
     if (errorText) h += '<div class="note err" role="alert"><span><span aria-hidden="true">⚠ </span>' + esc(errorText) + '</span></div>';
     if (sayText) h += '<div class="note" role="status"><span>Napiš do konverzace: „' + esc(sayText) + '“</span></div>';
     if (d && d.banner) h += '<div class="note ok" role="status"><span><span aria-hidden="true">✓ </span>' + esc(d.banner.text) + '</span>' + (d.banner.revisionId ? opener('Vrátit', 'undo_change', { revisionId: d.banner.revisionId }, 'Vrať poslední změnu.') : '') + '</div>';
@@ -453,8 +453,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       links.push(link(icon('undo') + 'Zrušit', 'Vrať jednotku ' + name + ' na stav v plánu.'));
     }
     if (w.status !== 'skipped') links.push(strava
-      ? link(icon('strava') + 'Strava', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.')
-      : link(icon('strava') + 'Zhodnotit', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.'));
+      ? link(icon('strava') + 'Hodnocení', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.')
+      : link(icon('strava') + 'Hodnocení', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.'));
     links.push(opener(icon('pace') + 'Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
     if (w.status === 'scheduled') links.push(opener(icon('watch') + 'Hodinky', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
     h += '<div class="main3">' + main.join('') + '</div>';
@@ -638,7 +638,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function renderResult(d, width) {
     var r = d.run, w = d.workout, t = d.target, sc = d.score, c = d.checkin, v = d.verdict || {};
     if (!form || form.id !== w.id) form = { id: w.id, status: c.status === 'scheduled' || c.status === 'skipped' ? (sc ? sc.suggestedStatus : 'completed') : c.status, feel: c.feel, pain: c.pain || 'none', conditions: c.conditions.slice() };
-    var h = head('', d) + '<div class="eyebrow">Doběhnuto</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
+    var h = head(null, d) + '<div class="eyebrow">Doběhnuto</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
     h += '<div class="sub">Plán: ' + esc(w.summary) + (r && r.name ? ' · Běh: ' + esc(r.name) : '') + '</div>';
     if (r) {
       if (sc) {
@@ -696,7 +696,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // ---------- Soubor do hodinek ----------
   function renderGarmin(d) {
-    var w = d.workout, h = head('', d) + '<div class="eyebrow">Soubor do hodinek Garmin</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
+    var w = d.workout, h = head(null, d) + '<div class="eyebrow">Soubor do hodinek Garmin</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
     h += '<div class="sub">' + d.steps.length + ' kroků' + (d.hasPaces ? ' s cílovými tempy' : '') + '</div>';
     h += '<a class="primary" data-link="1" href="' + esc(d.url) + '" target="_blank" rel="noopener">Stáhnout soubor .fit</a>';
     h += '<details><summary>Kroky a jak soubor nahrát</summary><ol class="steps fit">' + d.steps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>';
