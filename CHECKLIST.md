@@ -24,10 +24,13 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 
 ## Vizualizace a UI v konverzaci
 
-- [x] Widget s pohledy týden, celý plán, pomocník temp a běh proti plánu; světlý i tmavý režim, tabulková podoba grafů.
+- [x] Widget s pohledy týden, celý plán, tempa a doběhnuto (odhad splnění, zápis stavu, pocitu a okolností); světlý i tmavý režim, tabulková podoba grafů.
 - [x] Každá změna rozpisu vykreslí aktualizovaný týden s možností vrácení; bez plánu widget ukáže, jak začít.
 - [x] Záložky a navigace po týdnech přímým voláním nástrojů, akce u jednotek a nápovědy promptů jako zprávy do konverzace.
+- [x] Okolnosti běhu (zima, vítr, alkohol den předem, málo tekutin…) se ukládají k jednotce, jdou vrátit a zmírňují hodnocení pomalejšího tempa.
+- [x] Export jednotky do Garminu jako FIT trénink; soubor čte nezávislý dekodér. Na hodinkách neověřeno.
 - [x] Ikona konektoru v informacích serveru a favicon webu.
+- [~] Nová ikona pod novými názvy souborů (Claude si drží ikonu podle adresy); ověřit po odpojení a připojení konektoru.
 - [x] Úspora tokenů: krátká id, stručnější výpis plánu, méně opakování v popisech nástrojů.
 - [~] Ověřeno jen proti napodobenému hostiteli. V Claude zbývá ověřit vykreslení, zprávy z widgetu, přímé volání nástrojů a zobrazení ikony.
 - [ ] Ověřit, jestli Claude předává modelu i data pro widget (structuredContent); pokud ano, přesunout je mimo kontext modelu.
@@ -39,6 +42,5 @@ Datum: 16. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 
 ## Později
 
-- [ ] Export jednotky do hodinek Garmin (FIT workout).
 - [ ] OAuth a adresář Claude.
 - [ ] ChatGPT (dnes bez Stravy a se zápisem jen na firemních tarifech).

@@ -7,7 +7,8 @@ import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, wo
 import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
 import { resolveId } from './tools';
-import type { Workspace } from './workspace';
+import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
+import { CONDITIONS, type Condition, type Workspace } from './workspace';
 
 export type View = { ok: true; text: string; data: Record<string, unknown> } | { ok: false; text: string };
 const fail = (text: string): View => ({ ok: false, text });
@@ -15,7 +16,8 @@ const fail = (text: string): View => ({ ok: false, text });
 const isoDate = z.string().refine(isIsoDate, 'Datum musí být RRRR-MM-DD.');
 export const weekViewInput = z.object({ date: isoDate.optional().describe('Libovolný den týdne; bez něj probíhající týden.') });
 export const paceViewInput = z.object({ workoutId: z.string().optional().describe('Id jednotky z get_plan; přidá rozpis jejích úseků s cílovými tempy.') });
-export const runViewInput = z.object({
+export const garminInput = z.object({ workoutId: z.string().min(1).describe('Id běžecké jednotky z get_plan.') });
+export const resultViewInput = z.object({
   workoutId: z.string().min(1).describe('Id naplánované jednotky z get_plan, se kterou se běh porovná.'),
   run: z.object({
     name: z.string().max(80).optional(),
@@ -25,7 +27,8 @@ export const runViewInput = z.object({
     avgHr: z.number().min(30).max(250).optional(),
     elevGainM: z.number().min(0).max(20_000).optional(),
     laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(80).optional(),
-  }),
+  }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich widget nabídne jen zápis splnění.'),
+  conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti, které uživatel zmínil (cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore); zohlední se v hodnocení.'),
 });
 
 const NOT_RUN = new Set(['rest', 'strength', 'cross']);
@@ -66,7 +69,7 @@ function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
     id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, load: w.workout.load ?? null, status: w.status,
     summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null,
     kmMin: km(d.minM), kmMax: km(d.maxM), kmUnknown: d.unknown > 0, moved: w.date !== w.originDate, skipReason: w.skipReason ?? null,
-    feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null,
+    feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null, conditions: (note?.conditions ?? []).map((x) => CONDITIONS[x]),
   };
 }
 
@@ -181,7 +184,7 @@ export function paceView(ws: Workspace, input: z.infer<typeof paceViewInput>, no
   };
 }
 
-// ---------- Běh proti plánu ----------
+// ---------- Doběhnuto: hodnocení splnění a zápis ----------
 
 function targetOf(w: WorkoutSpec, chart: PaceChart): IntensityRef | null {
   const parts: Segment[] = w.blocks.flatMap((b) => (b.kind === 'segment' ? [b] : b.kind === 'repeat' ? [b.work, ...(b.more ?? [])] : []));
@@ -190,39 +193,102 @@ function targetOf(w: WorkoutSpec, chart: PaceChart): IntensityRef | null {
   return chart.easy && (w.type === 'easy' || w.type === 'long' || w.type === 'other') ? 'easy' : work?.intensity ?? null;
 }
 
-export function runView(ws: Workspace, input: z.infer<typeof runViewInput>, now: Date = new Date()): View {
+/** Okolnosti, které samy o sobě zpomalují: pomalejší tempo se pak nehodnotí jako chyba. */
+const SLOWING: Condition[] = ['cold', 'heat', 'wind', 'rain', 'hills', 'poor_sleep', 'alcohol', 'dehydrated', 'tired', 'sick', 'sore'];
+
+/** Odhad splnění 0–100. Je to hrubé vodítko z vzdálenosti a průměrného tempa, ne měření kvality tréninku. */
+function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, avgPaceSec: number, target: { fastSec: number; slowSec: number } | null, steady: boolean, conditions: Condition[]) {
+  const parts: Array<{ label: string; value: number; text: string }> = [];
+  if (plannedMaxM > 0) {
+    const ratio = distanceM / plannedMinM;
+    const value = ratio >= 0.97 ? (distanceM > plannedMaxM * 1.15 ? 90 : 100) : Math.max(0, Math.round(ratio * 100));
+    parts.push({ label: 'Vzdálenost', value, text: ratio >= 0.97 ? (value === 90 ? 'výrazně delší než plán' : 'odpovídá plánu') : `${Math.round(ratio * 100)} % plánované vzdálenosti` });
+  }
+  let paceWeight = 0.4;
+  if (target && steady) {
+    const fasterBy = target.fastSec - avgPaceSec, slowerBy = avgPaceSec - target.slowSec;
+    const excused = slowerBy > 2 && conditions.some((c) => SLOWING.includes(c));
+    const value = fasterBy > 2 ? Math.round(100 - Math.min(40, fasterBy * 2)) : slowerBy > 2 ? Math.round(100 - Math.min(40, slowerBy * 1.5)) : 100;
+    if (excused) paceWeight = 0.15;
+    parts.push({ label: 'Tempo', value, text: fasterBy > 2 ? `o ${Math.round(fasterBy)} s/km rychleji než cílové pásmo` : slowerBy > 2 ? `o ${Math.round(slowerBy)} s/km pomaleji než cílové pásmo${excused ? '; okolnosti to vysvětlují, váha tempa je snížená' : ''}` : 'v cílovém pásmu' });
+  }
+  if (!parts.length) return null;
+  const dist = parts.find((p) => p.label === 'Vzdálenost'), pace = parts.find((p) => p.label === 'Tempo');
+  const total = Math.round(dist && pace ? dist.value * (1 - paceWeight) + pace.value * paceWeight : (dist ?? pace)!.value);
+  return { total, label: total >= 90 ? 'Splněno' : total >= 70 ? 'Splněno s odchylkou' : 'Splněno částečně', suggestedStatus: total >= 70 ? 'completed' : 'partial', parts };
+}
+
+export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>, now: Date = new Date()): View {
   const c = context(ws, now);
   if (!c) return fail(NO_PLAN);
   const wanted = resolveId(c.all, input.workoutId);
   const w = c.all.find((x) => x.id === wanted);
   if (!w) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
-  const { run } = input;
+  const saved = ws.notes.find((n) => n.workoutId === w.id);
+  const conditions = [...new Set([...(saved?.conditions ?? []), ...(input.conditions ?? [])])];
   const planned = workoutDistance(w.workout, c.chart);
-  const avgPaceSec = run.movingSec / (run.distanceM / 1000);
   const intensity = targetOf(w.workout, c.chart);
   const range = intensity ? c.chart[intensity as keyof PaceChart] : undefined;
   const target = intensity && range ? { key: intensity, label: INTENSITY_LABEL[intensity], fastSec: Math.min(range.fromSec, range.toSec), slowSec: Math.max(range.fromSec, range.toSec) } : null;
   const steady = w.workout.type === 'easy' || w.workout.type === 'long';
+  const base = {
+    view: 'result',
+    workout: { id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, c.chart), kmMin: km(planned.minM), kmMax: km(planned.maxM), kmUnknown: planned.unknown > 0, status: w.status, dow: dowOf(w.date) },
+    checkin: { status: w.status, feel: saved?.feel ?? null, pain: saved?.pain ?? null, note: saved?.note ?? null, conditions },
+    conditionLabels: CONDITIONS,
+    target,
+  };
+  const { run } = input;
+  if (!run) {
+    return {
+      ok: true,
+      text: `Zobrazen zápis doběhnuté jednotky ${w.workout.title} (${w.date}). Uživatel ve widgetu vybere stav, pocit a okolnosti a uloží je sám; když je řekne slovy, zapiš je přes set_status.`,
+      data: { ...base, run: null, score: null, verdict: null },
+    };
+  }
+  const avgPaceSec = run.movingSec / (run.distanceM / 1000);
   const laps = (run.laps ?? []).map((l, i) => ({ n: i + 1, distanceM: Math.round(l.distanceM), durationSec: Math.round(l.durationSec), paceSec: Math.round(l.durationSec / (l.distanceM / 1000)), avgHr: l.avgHr ?? null }));
   const inTarget = target ? laps.filter((l) => l.paceSec >= target.fastSec - 2 && l.paceSec <= target.slowSec + 2).length : null;
   const distance = planned.maxM === 0 ? null : run.distanceM < planned.minM - 300 ? 'short' : run.distanceM > planned.maxM + 300 ? 'long' : 'ok';
   const pace = !target || !steady ? null : avgPaceSec < target.fastSec - 2 ? 'faster' : avgPaceSec > target.slowSec + 2 ? 'slower' : 'in';
+  const score = scoreOf(run.distanceM, planned.minM, planned.maxM, avgPaceSec, target, steady, conditions);
   const text = [
-    `Zobrazeno porovnání běhu s jednotkou ${w.workout.title} (${w.date}).`,
-    `Běh ${formatKm(run.distanceM)} za průměrné tempo ${formatPace(avgPaceSec)}/km; plán ${planned.maxM ? `${String(km(planned.minM)).replace('.', ',')}${planned.maxM !== planned.minM ? `–${String(km(planned.maxM)).replace('.', ',')}` : ''} km` : 'bez dané vzdálenosti'}${planned.unknown ? ' + nevyčíslené úseky' : ''}.`,
-    distance ? `Vzdálenost: ${distance === 'ok' ? 'odpovídá plánu' : distance === 'short' ? 'kratší než plán' : 'delší než plán'}.` : '',
-    pace ? `Průměrné tempo je ${pace === 'in' ? 'v cílovém rozsahu' : pace === 'faster' ? 'rychlejší než cílový rozsah' : 'pomalejší než cílový rozsah'} (${target!.label} ${formatPace(target!.fastSec)}–${formatPace(target!.slowSec)}/km).` : '',
-    target && laps.length && !steady ? `V rozsahu ${target.label} bylo ${inTarget} z ${laps.length} kol.` : '',
-    'Data běhu se jen vykreslila, Run Tracker je neuložil. Uživatel widget vidí; krátce zhodnoť a případně nabídni zápis splnění přes set_status.',
+    `Zobrazeno hodnocení běhu proti jednotce ${w.workout.title} (${w.date}).`,
+    `Běh ${formatKm(run.distanceM)}, průměrné tempo ${formatPace(avgPaceSec)}/km; plán ${planned.maxM ? `${String(km(planned.minM)).replace('.', ',')}${planned.maxM !== planned.minM ? `–${String(km(planned.maxM)).replace('.', ',')}` : ''} km` : 'bez dané vzdálenosti'}${planned.unknown ? ' + nevyčíslené úseky' : ''}.`,
+    score ? `Odhad splnění ${score.total} % (${score.label}): ${score.parts.map((p) => `${p.label.toLowerCase()} ${p.text}`).join('; ')}.` : '',
+    target && laps.length && !steady ? `V pásmu ${target.label} bylo ${inTarget} z ${laps.length} kol.` : '',
+    conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
+    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Uživatel může stav, pocit a okolnosti uložit ve widgetu; krátce zhodnoť a případně navrhni úpravu dalších dnů.',
   ].filter(Boolean).join(' ');
   return {
     ok: true,
     text,
     data: {
-      view: 'run',
-      workout: { id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, c.chart), kmMin: km(planned.minM), kmMax: km(planned.maxM), kmUnknown: planned.unknown > 0, status: w.status, dow: dowOf(w.date) },
+      ...base,
       run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps },
-      target, paces: paceRows(c.chart), verdict: { distance, pace, lapsInTarget: inTarget, steady },
+      score, verdict: { distance, pace, lapsInTarget: inTarget, steady },
+    },
+  };
+}
+
+// ---------- Export do hodinek Garmin ----------
+
+export function garminExport(ws: Workspace, input: z.infer<typeof garminInput>, now: Date = new Date()): { view: View; file?: { name: string; bytes: Uint8Array } } {
+  const c = context(ws, now);
+  if (!c) return { view: fail(NO_PLAN) };
+  const wanted = resolveId(c.all, input.workoutId);
+  const w = c.all.find((x) => x.id === wanted);
+  if (!w) return { view: fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.') };
+  if (NOT_RUN.has(w.workout.type)) return { view: fail('Do hodinek jde poslat jen běžecká jednotka.') };
+  const steps = workoutSteps(w.workout, c.chart);
+  const name = `${w.workout.title} ${w.date.slice(8)}.${w.date.slice(5, 7)}.`;
+  const fileName = `run-tracker-${w.date}-${w.workout.title.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'trenink'}.fit`;
+  return {
+    file: { name: fileName, bytes: encodeWorkoutFit(name, steps, now) },
+    view: {
+      ok: true,
+      text: `Připraven trénink pro Garmin: ${w.workout.title} (${w.date}), ${steps.length} kroků.`,
+      data: { view: 'garmin', workout: { id: w.id, date: w.date, title: w.workout.title, summary: workoutSummary(w.workout), dow: dowOf(w.date) }, steps: steps.map(describeStep), fileName, hasPaces: steps.some((s) => s.targetType === 0) },
     },
   };
 }

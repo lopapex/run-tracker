@@ -2,12 +2,20 @@
 // Neobsahuje žádná data aktivit ze Stravy; jen plán, rozpis, stav splnění a vlastní poznámky.
 import type { AthleteProfile, IsoDate, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, ScheduleRevision, TemplateWeek } from '../domain/types';
 
+export const CONDITIONS = {
+  cold: 'zima', heat: 'horko', wind: 'vítr', rain: 'déšť', hills: 'kopce', poor_sleep: 'špatný spánek', alcohol: 'alkohol den předem',
+  dehydrated: 'málo tekutin', tired: 'únava', sick: 'nemoc', stress: 'stres', sore: 'bolavé nohy',
+} as const;
+export type Condition = keyof typeof CONDITIONS;
+
 export interface WorkoutNote {
   workoutId: string;
   date: IsoDate;
   /** 1 = hodně těžké … 5 = výborné */
   feel?: 1 | 2 | 3 | 4 | 5;
   pain?: 'none' | 'mild' | 'significant';
+  /** Okolnosti běhu (počasí, spánek, alkohol…), které vysvětlují odchylku od plánu. */
+  conditions?: Condition[];
   note?: string;
   at: string;
 }

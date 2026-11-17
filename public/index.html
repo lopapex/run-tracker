@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Run Tracker – běžecký plán v Claude</title>
   <meta name="description" content="Konektor pro Claude, který drží tvůj běžecký plán: nahraješ PDF, Claude plán založí a pak ho s tebou přeplánuje podle toho, jak běháš.">
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+  <link rel="icon" href="/brand/run-tracker-v2.svg" type="image/svg+xml">
+  <link rel="icon" href="/brand/run-tracker-v2-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main>
     <header>
-      <img src="/icon.svg" alt="" width="48" height="48">
+      <img src="/brand/run-tracker-v2.svg" alt="" width="48" height="48">
       <h1>Běžecký plán, který s tebou řeší Claude</h1>
       <p class="lead">Nahraješ plán v PDF, Claude ho založí a pak mu stačí napsat „o víkendu nemůžu“. Run Tracker si pamatuje plán, přesuny a splnění. Běhy si Claude čte z tvé Stravy.</p>
     </header>
@@ -49,20 +50,32 @@
         <ul class="prompts">
           <li>Založ můj plán z přiloženého PDF. Závod mám 7. února.</li>
           <li>Ukaž mi tento týden.</li>
-          <li>Ukaž celý plán a jak jsem na tom.</li>
-          <li>Jak rychle mám běžet zítřejší trénink?</li>
           <li>O víkendu nemůžu běhat, přeplánuj to.</li>
-          <li>Podívej se na můj úterní běh ve Stravě a zapiš, jak jsem ho splnil.</li>
+          <li>Doběhl jsem. Podívej se do Stravy a zhodnoť to proti plánu.</li>
+          <li>Byla zima a foukalo, včera jsem byl v hospodě a málo pil. Vezmi to v úvahu.</li>
+          <li>Pošli mi zítřejší trénink do Garminu.</li>
           <li>Vrať poslední změnu.</li>
         </ul>
       </li>
     </ol>
 
+    <section aria-labelledby="shots">
+      <h2 id="shots">Jak to vypadá v konverzaci</h2>
+      <p class="lead small">Claude odpovídá kartami, na které jde klepat. Ukázky jsou z půlmaratonského plánu na 12 týdnů.</p>
+      <div class="shots">
+        <figure><img src="/shots/tyden.jpg" width="420" height="700" loading="lazy" alt="Karta týdne: sedm dní s jednotkami, splněné běhy a kilometry proti plánu"><figcaption><b>Týden.</b> Co je splněno, co tě čeká a kolik kilometrů zbývá. Klepnutím na jednotku ji zapíšeš, přesuneš nebo pošleš do hodinek.</figcaption></figure>
+        <figure><img src="/shots/dobehnuto.jpg" width="420" height="700" loading="lazy" alt="Karta doběhnuto: odhad splnění 99 procent, vzdálenost, tempo a graf tempa po kolech proti cílovému pásmu"><figcaption><b>Doběhnuto.</b> Běh ze Stravy proti plánu, odhad splnění a zápis pocitu a okolností. Zima, vítr nebo večer v hospodě se do hodnocení počítají.</figcaption></figure>
+        <figure><img src="/shots/plan.jpg" width="420" height="640" loading="lazy" alt="Karta plánu: týdenní objem po fázích, splněné kilometry, dlouhé běhy a dny do závodu"><figcaption><b>Celý plán.</b> Týdenní objem po fázích, kde právě jsi a kolik dní zbývá do závodu.</figcaption></figure>
+        <figure><img src="/shots/garmin.jpg" width="420" height="640" loading="lazy" alt="Karta exportu do Garminu: kroky tréninku s tempy a tlačítko ke stažení souboru"><figcaption><b>Do Garminu.</b> Trénink s rozklusem, opakováními a cílovými tempy jako soubor pro hodinky.</figcaption></figure>
+      </div>
+    </section>
+
     <section aria-labelledby="privacy">
       <h2 id="privacy">Soukromí</h2>
       <ul>
         <li>Žádný účet ani e-mail. Jediné, co tě s daty spojuje, je adresa konektoru.</li>
-        <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění a tvoje krátké poznámky.</li>
+        <li>Ukládá se plán, jeho zařazení do kalendáře, historie změn, stav splnění, pocit, okolnosti běhu a tvoje krátké poznámky.</li>
+        <li>Soubor pro Garmin je ke stažení na odkazu, který platí 24 hodin.</li>
         <li>Data aktivit ze Stravy Run Tracker neukládá. Čte je Claude přes oficiální konektor Stravy; když si necháš běh porovnat s plánem, jeho čísla se jen vykreslí a zahodí.</li>
         <li>Všechno smažeš větou „Smaž všechna moje data v Run Trackeru“. Smazání je nevratné.</li>
       </ul>

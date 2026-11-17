@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@types/node": "^24",
+    "fit-file-parser": "^6.2.9",
     "typescript": "^5.9.0",
     "vitest": "^5.1.0"
   }

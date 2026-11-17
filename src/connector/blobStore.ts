@@ -1,6 +1,6 @@
 // Netlify Blobs: jeden JSON na prostor, silná konzistence kvůli čtení hned po zápisu.
 import { getStore } from '@netlify/blobs';
-import type { Loaded, WorkspaceStore } from './store';
+import type { Loaded, TempFile, WorkspaceStore } from './store';
 import { isWorkspace, type Workspace } from './workspace';
 
 export class BlobStore implements WorkspaceStore {
@@ -20,5 +20,13 @@ export class BlobStore implements WorkspaceStore {
 
   async remove(id: string): Promise<void> {
     await this.store.delete(id);
+  }
+
+  private files = getStore({ name: 'exports', consistency: 'strong' });
+  async putFile(token: string, file: TempFile): Promise<void> {
+    await this.files.setJSON(token, file);
+  }
+  async getFile(token: string): Promise<TempFile | null> {
+    return (await this.files.get(token, { type: 'json' })) as TempFile | null;
   }
 }

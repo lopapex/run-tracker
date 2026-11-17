@@ -10,11 +10,12 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 2. Adresu přidá v Claude jako vlastní konektor. Účet ani přihlášení neexistují; adresa je jediné oprávnění.
 3. V konverzaci přiloží plán (PDF, obrázek, tabulka). Claude ho přepíše po týdnech přes `import_plan_weeks`, nástroj vrátí kontrolu týdenních součtů a `activate_plan` plán zařadí do kalendáře.
 4. Další změny jdou přes `move_workout`, `skip_workout`, `edit_workout`, `add_workout`, `restore_workout`, `shift_plan` a `set_status`. Každá je vratná přes `undo_change`. `get_plan` vrací aktuální stav, `delete_all_data` smaže vše.
-5. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_run_comparison` vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny posílá jako zprávu do konverzace.
+5. Vizualizace běží přímo v konverzaci (MCP Apps): `show_week`, `show_plan`, `show_paces` a `show_result` (doběhnuto: odhad splnění proti plánu a zápis stavu, pocitu a okolností) vykreslí widget z `public/widget.html`. Nástroje, které mění rozpis, vykreslí aktualizovaný týden samy. Widget má záložky, navigaci po týdnech, akce u jednotek a nápovědy dalších promptů; mezi pohledy přepíná přímým voláním nástrojů, změny rozpisu posílá jako zprávu do konverzace a zápis doběhnuté jednotky ukládá přímo.
+6. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
 
 ## Hranice vůči Stravě
 
-Podmínky Strava API (platné od 1. 6. 2026) zakazují posílat data z API do AI a provozovat vlastní MCP server se Strava daty. Run Tracker proto Strava API nepoužívá vůbec a data aktivit neukládá. `set_status` přijímá jen stav jednotky a krátkou poznámku uživatele. Výjimka je `show_run_comparison`: čísla běhu, která model přečetl přes oficiální konektor Stravy, přepočítá a vrátí widgetu, aniž by je uložil. Pro osobní použití vlastních dat to odpovídá účelu oficiálního konektoru; u veřejné služby pro cizí uživatele je to šedá zóna a před zveřejněním je potřeba si ji u Stravy ověřit.
+Podmínky Strava API (platné od 1. 6. 2026) zakazují posílat data z API do AI a provozovat vlastní MCP server se Strava daty. Run Tracker proto Strava API nepoužívá vůbec a data aktivit neukládá. `set_status` přijímá jen stav jednotky a krátkou poznámku uživatele. Výjimka je `show_result`: čísla běhu, která model přečetl přes oficiální konektor Stravy, přepočítá a vrátí widgetu, aniž by je uložil. Pro osobní použití vlastních dat to odpovídá účelu oficiálního konektoru; u veřejné služby pro cizí uživatele je to šedá zóna a před zveřejněním je potřeba si ji u Stravy ověřit.
 
 ## Vývoj
 
@@ -24,7 +25,7 @@ Testy v `src/connector/connector.test.ts` procházejí celý konektor přes skut
 
 ## Nasazení
 
-Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functions/mcp.mts` na cestě `/mcp/:key`. Data jsou v Netlify Blobs (úložiště `workspaces`), jeden JSON na uživatele pod otiskem klíče. Žádné proměnné prostředí nejsou potřeba.
+Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functions/mcp.mts` na cestě `/mcp/:key` a `garmin.mts` na `/garmin/:token`. Data jsou v Netlify Blobs (úložiště `workspaces`), jeden JSON na uživatele pod otiskem klíče. Žádné proměnné prostředí nejsou potřeba.
 
 ## Moduly
 
@@ -32,7 +33,8 @@ Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functio
 |---|---|
 | `src/domain` | příkazy nad rozpisem, revize a undo, mapování týdnů, vzdálenosti a tempa |
 | `src/connector/tools.ts` | operace konektoru nad prostorem uživatele |
-| `src/connector/views.ts` | data pro vizualizace (týden, plán, tempa, běh proti plánu) |
+| `src/connector/views.ts` | data pro vizualizace (týden, plán, tempa, doběhnuto) a export do Garminu |
+| `src/connector/fit.ts` | kódování tréninku do formátu FIT |
 | `src/connector/server.ts` | registrace nástrojů, UI metadat a instrukcí pro model |
 | `src/connector/http.ts` | bezstavový HTTP vstup MCP |
 | `src/connector/store.ts`, `blobStore.ts` | úložiště s podmíněným zápisem |

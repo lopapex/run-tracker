@@ -7,7 +7,7 @@ import { plannedDistance } from '../domain/distance';
 import { blockLines, formatDistanceRange, formatKm, formatPace, resolvePaceChart, workoutSummary } from '../domain/format';
 import { createActivation, newId, planRange } from '../domain/schedule';
 import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
-import { MAX_REVISIONS, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
+import { CONDITIONS, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
 export type Outcome = { ok: true; text: string; changed: boolean } | { ok: false; text: string };
 const fail = (text: string): Outcome => ({ ok: false, text });
@@ -61,6 +61,7 @@ export const statusInput = z.object({
   status: z.enum(['scheduled', 'completed', 'partial']),
   feel: z.number().int().min(1).max(5).optional(),
   pain: z.enum(['none', 'mild', 'significant']).optional(),
+  conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti běhu, které uživatel zmínil: cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore. Prázdné pole okolnosti smaže.'),
   note: z.string().max(300).optional(),
 });
 
@@ -89,7 +90,7 @@ function persist(ws: Workspace, snap: ScheduleSnapshot, rev: ConnectorRevision):
 }
 
 const noteOf = (ws: Workspace, workoutId: string): WorkoutNote | null => ws.notes.find((n) => n.workoutId === workoutId) ?? null;
-const sameNote = (a: WorkoutNote | null, b: WorkoutNote | null): boolean => (a?.feel ?? null) === (b?.feel ?? null) && (a?.pain ?? null) === (b?.pain ?? null) && (a?.note ?? null) === (b?.note ?? null);
+const sameNote = (a: WorkoutNote | null, b: WorkoutNote | null): boolean => (a?.feel ?? null) === (b?.feel ?? null) && (a?.pain ?? null) === (b?.pain ?? null) && (a?.note ?? null) === (b?.note ?? null) && [...(a?.conditions ?? [])].sort().join() === [...(b?.conditions ?? [])].sort().join();
 function putNote(ws: Workspace, workoutId: string, note: WorkoutNote | null): void {
   ws.notes = [...ws.notes.filter((n) => n.workoutId !== workoutId), ...(note ? [note] : [])];
 }
@@ -112,7 +113,7 @@ function workoutLine(ws: Workspace, w: ScheduledWorkout, chart: PaceChart): stri
   if (blocks.length) lines.push(`  Struktura: ${blocks.join('; ')}.`);
   if (w.workout.note) lines.push(`  Poznámka plánu: ${w.workout.note}`);
   const note = noteOf(ws, w.id);
-  if (note) lines.push(`  Zápis uživatele: ${[note.feel ? `pocit ${note.feel}/5` : '', note.pain && note.pain !== 'none' ? `bolest ${note.pain === 'mild' ? 'mírná' : 'výrazná'}` : '', note.note ?? ''].filter(Boolean).join(', ')}`);
+  if (note) lines.push(`  Zápis uživatele: ${[note.feel ? `pocit ${note.feel}/5` : '', note.pain && note.pain !== 'none' ? `bolest ${note.pain === 'mild' ? 'mírná' : 'výrazná'}` : '', note.conditions?.length ? `okolnosti: ${note.conditions.map((c) => CONDITIONS[c]).join(', ')}` : '', note.note ?? ''].filter(Boolean).join(', ')}`);
   return lines;
 }
 
@@ -278,7 +279,7 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
   const workout = ws.workouts.find((w) => w.id === wanted && w.activationId === activation.id);
   if (!workout) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
   const previous = noteOf(ws, workout.id);
-  const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}) };
+  const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}), ...(input.conditions != null ? { conditions: [...new Set(input.conditions)] } : {}) };
   const noteChanged = !sameNote(previous, next);
   const statusChanged = workout.status !== input.status;
   if (!statusChanged && !noteChanged) return done('Beze změny, jednotka už tenhle stav i zápis má.', false);

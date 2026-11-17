@@ -12,7 +12,19 @@ export interface WorkspaceStore {
   save(id: string, ws: Workspace, etag?: string): Promise<boolean>;
   /** Nevratně smaže celý prostor. */
   remove(id: string): Promise<void>;
+  /** Dočasný soubor ke stažení (export do hodinek); odkaz platí omezenou dobu. */
+  putFile(token: string, file: TempFile): Promise<void>;
+  getFile(token: string): Promise<TempFile | null>;
 }
+
+export interface TempFile {
+  name: string;
+  mime: string;
+  base64: string;
+  expiresAt: string;
+}
+export const FILE_TOKEN = /^[A-Za-z0-9_-]{32,64}$/;
+export const fileExpired = (file: TempFile, now: Date = new Date()): boolean => file.expiresAt < now.toISOString();
 
 /** Klíč z adresy konektoru je tajemství; do úložiště jde jen jeho otisk. */
 export async function workspaceId(key: string): Promise<string> {
@@ -44,4 +56,8 @@ export class MemoryStore implements WorkspaceStore {
   async remove(id: string): Promise<void> {
     this.data.delete(id);
   }
+
+  private files = new Map<string, TempFile>();
+  async putFile(token: string, file: TempFile): Promise<void> { this.files.set(token, file); }
+  async getFile(token: string): Promise<TempFile | null> { return this.files.get(token) ?? null; }
 }
