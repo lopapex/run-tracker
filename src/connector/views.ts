@@ -6,7 +6,7 @@ import { workoutDistance } from '../domain/distance';
 import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, workoutSummary } from '../domain/format';
 import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
-import { resolveId } from './tools';
+import { planSummaries, resolveId } from './tools';
 import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
 import { trainingPaces } from '../domain/vdot';
 import { CONDITIONS, type Condition, type Workspace } from './workspace';
@@ -33,6 +33,7 @@ export const resultViewInput = z.object({
     avgHr: z.number().min(30).max(250).optional(),
     elevGainM: z.number().min(0).max(20_000).optional(),
     laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(80).optional(),
+    reps: z.array(z.object({ distanceM: z.number().positive().max(50_000), durationSec: z.number().positive().max(4 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(40).optional().describe('Jen rychlé pracovní úseky intervalů, spočítané z kol (bez rozklusu a pauz).'),
   }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich widget nabídne jen zápis splnění.'),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti, které uživatel zmínil (cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore); zohlední se v hodnocení.'),
 });
@@ -79,7 +80,8 @@ function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
   };
 }
 
-function weekStats(workouts: ScheduledWorkout[], chart: PaceChart) {
+/** `unrecorded`: proběhlé dny, kde jednotka pořád čeká na zápis splnění. */
+function weekStats(workouts: ScheduledWorkout[], chart: PaceChart, today: string) {
   const runs = workouts.filter((w) => !NOT_RUN.has(w.workout.type));
   const sum = (list: ScheduledWorkout[]) => list.reduce((acc, w) => { const d = workoutDistance(w.workout, chart); return { min: acc.min + d.minM, max: acc.max + d.maxM }; }, { min: 0, max: 0 });
   const planned = sum(runs.filter((w) => w.status !== 'skipped'));
@@ -89,14 +91,29 @@ function weekStats(workouts: ScheduledWorkout[], chart: PaceChart) {
     plannedKmMin: km(planned.min), plannedKmMax: km(planned.max), doneKm: km(done.min),
     units: runs.length, unitsDone: runs.filter((w) => w.status === 'completed').length, unitsPartial: runs.filter((w) => w.status === 'partial').length, unitsSkipped: runs.filter((w) => w.status === 'skipped').length,
     longRunKm: long.length ? km(Math.max(...long)) : null,
+    unrecorded: runs.filter((w) => w.status === 'scheduled' && w.date < today).length,
   };
 }
 
 // ---------- Týden ----------
 
+/** Po posledním týdnu plánu: shrnutí a nabídka dalšího, místo prázdného týdne „mimo plán“. */
+function finishedView(ws: Workspace, today: string): View {
+  const all = planSummaries(ws);
+  const plan = all.find((s) => s.active)!;
+  const earlier = all.filter((s) => !s.active).slice(-3).reverse();
+  return {
+    ok: true,
+    text: `Plán „${plan.name}“ skončil ${plan.last}: splněno ${plan.done} z ${plan.runs} běhů, ${plan.doneKm} z ${plan.plannedKm} km podle plánu. Uživatel vidí shrnutí; nabídni další plán (draft_plan podle Stravy a poznámek, nebo import dokumentu).`,
+    data: { view: 'finished', today, plan, earlier, hasNotes: Boolean(ws.profile.coachNotes) },
+  };
+}
+
 export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, now: Date = new Date()): View {
   const c = context(ws, now);
   if (!c) return emptyView(ws);
+  const range = planRange(c.activation);
+  if (!input.date && range && weekStartOf(c.today) > range.last) return finishedView(ws, c.today);
   const start = weekStartOf(input.date ?? c.today);
   const mapping = c.activation.mapping.find((m) => m.weekStart === start);
   const template = ws.templates.find((t) => t.id === c.activation.templateId);
@@ -106,13 +123,13 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
     const date = addDays(start, i);
     return { date, dow: i, isToday: date === c.today, isPast: date < c.today, workouts: dayWorkouts(inWeek, date).map((w) => workoutCard(ws, w, c.chart)) };
   });
-  const stats = weekStats(inWeek, c.chart);
+  const stats = weekStats(inWeek, c.chart, c.today);
   const label = !mapping ? 'mimo plán' : mapping.sourceWeek == null ? 'pauza' : `týden ${mapping.sourceWeek} z ${template?.weeks.length ?? '?'}`;
   const next = days.flatMap((d) => d.workouts).find((w) => w.date >= c.today && w.status === 'scheduled' && w.type !== 'rest');
   return {
     ok: true,
-    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''} Uživatel widget vidí; neopakuj celý rozpis, jen krátce okomentuj.`,
-    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
+    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''} Uživatel widget vidí; neopakuj celý rozpis, jen krátce okomentuj.`,
+    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
   };
 }
 
@@ -126,7 +143,7 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   const weeks = [...c.activation.mapping].sort((a, b) => a.weekStart.localeCompare(b.weekStart)).map((m) => {
     const inWeek = c.all.filter((w) => w.date >= m.weekStart && w.date <= addDays(m.weekStart, 6));
     const source = m.sourceWeek != null ? template?.weeks.find((w) => w.index === m.sourceWeek) : undefined;
-    return { weekStart: m.weekStart, sourceWeek: m.sourceWeek, phase: source?.phase ?? null, isCurrent: m.weekStart === currentStart, isPast: m.weekStart < currentStart, ...weekStats(inWeek, c.chart) };
+    return { weekStart: m.weekStart, sourceWeek: m.sourceWeek, phase: source?.phase ?? null, isCurrent: m.weekStart === currentStart, isPast: m.weekStart < currentStart, ...weekStats(inWeek, c.chart, c.today) };
   });
   const range = planRange(c.activation);
   const race = ws.profile.raceDate ?? null;
@@ -138,7 +155,7 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   return {
     ok: true,
     text: `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''} Uživatel widget vidí; jen krátce okomentuj.`,
-    data: { view: 'plan', planName: c.planName, today: c.today, first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone } },
+    data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) } },
   };
 }
 
@@ -212,7 +229,16 @@ function isSteady(w: WorkoutSpec): boolean {
 const SLOWING: Condition[] = ['cold', 'heat', 'wind', 'rain', 'hills', 'poor_sleep', 'alcohol', 'dehydrated', 'tired', 'sick', 'sore'];
 
 /** Odhad splnění 0–100. Je to hrubé vodítko z vzdálenosti a průměrného tempa, ne měření kvality tréninku. */
-function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, unknown: boolean, avgPaceSec: number, target: { fastSec: number; slowSec: number } | null, steady: boolean, conditions: Condition[]) {
+interface RepRow { n: number; distanceM: number; durationSec: number; paceSec: number; avgHr: number | null; offSec: number }
+
+/** Odchylka tempa úseku od pásma v s/km: kladná = pomaleji, záporná = rychleji, 0 = v pásmu (tolerance 2 s). */
+function offBand(paceSec: number, t: { fastSec: number; slowSec: number }): number {
+  if (paceSec < t.fastSec - 2) return paceSec - t.fastSec;
+  if (paceSec > t.slowSec + 2) return paceSec - t.slowSec;
+  return 0;
+}
+
+function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, unknown: boolean, avgPaceSec: number, target: { fastSec: number; slowSec: number } | null, steady: boolean, conditions: Condition[], reps: RepRow[] = []) {
   const parts: Array<{ label: string; value: number; text: string }> = [];
   if (plannedMaxM > 0) {
     // Část jednotky zadaná jen časem bez tempa nemá vzdálenost: delší běh pak není chyba.
@@ -229,8 +255,18 @@ function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, un
     if (excused) paceWeight = 0.15;
     parts.push({ label: 'Tempo', value, text: fasterBy > 2 ? `o ${Math.round(fasterBy)} s/km rychleji než cílové pásmo` : slowerBy > 2 ? `o ${Math.round(slowerBy)} s/km pomaleji než cílové pásmo${excused ? '; okolnosti to vysvětlují, váha tempa je snížená' : ''}` : 'v cílovém pásmu' });
   }
+  if (target && !steady && reps.length) {
+    // U intervalů rozhoduje tempo rychlých úseků; vzdálenost celého běhu má menší váhu.
+    const inBand = reps.filter((r) => r.offSec === 0).length;
+    const avgOff = reps.reduce((s, r) => s + Math.abs(r.offSec), 0) / reps.length;
+    const slower = reps.filter((r) => r.offSec > 0).length, faster = reps.filter((r) => r.offSec < 0).length;
+    const excused = slower > 0 && conditions.some((c) => SLOWING.includes(c));
+    paceWeight = excused ? 0.25 : 0.5;
+    const trend = slower > faster ? 'pomaleji' : 'rychleji';
+    parts.push({ label: 'Úseky', value: Math.round(100 - Math.min(40, avgOff * 3)), text: `${inBand} z ${reps.length} v cílovém pásmu${avgOff >= 1 ? `, průměrně o ${Math.round(avgOff)} s/km ${trend}` : ''}${excused ? '; okolnosti to vysvětlují, váha tempa je snížená' : ''}` });
+  }
   if (!parts.length) return null;
-  const dist = parts.find((p) => p.label === 'Vzdálenost'), pace = parts.find((p) => p.label === 'Tempo');
+  const dist = parts.find((p) => p.label === 'Vzdálenost'), pace = parts.find((p) => p.label === 'Tempo' || p.label === 'Úseky');
   const total = Math.round(dist && pace ? dist.value * (1 - paceWeight) + pace.value * paceWeight : (dist ?? pace)!.value);
   return { total, label: total >= 90 ? 'Splněno' : total >= 70 ? 'Splněno s odchylkou' : 'Splněno částečně', suggestedStatus: total >= 70 ? 'completed' : 'partial', parts };
 }
@@ -268,13 +304,17 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
   const inTarget = target ? laps.filter((l) => l.paceSec >= target.fastSec - 2 && l.paceSec <= target.slowSec + 2).length : null;
   const distance = planned.maxM === 0 ? null : run.distanceM < planned.minM - 300 ? 'short' : run.distanceM > planned.maxM + 300 && !planned.unknown ? 'long' : 'ok';
   const pace = !target || !steady ? null : avgPaceSec < target.fastSec - 2 ? 'faster' : avgPaceSec > target.slowSec + 2 ? 'slower' : 'in';
-  const score = scoreOf(run.distanceM, planned.minM, planned.maxM, planned.unknown > 0, avgPaceSec, target, steady, conditions);
+  const reps: RepRow[] = (run.reps ?? []).map((r, i) => {
+    const paceSec = Math.round(r.durationSec / (r.distanceM / 1000));
+    return { n: i + 1, distanceM: Math.round(r.distanceM), durationSec: Math.round(r.durationSec), paceSec, avgHr: r.avgHr ?? null, offSec: target ? offBand(paceSec, target) : 0 };
+  });
+  const score = scoreOf(run.distanceM, planned.minM, planned.maxM, planned.unknown > 0, avgPaceSec, target, steady, conditions, reps);
   const text = [
     `Zobrazeno hodnocení běhu proti jednotce ${w.workout.title} (${w.date}).`,
     `Běh ${formatKm(run.distanceM)}, průměrné tempo ${formatPace(avgPaceSec)}/km; plán ${planned.maxM ? `${String(km(planned.minM)).replace('.', ',')}${planned.maxM !== planned.minM ? `–${String(km(planned.maxM)).replace('.', ',')}` : ''} km` : 'bez dané vzdálenosti'}${planned.unknown ? ' + nevyčíslené úseky' : ''}.`,
     score ? `Odhad splnění ${score.total} % (${score.label}): ${score.parts.map((p) => `${p.label.toLowerCase()} ${p.text}`).join('; ')}.` : '',
     target && laps.length && !steady ? `V pásmu ${target.label} bylo ${inTarget} z ${laps.length} kol (počítají se i rozklus a pauzy).` : '',
-    !steady ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí.' : '',
+    !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
     'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Uživatel může stav, pocit a okolnosti uložit ve widgetu; krátce zhodnoť a případně navrhni úpravu dalších dnů.',
   ].filter(Boolean).join(' ');
@@ -283,7 +323,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     text,
     data: {
       ...base,
-      run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps },
+      run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps, reps },
       score, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
   };

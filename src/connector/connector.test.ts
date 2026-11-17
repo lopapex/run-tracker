@@ -58,7 +58,7 @@ describe('konektor Run Tracker', () => {
   it('nabídne nástroje s popsaným tvarem jednotky a instrukce pro model', async () => {
     const { client } = await connect(new MemoryStore());
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'shift_plan', 'show_paces', 'show_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'draft_plan', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'set_statuses', 'shift_plan', 'show_paces', 'show_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
     expect(tools.find((t) => t.name === 'get_plan')?.annotations?.readOnlyHint).toBe(true);
     const edit = JSON.stringify(tools.find((t) => t.name === 'import_plan_weeks')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
@@ -414,7 +414,7 @@ describe('konektor Run Tracker', () => {
     expect(size('edit_workout')).toBeLessThan(1500);
     expect(size('add_workout')).toBeLessThan(1500);
     expect(JSON.stringify(tools.find((t) => t.name === 'import_plan_weeks'))).toContain('recoveryAfterLast');
-    expect(JSON.stringify(tools).length).toBeLessThan(24_000);
+    expect(JSON.stringify(tools).length).toBeLessThan(28_000);
   });
 
   it('tlačítko Vrátit vrací právě tu změnu a po vrácení se už nenabízí', async () => {
@@ -501,6 +501,163 @@ describe('konektor Run Tracker', () => {
     await call('delete_all_data', { confirm: 'SMAZAT' });
     expect(await store.getFile(token)).toBeNull();
     expect(await store.getFile('p'.repeat(48))).not.toBeNull();
+  });
+
+  it('hromadný zápis splnění: jedno volání, jedna vratná změna, jeden widget', async () => {
+    const store = new MemoryStore();
+    const { call } = await connect(store);
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-29' })).text;
+    const ids = [idOf(plan, '2026-11-16', 'Easy Run'), idOf(plan, '2026-11-17', 'Speed Session'), idOf(plan, '2026-11-19', 'Easy Run')];
+
+    const missing = await call('set_statuses', { workoutIds: [...ids, 'neexistuje'], status: 'completed' });
+    expect(missing.isError).toBe(true);
+    expect((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text).not.toContain('splněno');
+
+    const revisionsBefore = (await store.load(await workspaceId(KEY_A)))!.ws.revisions.length;
+    const marked = await call('set_statuses', { workoutIds: ids, status: 'completed', reason: 'podle Stravy' });
+    expect(marked.isError).toBe(false);
+    expect(marked.data).toMatchObject({ view: 'week', weekStart: '2026-11-16', banner: { text: 'Splněno: 3 jednotky (16. 11. – 19. 11.).' } });
+    expect(marked.data.banner.revisionId).toMatch(/^[0-9a-f]{8}$/);
+    expect(marked.data.stats.unitsDone).toBe(3);
+    expect((await store.load(await workspaceId(KEY_A)))!.ws.revisions.length).toBe(revisionsBefore + 1);
+    expect((await call('set_statuses', { workoutIds: ids, status: 'completed' })).text).toContain('Beze změny');
+
+    // přes dva týdny ukáže přehled plánu
+    const both = await call('set_statuses', { workoutIds: [idOf(plan, '2026-11-21', 'Easy Run'), idOf(plan, '2026-11-23', 'Easy Run')], status: 'partial' });
+    expect(both.data.view).toBe('plan');
+
+    // vrácení vrátí celé hromadné zapsání najednou
+    await call('undo_change');
+    const undone = await call('undo_change', { revisionId: marked.data.banner.revisionId });
+    expect(undone.isError).toBe(false);
+    const after = (await call('get_plan', { from: '2026-11-16', to: '2026-11-29' })).text;
+    expect(after).not.toContain('splněno');
+  });
+
+  it('intervaly se hodnotí podle rychlých úseků, ne podle průměru běhu', async () => {
+    const { call } = await connect(new MemoryStore());
+    const intervals: WorkoutSpec = { type: 'speed', title: 'Speed', blocks: [
+      { kind: 'segment', role: 'warmup', durationSec: 750, intensity: 'easy' },
+      { kind: 'repeat', count: 4, work: { role: 'work', distanceM: 1600, intensity: '10k_pace' }, recovery: { role: 'recovery', durationSec: 120, intensity: 'walk' }, recoveryAfterLast: false },
+      { kind: 'segment', role: 'cooldown', durationSec: 750, intensity: 'easy' },
+    ] };
+    const days = [intervals, easy(10), rest, easy(10), rest, easy(13), long(16)].map((workout, dow) => ({ dow, workout }));
+    await call('import_plan_weeks', { name: 'Plán', weeks: [{ index: 1, days }], paceChart: { easy: { fromSec: 285, toSec: 315 }, '10k_pace': { fromSec: 227, toSec: 233 } } });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const id = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Speed');
+
+    // skutečný trénink: úseky 3:56, 3:56, 3:56, 3:58 proti cíli 3:47–3:53
+    const reps = [378, 378, 378, 381].map((durationSec) => ({ distanceM: 1600, durationSec }));
+    const result = await call('show_result', { workoutId: id, run: { distanceM: 12020, movingSec: 3585, reps } });
+    expect(result.data.target).toMatchObject({ key: '10k_pace', fastSec: 227, slowSec: 233 });
+    expect(result.data.run.reps.map((r: { paceSec: number; offSec: number }) => [r.paceSec, r.offSec])).toEqual([[236, 3], [236, 3], [236, 3], [238, 5]]);
+    const part = result.data.score.parts.find((p: { label: string }) => p.label === 'Úseky');
+    expect(part).toMatchObject({ value: 90, text: '0 z 4 v cílovém pásmu, průměrně o 4 s/km pomaleji' });
+    expect(result.data.score).toMatchObject({ total: 95, label: 'Splněno' });
+
+    // za větru se pomalejší úseky omlouvají a váha tempa klesne
+    const windy = await call('show_result', { workoutId: id, run: { distanceM: 12020, movingSec: 3585, reps }, conditions: ['wind'] });
+    expect(windy.data.score.parts.find((p: { label: string }) => p.label === 'Úseky').text).toContain('okolnosti to vysvětlují');
+    expect(windy.data.score.total).toBe(98);
+
+    // bez úseků se tempo nehodnotí a model dostane radu, co poslat
+    const plain = await call('show_result', { workoutId: id, run: { distanceM: 12020, movingSec: 3585 } });
+    expect(plain.data.score.parts.map((p: { label: string }) => p.label)).toEqual(['Vzdálenost']);
+    expect(plain.text).toContain('run.reps');
+  });
+
+  it('proběhlé nezapsané tréninky a odpočet do závodu', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2), week(3)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-02' });
+    const today = new Date().toISOString().slice(0, 10);
+    const raceDate = '2027-04-11';
+    await call('set_profile', { raceDate });
+
+    // týden 2.–8. 11. je celý za námi: 5 běhů, jeden zapsaný
+    const plan = (await call('get_plan', { from: '2026-11-02', to: '2026-11-08' })).text;
+    await call('set_status', { workoutId: idOf(plan, '2026-11-02', 'Easy Run'), status: 'completed' });
+    const past = await call('show_week', { date: '2026-11-04' });
+    expect(past.data.stats).toMatchObject({ units: 5, unitsDone: 1, unrecorded: 4 });
+    expect(past.text).toContain('Nezapsáno: 4 proběhlých běhů');
+    expect(past.data.daysToRace).toBe(Math.round((Date.parse(raceDate) - Date.parse(today)) / 86_400_000));
+    expect((await call('show_plan')).data.totals.unrecorded).toBeGreaterThanOrEqual(4);
+
+    // budoucí týden nic nezapsaného nemá
+    const future = await call('show_week', { date: '2027-03-01' });
+    expect(future.data.stats.unrecorded).toBe(0);
+    expect(future.text).not.toContain('Nezapsáno');
+  });
+
+  it('poznámky trenéra se ukládají do profilu a get_plan je vrací', async () => {
+    const { call } = await connect(new MemoryStore());
+    expect((await call('get_plan')).text).toContain('Poznámky trenéra: žádné.');
+    await call('set_profile', { notes: 'Citlivá levá Achillovka. V pondělí nemůže běhat. Cíl: půlmaraton pod 1:30.' });
+    expect((await call('get_plan')).text).toContain('Poznámky trenéra: Citlivá levá Achillovka. V pondělí nemůže běhat. Cíl: půlmaraton pod 1:30.');
+    await call('set_profile', { notes: '' });
+    expect((await call('get_plan')).text).toContain('Poznámky trenéra: žádné.');
+  });
+
+  it('kostra nového plánu na závod: růst, lehčí týdny, ubrání a závod v posledním týdnu', async () => {
+    const { call } = await connect(new MemoryStore());
+    expect((await call('draft_plan', { name: 'Jaro', intent: 'race', weeklyKm: 40, runsPerWeek: 4 })).isError).toBe(true);
+    const draft = await call('draft_plan', { name: 'Půlmaraton jaro', intent: 'race', weeklyKm: 40, runsPerWeek: 4, restDows: [0, 4], longRunDow: 6, startDate: '2026-11-23', raceDate: '2027-01-31', raceDistanceM: 21097.5 });
+    expect(draft.isError).toBe(false);
+    expect(draft.text).toContain('10 týdnů od 2026-11-23, závod 2027-01-31');
+    expect(draft.text).toContain('T4 ');
+    expect(draft.text).toContain('(odpočinkový)');
+    expect(draft.text).toContain('T10 ');
+    expect(draft.text).toContain('mode "race" a date 2027-01-31');
+    const activated = await call('activate_plan', { mode: 'race', date: '2027-01-31' });
+    expect(activated.data).toMatchObject({ view: 'plan', planName: 'Půlmaraton jaro', first: '2026-11-23', last: '2027-01-31' });
+    const weeks = activated.data.weeks as Array<{ plannedKmMax: number }>;
+    expect(weeks).toHaveLength(10);
+    // objem roste, 4. týden je lehčí, poslední týden ubírá
+    expect(weeks[2].plannedKmMax).toBeGreaterThan(weeks[0].plannedKmMax);
+    expect(weeks[3].plannedKmMax).toBeLessThan(weeks[2].plannedKmMax);
+    expect(weeks[9].plannedKmMax).toBeLessThan(weeks[8].plannedKmMax);
+    const raceWeek = (await call('get_plan', { from: '2027-01-25', to: '2027-01-31' })).text;
+    expect(raceWeek).toContain('2027-01-31 neděle | T10 | Závod');
+    // pondělí a pátek zůstaly bez běhu
+    expect(raceWeek).toMatch(/Volno: pondělí 01-25.*pátek 01-29/);
+  });
+
+  it('po doběhnutí plánu ukáže shrnutí a historie se přenese do dalšího plánu', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Podzim', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-10-05' });
+    const plan = (await call('get_plan', { from: '2026-10-05', to: '2026-10-11' })).text;
+    await call('set_statuses', { workoutIds: [idOf(plan, '2026-10-05', 'Easy Run'), idOf(plan, '2026-10-06', 'Speed Session')], status: 'completed' });
+    await call('set_status', { workoutId: idOf(plan, '2026-10-11', 'Long Run'), status: 'partial', feel: 2, pain: 'mild', conditions: ['heat'] });
+    await call('skip_workout', { workoutId: idOf(plan, '2026-10-08', 'Easy Run'), reason: 'nemoc' });
+
+    const finished = await call('show_week');
+    expect(finished.data).toMatchObject({ view: 'finished', plan: { name: 'Podzim', first: '2026-10-05', last: '2026-10-11', runs: 5, done: 2, partial: 1, skipped: 1, avgFeel: 2, painCount: 1, conditions: ['horko'] } });
+    expect(finished.text).toContain('draft_plan');
+    const text = (await call('get_plan')).text;
+    expect(text).toContain('Plán skončil 2026-10-11');
+    expect(text).toContain('Historie plánů:');
+    expect(text).toContain('- Podzim (2026-10-05 až 2026-10-11): splněno 2 + 1 částečně z 5 běhů, vynecháno 1');
+
+    // další plán: předchozí zůstane v historii a ve shrnutí
+    await call('import_plan_weeks', { name: 'Zima', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const next = (await call('get_plan')).text;
+    expect(next).toContain('Aktivní plán „Zima“');
+    expect(next).toContain('- Podzim (2026-10-05 až 2026-10-11)');
+    expect((await call('show_week')).data.view).toBe('week');
+  });
+
+  it('nabízí připravené prompty pro nový plán a týdenní kontrolu', async () => {
+    const { client } = await connect(new MemoryStore());
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((x) => x.name).sort()).toEqual(['novy-plan', 'tydenni-kontrola']);
+    const newPlan = await client.getPrompt({ name: 'novy-plan' });
+    expect(JSON.stringify(newPlan.messages)).toContain('draft_plan');
+    const review = await client.getPrompt({ name: 'tydenni-kontrola' });
+    expect(JSON.stringify(review.messages)).toContain('set_statuses');
   });
 
   it('smaže všechna data jen s výslovným potvrzením', async () => {

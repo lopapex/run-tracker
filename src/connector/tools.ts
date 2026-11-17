@@ -6,10 +6,12 @@ import { addDays, DOW_LONG, dowOf, formatDay, isIsoDate, todayIso, weekStartOf }
 import { plannedDistance } from '../domain/distance';
 import { blockLines, formatDistanceRange, formatKm, formatPace, resolvePaceChart, workoutSummary } from '../domain/format';
 import { createActivation, newId, planRange } from '../domain/schedule';
+import { defaultStart, generateWeeks, weeksUntil } from '../domain/generator';
 import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
 import { CONDITIONS, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
-export type Outcome = { ok: true; text: string; changed: boolean } | { ok: false; text: string };
+/** `banner` je krátké shrnutí pro widget, když je text pro model delší. */
+export type Outcome = { ok: true; text: string; changed: boolean; banner?: string } | { ok: false; text: string };
 const fail = (text: string): Outcome => ({ ok: false, text });
 const done = (text: string, changed = true): Outcome => ({ ok: true, text, changed });
 
@@ -33,6 +35,20 @@ export const profileInput = z.object({
   raceDistanceM: z.number().positive().max(200_000).optional(),
   raceTargetSec: z.number().int().positive().max(48 * 3600).optional(),
   paceChart: paceChartSchema.optional(),
+  notes: z.string().max(1500).optional().describe('Poznámky trenéra o běžci: zranění a omezení, dny a časy, cíle, závody, co mu nesedí. Pošli celé nové znění; prázdný text poznámky smaže.'),
+});
+
+export const draftInput = z.object({
+  name: z.string().min(1).max(80),
+  intent: z.enum(['maintain', 'improve', 'race']).describe('maintain = udržování, improve = postupné zlepšení, race = příprava na závod'),
+  weeks: z.number().int().min(1).max(30).optional().describe('Počet týdnů; u závodu se dopočítá z data závodu.'),
+  weeklyKm: z.number().min(5).max(250).describe('Výchozí týdenní objem v km, nejlíp průměr posledních 4 týdnů ze Stravy.'),
+  runsPerWeek: z.number().int().min(2).max(7),
+  restDows: z.array(dow).max(5).default([]).describe('Dny bez běhu (0 = pondělí … 6 = neděle).'),
+  longRunDow: dow.default(6),
+  startDate: isoDate.optional().describe('Začátek plánu; bez něj příští pondělí.'),
+  raceDate: isoDate.optional(),
+  raceDistanceM: z.number().positive().max(200_000).optional(),
 });
 
 export const stageInput = z.object({
@@ -54,6 +70,12 @@ export const activateInput = z.object({
   date: isoDate,
   startFromWeek: z.number().int().min(1).max(52).optional(),
   skipWeeks: z.array(z.number().int().min(1).max(52)).max(52).optional(),
+});
+
+export const bulkStatusInput = z.object({
+  workoutIds: z.array(z.string().min(1)).min(1).max(60).describe('Id jednotek z get_plan.'),
+  status: z.enum(['scheduled', 'completed', 'partial']),
+  reason: z.string().max(300).default('').describe('Stručně proč, slovy uživatele.'),
 });
 
 export const statusInput = z.object({
@@ -140,6 +162,9 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
     p.restDows.length ? `bez běhu: ${p.restDows.map((d) => DOW_LONG[d]).join(', ')}` : '',
   ].filter(Boolean);
   lines.push(about.length ? `Profil: ${about.join('; ')}.` : 'Profil je prázdný (záměr, objem a dny bez běhu nejsou zadané).');
+  lines.push(p.coachNotes ? `Poznámky trenéra: ${p.coachNotes}` : 'Poznámky trenéra: žádné.');
+  const history = planSummaries(ws).filter((s) => !s.active || s.last < today);
+  if (history.length) lines.push('Historie plánů:', ...history.slice(-5).map(summaryLine));
 
   if (ws.staged) lines.push(`Rozpracovaný import „${ws.staged.name}“: nahrané týdny ${ws.staged.weeks.map((w) => w.index).join(', ')}. Ještě není zařazený do kalendáře.`);
 
@@ -154,6 +179,7 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
   const paces = Object.entries(chart).map(([k, v]) => `${k} ${formatPace(v.fromSec)}–${formatPace(v.toSec)}`).join('; ');
   lines.push(`Tempa min/km: ${paces || 'nezadaná'}.`);
   lines.push(`Aktivní plán „${template?.name ?? 'bez názvu'}“${range ? `, ${range.first} až ${range.last}` : ''}. Verze rozpisu ${activation.revisionSeq}.`);
+  if (range && range.last < today) lines.push(`Plán skončil ${range.last}. Nabídni další: kostru přes draft_plan podle Stravy a poznámek, nebo import nového dokumentu.`);
 
   const from = input.from ?? weekStartOf(today);
   const to = input.to ?? addDays(from, 13);
@@ -190,10 +216,11 @@ export function setProfile(ws: Workspace, input: z.infer<typeof profileInput>): 
   if (input.timezone) {
     try { new Intl.DateTimeFormat('en-CA', { timeZone: input.timezone }); } catch { return fail(`Neznámá časová zóna „${input.timezone}“. Použij název jako Europe/Prague.`); }
   }
-  const { paceChart, restDows, longRunDow, ...rest } = input;
+  const { paceChart, restDows, longRunDow, notes, ...rest } = input;
   ws.profile = {
     ...ws.profile,
     ...rest,
+    ...(notes != null ? { coachNotes: notes.trim() || undefined } : {}),
     ...(restDows ? { restDows: restDows as Dow[] } : {}),
     ...(longRunDow != null ? { longRunDow: longRunDow as Dow } : {}),
     ...(paceChart ? { paceChart: { ...ws.profile.paceChart, ...paceChart }, paceSource: 'profile' as const } : {}),
@@ -312,6 +339,103 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
   persist(ws, snap, revision);
   lines.push(`Změna ${shortId(revision.id)} je uložená a jde vrátit přes undo_change.`);
   return done(lines.join('\n'));
+}
+
+/** Stejný stav více jednotkám najednou: jedna vratná změna místo série volání. */
+export function setStatuses(ws: Workspace, input: z.infer<typeof bulkStatusInput>, now: string): Outcome {
+  const activation = activeOf(ws);
+  if (!activation) return fail('Uživatel nemá aktivní plán.');
+  const snap = snapshotOf(ws, activation);
+  const missing: string[] = [];
+  const before: ScheduledWorkout[] = [];
+  const after: ScheduledWorkout[] = [];
+  for (const ref of new Set(input.workoutIds)) {
+    const w = snap.workouts.find((x) => x.id === resolveId(snap.workouts, ref));
+    if (!w) { missing.push(ref); continue; }
+    if (w.status === input.status || before.some((b) => b.id === w.id)) continue;
+    before.push(w);
+    const next: ScheduledWorkout = { ...structuredClone(w), status: input.status };
+    if (w.status === 'skipped') delete next.skipReason;
+    after.push(next);
+  }
+  if (missing.length) return fail(`Tyto jednotky v rozpisu nejsou: ${missing.join(', ')}. Nic se nezměnilo; načti aktuální id přes get_plan.`);
+  if (!after.length) return done('Beze změny, jednotky už tenhle stav mají.', false);
+  const rev: ConnectorRevision = { id: newId(), activationId: activation.id, seq: activation.revisionSeq + 1, at: now, author: 'coach', operation: 'SET_STATUS', reason: input.reason, commandId: newId(), before, after };
+  persist(ws, snap, rev);
+  const label = input.status === 'completed' ? 'Splněno' : input.status === 'partial' ? 'Splněno částečně' : 'Vráceno do plánu';
+  const count = after.length === 1 ? '1 jednotka' : after.length < 5 ? `${after.length} jednotky` : `${after.length} jednotek`;
+  const sorted = [...after].sort((a, b) => a.date.localeCompare(b.date));
+  return {
+    ok: true,
+    changed: true,
+    banner: `${label}: ${count} (${formatDay(sorted[0].date)}${sorted.length > 1 ? ` – ${formatDay(sorted[sorted.length - 1].date)}` : ''}).`,
+    text: [
+      `${label}: ${count}.`,
+      ...sorted.map((w) => `${w.date} ${DOW_LONG[dowOf(w.date)]}: ${w.workout.title}`),
+      `Změna ${shortId(rev.id)} je uložená; undo_change ji vrátí celou najednou.`,
+    ].join('\n'),
+  };
+}
+
+// ---------- Historie plánů ----------
+
+export interface PlanSummary {
+  name: string; first: string; last: string; active: boolean;
+  runs: number; done: number; partial: number; skipped: number;
+  plannedKm: number; doneKm: number; avgFeel: number | null; painCount: number; conditions: string[];
+}
+
+/** Souhrn každého zařazeného plánu z uložených jednotek a zápisů. Data aktivit ze Stravy v něm nejsou. */
+export function planSummaries(ws: Workspace): PlanSummary[] {
+  return ws.activations.map((a) => {
+    const template = ws.templates.find((t) => t.id === a.templateId);
+    const range = planRange(a);
+    const last = a.endedOn && (!range || a.endedOn < range.last) ? a.endedOn : range?.last ?? '';
+    const chart = resolvePaceChart(ws.profile, template?.paceChart);
+    const runs = ws.workouts.filter((w) => w.activationId === a.id && w.date <= last && !['rest', 'strength', 'cross'].includes(w.workout.type));
+    const km = (list: ScheduledWorkout[]) => Math.round(plannedDistance(list.map((w) => w.workout), chart).minM / 1000);
+    const doneList = runs.filter((w) => w.status === 'completed' || w.status === 'partial');
+    const notes = ws.notes.filter((n) => runs.some((w) => w.id === n.workoutId));
+    const feels = notes.map((n) => n.feel).filter((f): f is 1 | 2 | 3 | 4 | 5 => f != null);
+    const counts = new Map<string, number>();
+    for (const n of notes) for (const c of n.conditions ?? []) counts.set(CONDITIONS[c], (counts.get(CONDITIONS[c]) ?? 0) + 1);
+    return {
+      name: template?.name ?? 'Plán', first: range?.first ?? '', last, active: a.status === 'active',
+      runs: runs.length, done: runs.filter((w) => w.status === 'completed').length, partial: runs.filter((w) => w.status === 'partial').length, skipped: runs.filter((w) => w.status === 'skipped').length,
+      plannedKm: km(runs.filter((w) => w.status !== 'skipped')), doneKm: km(doneList),
+      avgFeel: feels.length ? Math.round(feels.reduce((s, f) => s + f, 0) / feels.length * 10) / 10 : null,
+      painCount: notes.filter((n) => n.pain && n.pain !== 'none').length,
+      conditions: [...counts.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([label]) => label),
+    };
+  }).sort((x, y) => x.first.localeCompare(y.first));
+}
+
+function summaryLine(s: PlanSummary): string {
+  return `- ${s.name} (${s.first} až ${s.last}): splněno ${s.done}${s.partial ? ` + ${s.partial} částečně` : ''} z ${s.runs} běhů, vynecháno ${s.skipped}; ${s.doneKm} z ${s.plannedKm} km podle plánu${s.avgFeel != null ? `; průměrný pocit ${String(s.avgFeel).replace('.', ',')}/5` : ''}${s.painCount ? `; bolest zapsaná ${s.painCount}×` : ''}${s.conditions.length ? `; nejčastější okolnosti: ${s.conditions.join(', ')}` : ''}.`;
+}
+
+// ---------- Kostra nového plánu ----------
+
+/** Deterministická kostra z generátoru: objem roste po 3 týdnech, 4. týden je lehčí, před závodem se ubírá. */
+export function draftPlan(ws: Workspace, input: z.infer<typeof draftInput>, now: string): Outcome {
+  const today = todayIso(ws.profile.timezone, new Date(now));
+  const startDate = weekStartOf(input.startDate ?? defaultStart(today));
+  if (input.intent === 'race' && !input.raceDate) return fail('U přípravy na závod potřebuju datum závodu (raceDate).');
+  if (input.raceDate && input.raceDate < startDate) return fail('Závod je před začátkem plánu.');
+  const weeks = input.raceDate ? weeksUntil(startDate, input.raceDate) : input.weeks ?? 8;
+  if (weeks > 30) return fail(`Plán by měl ${weeks} týdnů; víc než 30 neumím. Zvol pozdější začátek.`);
+  const generated = generateWeeks({
+    intent: input.intent, weeks, startDate, weeklyKm: input.weeklyKm, runsPerWeek: input.runsPerWeek,
+    restDows: input.restDows as Dow[], longRunDow: input.longRunDow as Dow, raceDate: input.raceDate, raceDistanceM: input.raceDistanceM, assumptions: [],
+  });
+  ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now };
+  const chart = resolvePaceChart(ws.profile);
+  const volumes = generated.map((w) => `T${w.index} ${formatDistanceRange(plannedDistance(w.days.map((d) => d.workout), chart))} (${w.phase})`);
+  return done([
+    `Kostra plánu „${input.name}“: ${weeks} týdnů od ${startDate}${input.raceDate ? `, závod ${input.raceDate}` : ''}. Je v rozpracovaném importu, do kalendáře ještě zařazená není.`,
+    `Objem po týdnech: ${volumes.join('; ')}.`,
+    `Projdi ji s uživatelem a uprav podle Stravy a poznámek: týden přepíšeš přes import_plan_weeks se stejným name a číslem týdne. Po schválení zavolej activate_plan s mode "${input.raceDate ? 'race' : 'start'}" a date ${input.raceDate ?? startDate}.`,
+  ].join('\n'));
 }
 
 export function undoChange(ws: Workspace, revisionId: string | undefined, now: string): Outcome {

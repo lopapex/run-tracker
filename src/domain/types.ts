@@ -237,6 +237,8 @@ export interface PlanDraftRevision {
 
 export interface AthleteProfile {
   id: 'me';
+  /** Volné poznámky trenéra o běžci (zranění, preference, cíle); přenáší se mezi plány i hostiteli. */
+  coachNotes?: string;
   locale: 'cs';
   units: 'km';
   timezone: string;

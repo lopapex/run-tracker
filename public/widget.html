@@ -44,7 +44,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible, [data-open]:focus-
 h2 { margin: 2px 0 0; font-size: 19px; line-height: 1.2; letter-spacing: -.01em; }
 h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink2); }
 .sub { color: var(--ink2); font-size: 13px; }
-.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.head .title { text-align: center; }
 .nav { display: flex; gap: 6px; flex: none; }
 .nav button { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 18px; cursor: pointer; }
 .nav button[disabled] { opacity: .35; cursor: default; }
@@ -54,6 +55,7 @@ h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink2); 
 .note > span { flex: 1; min-width: 0; }
 .note.ok { border-color: var(--good); }
 .note.err { border-color: var(--crit); }
+.note.warn { border-color: var(--warn); }
 .note button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-weight: 600; cursor: pointer; }
 
 /* dlaždice */
@@ -86,12 +88,20 @@ button.row[aria-expanded="true"] { background: var(--wash); }
 .row .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--s1-soft); }
 .row .bar.done { background: var(--s1); }
 .row .bar.skip { background: none; border: 1px dashed var(--axis); }
-.acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 6px 12px; }
+.acts { display: flex; flex-wrap: wrap; gap: 10px 8px; padding: 6px 6px 14px; }
 .acts ul { flex-basis: 100%; margin: 0 0 4px; padding-left: 18px; color: var(--ink2); font-size: 13px; }
 .acts > button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; }
 .acts > button.main { border-color: var(--s1); background: var(--s1); color: #fff; }
-.links { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0 4px; }
-.links button { min-height: 44px; padding: 0 12px 0 0; border: 0; background: none; color: var(--s1); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.acts .main3 { flex-basis: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.acts .main3 button { min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; }
+.acts .main3 button.main { border-color: var(--s1); background: var(--s1); color: #fff; }
+.acts .main3 button[aria-expanded="true"] { border-color: var(--s1); color: var(--s1); }
+.more { flex-basis: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.more button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; padding: 6px 4px; border: 0; border-radius: 8px; background: var(--wash); color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
+.more.wide button { flex-direction: row; min-height: 44px; font-size: 13px; }
+.more button svg { flex: none; width: 22px; height: 22px; color: var(--s1); }
+.more button svg.i-strava { color: #fc4c02; }
+.more button:hover { background: var(--s1-soft); }
 .daypick { flex-basis: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 2px 0 2px; }
 .daypick button { position: relative; min-height: 44px; padding: 2px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; line-height: 1.15; cursor: pointer; }
 .daypick button b { display: block; font-size: 13px; }
@@ -138,6 +148,11 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
 .form { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .form .k { margin: 10px 0 5px; color: var(--ink2); font-size: 12px; font-weight: 600; }
 .form .k:first-child { margin-top: 0; }
+.form.log { padding: 0 12px; }
+.form.log[open] { padding-bottom: 12px; }
+.form.log > summary { padding: 12px 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.form.log > summary + .k { margin-top: 0; }
+td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 .form details.cond { margin-top: 10px; }
 .form details.cond summary { display: flex; align-items: center; min-height: 44px; color: var(--ink2); font-size: 12px; font-weight: 600; }
 .pick { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -285,7 +300,6 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function num(n, d) { return (d == null ? String(n) : n.toFixed(d)).replace('.', ','); }
   function kmRange(a, b) { return a === b ? num(a) : num(a) + '–' + num(b); }
-  function kmRound(a, b) { return a === b ? num(a) : Math.round(a) + '–' + Math.round(b); }
   function pace(sec) { var s = Math.round(sec); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
   function dur(sec) {
     var s = Math.round(sec), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
@@ -298,7 +312,12 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
   function kmh(secPerKm) { return 3600 / secPerKm; }
   function meters(m) { return m >= 1000 ? num(Math.round(m / 10) / 100) + ' km' : Math.round(m) + ' m'; }
   function niceMax(v) { var step = v <= 20 ? 5 : v <= 60 ? 10 : 20; return Math.max(step, Math.ceil(v / step) * step); }
-  function chip(status) { var s = STATUS[status] || STATUS.scheduled; return '<span class="chip ' + s.cls + '"><span aria-hidden="true">' + s.icon + '</span>' + s.label + '</span>'; }
+  // Proběhlý den bez zápisu není „v plánu“: ukáže se jako nezapsaný, aby šel doplnit.
+  function chip(status, past) {
+    var s = status === 'scheduled' && past ? { label: 'Nezapsáno', icon: '?', cls: 'warn' } : STATUS[status] || STATUS.scheduled;
+    return '<span class="chip ' + s.cls + '"><span aria-hidden="true">' + s.icon + '</span>' + s.label + '</span>';
+  }
+  function plural(n, one, few, many) { return n === 1 ? one : n > 1 && n < 5 ? few : many; }
 
   // ---------- Tooltip ----------
   var tips = [], tipEl = null;
@@ -373,16 +392,33 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     if (d && d.banner) h += '<div class="note ok" role="status"><span><span aria-hidden="true">✓ </span>' + esc(d.banner.text) + '</span>' + (d.banner.revisionId ? opener('Vrátit', 'undo_change', { revisionId: d.banner.revisionId }, 'Vrať poslední změnu.') : '') + '</div>';
     return h;
   }
+  // Krátký štítek, celá věta se pošle do konverzace až po klepnutí.
   function hints(list) {
-    return '<div class="hints"><div class="k">Příklady, co napsat</div><div>' + list.map(function (t) { return '<button type="button" data-say="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div></div>';
+    return '<div class="hints"><div class="k">Zeptat se</div><div>' + list.map(function (t) { return '<button type="button" data-say="' + esc(t[1]) + '" title="' + esc(t[1]) + '">' + esc(t[0]) + '</button>'; }).join('') + '</div></div>';
+  }
+
+  // ---------- Plán dokončen ----------
+  function renderFinished(d) {
+    var p = d.plan, h = head('week', d) + '<div class="eyebrow">Plán dokončen</div><h2>' + esc(p.name) + '</h2>';
+    h += '<div class="sub">' + dm(p.first) + ' – ' + dm(p.last) + '</div><div class="tiles">';
+    h += '<div class="tile"><div class="k">Splněné běhy</div><div class="v">' + p.done + ' <small>z ' + p.runs + '</small></div><div class="n">' + ([p.partial ? p.partial + ' částečně' : '', p.skipped ? p.skipped + ' vynecháno' : ''].filter(Boolean).join(', ') || 'splněno') + '</div></div>';
+    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + p.doneKm + ' <small>z ' + p.plannedKm + '</small></div></div>';
+    h += '<div class="tile"><div class="k">Pocit</div><div class="v">' + (p.avgFeel != null ? num(p.avgFeel) + ' <small>/ 5</small>' : '–') + '</div>' + (p.painCount ? '<div class="n">bolest ' + p.painCount + '×</div>' : '') + '</div></div>';
+    if (p.conditions.length) h += '<p class="sub">Nejčastější okolnosti: ' + esc(p.conditions.join(', ')) + '</p>';
+    if (d.earlier.length) {
+      h += '<h3>Předchozí plány</h3><table><thead><tr><th>Plán</th><th>Běhy</th><th>Km</th></tr></thead><tbody>';
+      d.earlier.forEach(function (x) { h += '<tr><td>' + esc(x.name) + ' <span class="sub">' + dm(x.first) + ' – ' + dm(x.last) + '</span></td><td>' + x.done + '/' + x.runs + '</td><td>' + x.doneKm + '</td></tr>'; });
+      h += '</tbody></table>';
+    }
+    return h + hints([['Další plán', strava ? 'Postav mi další plán podle mé Stravy a toho, co o mně víš.' : 'Postav mi další plán podle toho, co o mně víš. Řeknu ti, kolik teď běhám.'], ['Nahrát plán', 'Mám nový plán v dokumentu, přiložím ho.'], ['Volnější týdny', 'Navrhni mi dva volnější týdny na odpočinek.']]);
   }
 
   // ---------- Bez plánu ----------
   function renderEmpty(d) {
     var h = head('', d) + '<div class="eyebrow">Run Tracker</div><h2>Zatím tu není žádný plán</h2>';
     if (d.staged) h += '<p class="sub">Rozpracovaný import „' + esc(d.staged.name) + '“ má nahrané týdny ' + d.staged.weeks.join(', ') + '. Ještě není zařazený do kalendáře.</p>';
-    h += '<ol class="steps"><li>Přilož do konverzace plán v PDF, obrázku nebo tabulce.</li><li>Napiš, kdy začínáš nebo kdy máš závod.</li><li>Claude plán přepíše, zkontroluje týdenní součty a zařadí ho do kalendáře.</li></ol>';
-    return h + hints(d.staged ? ['Dokonči import plánu a zařaď ho do kalendáře.'] : ['Založ můj plán z přiloženého souboru. Závod mám …', 'Můj poslední půlmaraton byl za 1:45. Spočítej mi tempa.']);
+    h += '<ol class="steps"><li>Přilož do konverzace plán v PDF, obrázku nebo tabulce, nebo si nech plán postavit' + (strava ? ' podle své Stravy' : '') + '.</li><li>Napiš, kdy začínáš nebo kdy máš závod.</li><li>Claude plán přepíše, zkontroluje týdenní součty a zařadí ho do kalendáře.</li></ol>';
+    return h + hints(d.staged ? [['Dokončit import', 'Dokonči import plánu a zařaď ho do kalendáře.']] : [['Nahrát plán', 'Chci založit plán z dokumentu. Přiložím ho a řeknu ti, kdy mám závod.'], [strava ? 'Plán podle Stravy' : 'Postavit plán', strava ? 'Postav mi plán podle mé Stravy.' : 'Postav mi plán. Řeknu ti, kolik teď běhám.']]);
   }
 
   // ---------- Týden ----------
@@ -400,41 +436,54 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
   function actions(w) {
     var name = w.title + ' (' + when(w) + ')', h = '<div class="acts">', links = [];
     var link = function (label, text) { return '<button type="button" data-say="' + esc(text) + '">' + label + '</button>'; };
+    var main = [];
     if (w.lines.length) h += '<ul>' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
     if (w.status === 'scheduled') {
-      h += opener('Doběhnuto', 'show_result', { workoutId: w.id }, 'Doběhl jsem jednotku ' + name + '. Zapiš ji a zeptej se mě na pocit.', ' class="main"');
-      h += '<button type="button" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">Přesunout</button>';
-      h += opener('Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.');
-      if (moveId === w.id) h += dayPicker(w);
-      links.push(link('Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
+      main.push(opener('Doběhnuto', 'show_result', { workoutId: w.id }, 'Doběhl jsem jednotku ' + name + '. Zapiš ji a zeptej se mě na pocit.', ' class="main"'));
+      main.push('<button type="button" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">Přesunout</button>');
+      main.push(opener('Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.'));
+      links.push(link(icon('short') + 'Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
     } else if (w.status === 'skipped') {
-      h += opener('Obnovit', 'restore_workout', { workoutId: w.id, reason: 'obnoveno ve widgetu' }, 'Obnov jednotku ' + name + '.');
+      main.push(opener('Obnovit', 'restore_workout', { workoutId: w.id, reason: 'obnoveno ve widgetu' }, 'Obnov jednotku ' + name + '.'));
     } else {
-      h += opener('Upravit zápis', 'show_result', { workoutId: w.id }, 'Chci upravit zápis k jednotce ' + name + '.');
-      links.push(link('Vrátit na „v plánu“', 'Vrať jednotku ' + name + ' na stav v plánu.'));
+      main.push(opener('Upravit zápis', 'show_result', { workoutId: w.id }, 'Chci upravit zápis k jednotce ' + name + '.'));
+      links.push(link(icon('undo') + 'Zrušit', 'Vrať jednotku ' + name + ' na stav v plánu.'));
     }
     if (w.status !== 'skipped') links.push(strava
-      ? link('Zhodnotit podle Stravy', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.')
-      : link('Zhodnotit běh', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.'));
-    links.push(opener('Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
-    if (w.status === 'scheduled') links.push(opener('Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
-    return h + '<div class="links">' + links.join('') + '</div></div>';
+      ? link(icon('strava') + 'Strava', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.')
+      : link(icon('strava') + 'Zhodnotit', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.'));
+    links.push(opener(icon('pace') + 'Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
+    if (w.status === 'scheduled') links.push(opener(icon('watch') + 'Hodinky', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
+    h += '<div class="main3">' + main.join('') + '</div>';
+    if (moveId === w.id) h += dayPicker(w);
+    return h + '<div class="more">' + links.join('') + '</div></div>';
   }
+  // Drobné ikony vedlejších akcí, kreslené barvou textu.
+  var ICONS = {
+    short: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.1 8.1L20 20M8.1 15.9L20 4"/>',
+    strava: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+    pace: '<circle cx="12" cy="14" r="7"/><path d="M12 14V10.5M10 3h4M12 3v4M18.5 7.5l1.5-1.5"/>',
+    watch: '<circle cx="12" cy="12" r="6"/><path d="M12 9.5V12l1.5 1.5M9 6.6L9.6 2h4.8l.6 4.6M9 17.4L9.6 22h4.8l.6-4.6"/>',
+    undo: '<path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 010 10h-2"/>'
+  };
+  function icon(k) { return '<svg class="i-' + k + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[k] + '</svg>'; }
   function renderWeek(d) {
     var s = d.stats, max = 1, h = head('week', d);
     d.days.forEach(function (day) { day.workouts.forEach(function (w) { max = Math.max(max, w.kmMax); }); });
     var prev = addDays(d.weekStart, -7), nxt = addDays(d.weekStart, 7);
-    h += '<div class="head"><div><div class="eyebrow">' + esc(d.planName) + '</div>';
-    h += '<h2>' + esc(d.label.charAt(0).toUpperCase() + d.label.slice(1)) + (d.phase ? ' · ' + esc(d.phase) : '') + '</h2>';
-    h += '<div class="sub">' + dm(d.weekStart) + ' – ' + dm(addDays(d.weekStart, 6)) + (d.isCurrent ? ' · probíhá' : '') + '</div></div>';
-    h += '<div class="nav">' + opener('‹', 'show_week', { date: prev }, 'Ukaž mi týden od ' + prev + '.', ' aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled'));
-    h += opener('›', 'show_week', { date: nxt }, 'Ukaž mi týden od ' + nxt + '.', ' aria-label="Další týden"' + (d.hasNext ? '' : ' disabled')) + '</div></div>';
-    var pct = s.plannedKmMin > 0 ? Math.min(100, Math.round(s.doneKm / s.plannedKmMin * 100)) : 0;
+    // Šipky po stranách nadpisu, jak je u přepínání období zvykem.
+    h += '<div class="head"><div class="nav">' + opener('‹', 'show_week', { date: prev }, 'Ukaž mi týden od ' + prev + '.', ' aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled')) + '</div>';
+    h += '<div class="title"><div class="eyebrow">' + esc(d.planName) + (d.phase ? ' · ' + esc(d.phase) : '') + '</div>';
+    h += '<h2>' + esc(d.label.charAt(0).toUpperCase() + d.label.slice(1)) + '</h2>';
+    h += '<div class="sub">' + dm(d.weekStart) + ' – ' + dm(addDays(d.weekStart, 6)) + '</div></div>';
+    h += '<div class="nav">' + opener('›', 'show_week', { date: nxt }, 'Ukaž mi týden od ' + nxt + '.', ' aria-label="Další týden"' + (d.hasNext ? '' : ' disabled')) + '</div></div>';
     h += '<div class="tiles">';
-    h += '<div class="tile"><div class="k">Běhy</div><div class="v">' + s.unitsDone + ' <small>z ' + s.units + '</small></div><div class="n">' + ([s.unitsPartial ? s.unitsPartial + ' částečně' : '', s.unitsSkipped ? s.unitsSkipped + ' vynecháno' : ''].filter(Boolean).join(', ') || 'splněno') + '</div></div>';
-    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + num(s.doneKm) + '</div><div class="n">z ' + kmRound(s.plannedKmMin, s.plannedKmMax) + ' km plánu</div><div class="meter" role="img" aria-label="Splněno ' + pct + ' % plánovaných kilometrů"><i style="width:' + pct + '%"></i></div></div>';
+    h += '<div class="tile"><div class="k">Běhy</div><div class="v">' + s.unitsDone + ' <small>z ' + s.units + '</small></div><div class="n">' + ([s.unitsPartial ? s.unitsPartial + ' částečně' : '', s.unitsSkipped ? s.unitsSkipped + ' vynecháno' : ''].filter(Boolean).join(', ')) + '</div></div>';
+    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + num(s.doneKm) + ' <small>z ' + Math.round(s.plannedKmMax) + '</small></div></div>';
     if (s.longRunKm != null) h += '<div class="tile"><div class="k">Dlouhý běh</div><div class="v">' + num(s.longRunKm) + ' <small>km</small></div></div>';
-    h += '</div><ul class="days">';
+    h += '</div>';
+    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span><button type="button" data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>';
+    h += '<ul class="days">';
     d.days.forEach(function (day) {
       day.workouts.forEach(function (w) {
         var rest = w.type === 'rest', opened = openId === w.id;
@@ -443,25 +492,26 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
         if (rest) { h += '<div class="row">' + whenCell + '<span class="what"><span class="t">Volno</span></span><span></span></div></li>'; return; }
         var sub = [w.summary, w.moved ? 'přesunuto' : '', w.feel ? 'pocit ' + w.feel + '/5' : '', (w.conditions || []).join(', '), w.userNote || ''].filter(Boolean).join(' · ');
         h += '<button type="button" class="row" data-row="' + w.id + '" aria-expanded="' + opened + '">' + whenCell;
-        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + chip(w.status);
+        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + chip(w.status, day.isPast);
         if (w.kmMax > 0) h += '<span class="bar ' + (w.status === 'completed' || w.status === 'partial' ? 'done' : w.status === 'skipped' ? 'skip' : '') + '" style="width:' + Math.max(4, Math.round(w.kmMax / max * 70)) + '%"></span>';
         h += '</button>' + (opened ? actions(w) : '') + '</li>';
       });
     });
-    h += '</ul><div class="foot">Klepni na trénink pro rozpis a akce.</div>';
+    h += '</ul>' + (openId ? '' : '<div class="foot">Klepni na trénink pro rozpis a akce.</div>');
     if (d.authorNote) h += '<details><summary>Poznámka autora plánu</summary><p class="sub">' + esc(d.authorNote) + '</p></details>';
-    return h + hints(['O víkendu nemůžu běhat, přeplánuj mi týden.', strava ? 'Podívej se do Stravy a zhodnoť, co jsem tento týden odběhl.' : 'Zhodnoť můj týden. Řeknu ti, co jsem odběhl.']);
+    return h + hints([['Nemůžu o víkendu', 'O víkendu nemůžu běhat, přeplánuj mi týden.'], ['Zhodnotit týden', strava ? 'Podívej se do Stravy a zhodnoť, co jsem tento týden odběhl.' : 'Zhodnoť můj týden. Řeknu ti, co jsem odběhl.']]);
   }
 
   // ---------- Celý plán ----------
   function renderPlan(d, width) {
     var t = d.totals, h = head('plan', d) + '<div class="eyebrow">Přehled plánu</div><h2>' + esc(d.planName) + '</h2>';
-    if (d.first) h += '<div class="sub">' + dm(d.first) + ' – ' + dm(d.last) + ' · ' + d.weeks.length + ' týdnů</div>';
-    var pct = t.plannedKm > 0 ? Math.min(100, Math.round(t.doneKm / t.plannedKm * 100)) : 0;
-    h += '<div class="tiles"><div class="tile"><div class="k">Splněné běhy</div><div class="v">' + t.unitsDone + ' <small>z ' + t.units + '</small></div></div>';
-    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + t.doneKm + '</div><div class="n">z ' + t.plannedKm + ' km plánu</div><div class="meter" role="img" aria-label="Splněno ' + pct + ' % plánovaných kilometrů"><i style="width:' + pct + '%"></i></div></div>';
+    // Plán zařazený od pozdějšího týdne: „týden 6“ je číslo z dokumentu, proto se ukáže, které týdny plánu běží.
+    var firstWeek = d.weeks.filter(function (w) { return w.sourceWeek != null; })[0], lastWeek = d.weeks.filter(function (w) { return w.sourceWeek != null; }).slice(-1)[0];
+    if (d.first) h += '<div class="sub">' + dm(d.first) + ' – ' + dm(d.last) + ' · ' + d.weeks.length + ' týdnů' + (firstWeek && firstWeek.sourceWeek > 1 ? ' (týdny ' + firstWeek.sourceWeek + '–' + lastWeek.sourceWeek + ' plánu)' : '') + (d.finished ? ' · dokončen' : '') + '</div>';
+    h += '<div class="tiles"><div class="tile"><div class="k">Splněné běhy</div><div class="v">' + t.unitsDone + ' <small>z ' + t.units + '</small></div>' + (t.unrecorded ? '<div class="n">' + t.unrecorded + ' nezapsáno</div>' : '') + '</div>';
+    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + t.doneKm + ' <small>z ' + t.plannedKm + '</small></div></div>';
     if (d.daysToRace != null && d.daysToRace >= 0) h += '<div class="tile"><div class="k">Do závodu</div><div class="v">' + d.daysToRace + ' <small>dní</small></div><div class="n">' + dm(d.raceDate) + '</div></div>';
-    h += '</div><h3>Týdenní objem v kilometrech</h3>';
+    h += '</div><h3>Týdenní objem v km · klepni na týden</h3>';
     h += '<div class="legend"><span><i style="background:var(--s1-soft)"></i>Plán</span><span><i style="background:var(--s1)"></i>Splněno</span><span><i class="dot" style="background:var(--s2)"></i>Dlouhý běh</span></div>';
     var W = Math.max(280, width), H = 210, L = 30, R = 6, T = 16, B = 40, n = d.weeks.length, top = 1;
     d.weeks.forEach(function (w) { top = Math.max(top, w.plannedKmMax, w.longRunKm || 0, w.doneKm); });
@@ -498,7 +548,6 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
       }
     }
     h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
-    h += '<div class="foot">Klepnutím na sloupec otevřeš týden.</div>';
     h += '<details><summary>Tabulka</summary><table><thead><tr><th>Týden</th><th>Od</th><th>Plán km</th><th>Splněno km</th><th>Běhy</th><th>Dlouhý km</th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
       h += '<tr><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.phase ? ' · ' + esc(w.phase) : '') + (w.isCurrent ? ' (teď)' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + kmRange(w.plannedKmMin, w.plannedKmMax) + '</td><td>' + num(w.doneKm) + '</td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
@@ -533,7 +582,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
           h += '<tr><td>' + (r.reps > 1 ? r.reps + '× ' : '') + esc(r.label) + (r.paceFastSec ? ' <span class="sub">' + esc(r.intensityLabel) + '</span>' : '') + '</td><td>' + given + '</td><td>' + p + '</td><td>' + out + '</td></tr>';
         });
         h += '</tbody></table><div class="foot">„Vychází“ je vzdálenost u úseku na čas a čas u úseku na vzdálenost.</div>';
-        h += '<div class="links">' + opener('Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi tuhle jednotku jako soubor do hodinek Garmin.') + '</div>';
+        h += '<div class="more wide" style="margin-top:10px">' + opener(icon('watch') + 'Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi tuhle jednotku jako soubor do hodinek Garmin.') + '</div>';
       }
     }
     if (c) {
@@ -548,7 +597,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
       d.paces.forEach(function (p) { h += '<tr><td>' + esc(p.label) + '</td><td>' + dur(p.fromSec * 0.4) + '–' + dur(p.toSec * 0.4) + '</td><td>' + num(kmh(p.toSec), 1) + '–' + num(kmh(p.fromSec), 1) + '</td></tr>'; });
       h += '</tbody></table></details>';
     } else h += '<p class="empty">Tempa zatím nejsou zadaná.</p>';
-    return h + (c ? '' : hints(['Můj poslední půlmaraton byl za 1:45. Spočítej mi tempa.']));
+    return h + (c ? '' : hints([['Spočítat tempa', 'Spočítej mi tempa z mého posledního závodu. Zeptej se mě na vzdálenost a čas.']]));
   }
 
   // ---------- Doběhnuto: hodnocení splnění a zápis ----------
@@ -589,7 +638,6 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     if (r) {
       if (sc) {
         h += '<div class="score"><div class="big">' + sc.total + ' <small>%</small></div><div><b>' + esc(sc.label) + '</b><ul>' + sc.parts.map(function (p) { return '<li>' + esc(p.label) + ': ' + esc(p.text) + '</li>'; }).join('') + '</ul></div></div>';
-        h += '<div class="foot">Odhad z vzdálenosti' + (v.steady ? ' a průměrného tempa' : '') + '. Je to vodítko, ne měření kvality tréninku.</div>';
       }
       h += '<div class="tiles' + (r.avgHr == null ? '' : ' two') + '">';
       h += '<div class="tile"><div class="k">Vzdálenost</div><div class="v">' + num(Math.round(r.distanceM / 10) / 100) + ' <small>km</small></div><div class="n">plán ' + (w.kmMax ? kmRange(w.kmMin, w.kmMax) + ' km' : '–') + '</div></div>';
@@ -597,21 +645,38 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
       h += '<div class="tile"><div class="k">Čas</div><div class="v">' + dur(r.movingSec) + '</div>' + (r.elevGainM != null ? '<div class="n">+' + Math.round(r.elevGainM) + ' m</div>' : '') + '</div>';
       if (r.avgHr != null) h += '<div class="tile"><div class="k">Tep</div><div class="v">' + Math.round(r.avgHr) + ' <small>/min</small></div></div>';
       h += '</div>';
-      if (r.laps.length > 1) h += '<h3>Tempo po kolech' + (t ? ' · pruh je cíl „' + esc(t.label) + '“' : '') + '</h3>' + lapChart(r, t, v, width);
+      if (r.reps && r.reps.length) {
+        // Stejně dlouhé úseky: délka jednou v nadpisu; u kilometrových je čas totéž co tempo.
+        var same = r.reps.every(function (x) { return x.distanceM === r.reps[0].distanceM; });
+        var showTime = !same || r.reps[0].distanceM !== 1000;
+        var showHr = r.reps.some(function (x) { return x.avgHr != null; });
+        h += '<h3>Rychlé úseky' + (same ? ' · ' + r.reps.length + '× ' + meters(r.reps[0].distanceM) : '') + (t ? ' · cíl ' + pace(t.fastSec) + '–' + pace(t.slowSec) : '') + '</h3><table><thead><tr><th>#</th>' + (same ? '' : '<th>Délka</th>') + (showTime ? '<th>Čas</th>' : '') + '<th>Tempo</th>' + (showHr ? '<th>Tep</th>' : '') + '<th>Proti cíli</th></tr></thead><tbody>';
+        r.reps.forEach(function (x) {
+          var off = x.offSec === 0 ? '<span class="ok" title="v cílovém pásmu" aria-label="v cílovém pásmu">✓</span>' :'<span title="' + (x.offSec > 0 ? 'pomaleji' : 'rychleji') + ' než cíl">' + (x.offSec > 0 ? '+' : '−') + Math.abs(Math.round(x.offSec)) + ' s/km</span>';
+          h += '<tr><td>' + x.n + '</td>' + (same ? '' : '<td>' + meters(x.distanceM) + '</td>') + (showTime ? '<td>' + dur(x.durationSec) + '</td>' : '') + '<td>' + pace(x.paceSec) + '</td>' + (showHr ? '<td>' + (x.avgHr != null ? Math.round(x.avgHr) : '–') + '</td>' : '') + '<td>' + off + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      }
+      if (r.laps.length > 1 && r.reps && r.reps.length) h += '<details><summary>Tempo po kolech</summary>' + lapChart(r, t, v, width) + '</details>';
+      else if (r.laps.length > 1) h += '<h3>Tempo po kolech' + (t ? ' · pruh je cíl „' + esc(t.label) + '“' : '') + '</h3>' + lapChart(r, t, v, width);
     }
-    h += '<div class="form"><div class="k">Stav</div>' + pickRow('status', [['completed', 'Splněno'], ['partial', 'Částečně']], form.status, 'Stav');
+    // Zápis je volitelný: u běhu s čísly je sbalený a otevře se jen na přání. Bez čísel je to hlavní obsah karty.
+    var logOpen = form.showLog != null ? form.showLog : !r;
+    var recorded = c.status === 'completed' || c.status === 'partial';
+    var logSum = recorded ? 'Zapsáno: ' + STATUS[c.status].label.toLowerCase() + (c.feel ? ' · pocit ' + c.feel + '/5' : '') + ' · upravit' : 'Zapsat splnění a pocit';
+    h += '<details class="form log" data-log="1"' + (logOpen ? ' open' : '') + '><summary>' + esc(logSum) + '</summary><div class="k">Stav</div>' + pickRow('status', [['completed', 'Splněno'], ['partial', 'Částečně']], form.status, 'Stav');
     h += '<div class="k">Pocit</div>' + pickRow('feel', [1, 2, 3, 4, 5].map(function (n) { return [n, n + ' · ' + FEEL[n]]; }), form.feel, 'Pocit');
     h += '<div class="k">Bolest</div>' + pickRow('pain', PAIN, form.pain, 'Bolest');
     // Okolnosti jsou sbalené, dokud žádná není vybraná: běžný zápis je pak krátký.
     var condOpen = form.showCond || form.conditions.length > 0;
     h += '<details class="cond" data-cond="1"' + (condOpen ? ' open' : '') + '><summary>Okolnosti' + (form.conditions.length ? ' (' + form.conditions.length + ')' : ': zima, vítr, spánek, alkohol…') + '</summary>' + pickRow('cond', Object.keys(d.conditionLabels).map(function (k) { return [k, d.conditionLabels[k]]; }), form.conditions, 'Okolnosti') + '</details>';
-    h += '<button type="button" class="primary" data-save="1">Uložit zápis</button></div>';
+    h += '<button type="button" class="primary" data-save="1">Uložit zápis</button></details>';
     if (!r) h += '<div class="acts">' + (strava
       ? '<button type="button" data-say="' + esc('Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.') + '">Zhodnotit podle Stravy</button>'
       : '<button type="button" data-say="' + esc('Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + w.title + '. Zeptej se mě na vzdálenost, čas a případně kola.') + '">Zadat čísla běhu</button>') + '</div>';
-    else h += '<div class="foot">Čísla běhu se jen vykreslila. Run Tracker je neukládá.</div>';
+    else h += '<div class="foot">' + (sc ? 'Odhad splnění je vodítko z vzdálenosti' + (v.steady ? ' a tempa' : r.reps && r.reps.length ? ' a tempa úseků' : '') + ', ne měření kvality. ' : '') + 'Čísla běhu se neukládají.</div>';
     if (w.lines.length) h += '<details><summary>Předpis jednotky</summary><ul class="sub">' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></details>';
-    return h + hints(['Co z toho plyne pro další dny?']);
+    return h + hints([['Co dál?', 'Co z toho plyne pro další dny?']]);
   }
   function saveCheckin(d) {
     var w = d.workout, args = { workoutId: w.id, status: form.status, conditions: form.conditions.slice(), pain: form.pain };
@@ -640,7 +705,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     var width = app.clientWidth - 28;
     lastWidth = app.clientWidth;
     if (!data) app.innerHTML = head('', null) + '<p class="empty">' + esc(plain) + '</p>';
-    else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
+    else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);
     setTimeout(reportSize, 60);
@@ -658,7 +723,7 @@ th:first-child, td:first-child { text-align: left; white-space: normal; }
     new ResizeObserver(function () { if ((data || plain) && Math.abs(app.clientWidth - lastWidth) > 4) render(); reportSize(); }).observe(document.body);
     new ResizeObserver(reportSize).observe(app);
   }
-  app.addEventListener('toggle', function (e) { if (form && e.target.hasAttribute && e.target.hasAttribute('data-cond')) form.showCond = e.target.open; reportSize(); }, true);
+  app.addEventListener('toggle', function (e) { if (form && e.target.hasAttribute && e.target.hasAttribute('data-cond')) form.showCond = e.target.open; if (form && e.target.hasAttribute && e.target.hasAttribute('data-log')) form.showLog = e.target.open; reportSize(); }, true);
 
   if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude nebo ChatGPT, když je připojený konektor Run Tracker.</p>'; return; }
   if (oai) {
