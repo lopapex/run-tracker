@@ -128,6 +128,7 @@ th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); text-align: rig
 th { color: var(--ink2); font-weight: 600; }
 th:first-child, td:first-child { text-align: left; white-space: normal; }
 td small { color: var(--ink2); font-size: 11.5px; }
+.summary { margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--s1); border-radius: 0 8px 8px 0; background: var(--wash); color: var(--ink); font-size: 13.5px; line-height: 1.45; }
 .est { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding: 8px 12px; border-radius: 10px; background: var(--wash); font-size: 13px; color: var(--ink2); }
 .est b { color: var(--ink); font-size: 15px; }
 td .warn-mark { color: var(--warn-ink); font-weight: 650; }
@@ -425,6 +426,10 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     return h + hints([['Další plán', strava ? 'Postav mi další plán podle mé Stravy a toho, co o mně víš.' : 'Postav mi další plán podle toho, co o mně víš. Řeknu ti, kolik teď běhám.'], ['Nahrát plán', 'Mám nový plán v dokumentu, přiložím ho.'], ['Volnější týdny', 'Navrhni mi dva volnější týdny na odpočinek.']]);
   }
 
+  // Shrnutí spočítané konektorem: fakta, která jinak musel vyčíst Claude do chatu.
+  function summaryBox(list) {
+    return list && list.length ? '<p class="summary">' + list.map(esc).join(' ') + '</p>' : '';
+  }
   // Forma: odhady VDOT z hodnocených běhů a předpověď na cílovou vzdálenost.
   function fitnessBlock(f, width) {
     var dist = num(Math.round(f.distanceM / 100) / 10) + ' km';
@@ -544,6 +549,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + num(s.doneKm) + ' <small>z ' + Math.round(s.plannedKmMax) + '</small></div></div>';
     if (s.longRunKm != null) h += '<div class="tile"><div class="k">Dlouhý běh</div><div class="v">' + num(s.longRunKm) + ' <small>km</small></div></div>';
     h += '</div>';
+    h += summaryBox(d.summary);
     if (d.fatigue) h += '<div class="note warn" style="margin:10px 0 0"><span>' + esc(d.fatigue.text) + ' Možná je čas ubrat.</span><button type="button" data-say="' + esc(d.fatigue.kind === 'pain' ? 'Poslední běhy mě bolí. Co s tím a jak upravit zbytek týdne?' : 'Poslední běhy byly těžké. Navrhni lehčí zbytek týdne.') + '">Ubrat</button></div>';
     if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span><button type="button" data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>';
     h += '<ul class="days">';
@@ -575,7 +581,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     h += '<div class="tiles"><div class="tile"><div class="k">Splněné běhy</div><div class="v">' + t.unitsDone + ' <small>z ' + t.units + '</small></div>' + (t.unrecorded ? '<div class="n">' + t.unrecorded + ' nezapsáno</div>' : '') + '</div>';
     h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + t.doneKm + ' <small>z ' + t.plannedKm + '</small></div></div>';
     if (d.daysToRace != null && d.daysToRace >= 0) h += '<div class="tile"><div class="k">Do závodu</div><div class="v">' + d.daysToRace + ' <small>dní</small></div><div class="n">' + dm(d.raceDate) + '</div></div>';
-    h += '</div><h3>Týdenní objem v km · klepni na týden</h3>';
+    h += '</div>' + summaryBox(d.summary) + '<h3>Týdenní objem v km · klepni na týden</h3>';
     h += '<div class="legend"><span><i style="background:var(--s1-soft)"></i>Plán</span><span><i style="background:var(--s1)"></i>Splněno</span><span><i class="dot" style="background:var(--s2)"></i>Dlouhý běh</span></div>';
     var W = Math.max(280, width), H = 210, L = 30, R = 6, T = 16, B = 40, n = d.weeks.length, top = 1;
     d.weeks.forEach(function (w) { top = Math.max(top, w.plannedKmMax, w.longRunKm || 0, w.doneKm); });
@@ -704,6 +710,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     if (r) {
       if (sc) {
         h += '<div class="score"><div class="big">' + sc.total + ' <small>%</small></div><div><b>' + esc(sc.label) + '</b><ul>' + sc.parts.map(function (p) { return '<li>' + esc(p.label) + ': ' + esc(p.text) + '</li>'; }).join('') + '</ul></div></div>';
+        h += summaryBox(d.summary);
         if (d.estimate) h += '<div class="est"><span>Odhad formy</span><b>' + dur(d.estimate.sec) + '</b> na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km · VDOT ' + num(d.estimate.vdot) + '</div>';
       }
       h += '<div class="tiles' + (r.avgHr == null ? '' : ' two') + '">';

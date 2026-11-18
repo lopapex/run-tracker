@@ -637,6 +637,10 @@ describe('konektor Run Tracker', () => {
     expect(result.data.estimate.vdot).toBeGreaterThan(50);
     expect(result.data.estimate.vdot).toBeLessThan(56);
     expect(result.text).toContain('Odhad formy: VDOT');
+    expect(result.data.summary).toEqual(['Úseky rovnoměrné (rozptyl 2 s/km).']);
+    const wk = (await call('show_week', { date: '2026-11-20' })).data;
+    expect(wk.summary.join(' ')).toMatch(/Zbývá [0-9]+ běh/);
+    expect((await call('show_plan')).data.summary.join(' ')).toMatch(/Do dneška splněno|Plán začíná/);
     // za větru se odhad nedělá: pomalejší úseky by formu podhodnotily
     expect((await call('show_result', { workoutId: id, run: { distanceM: 9000, movingSec: 2900, reps }, conditions: ['wind'] })).data.estimate).toBeNull();
     expect((await call('show_plan')).data.fitness).toBeNull();
