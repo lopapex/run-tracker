@@ -128,8 +128,6 @@ th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); text-align: rig
 th { color: var(--ink2); font-weight: 600; }
 th:first-child, td:first-child { text-align: left; white-space: normal; }
 td small { color: var(--ink2); font-size: 11.5px; }
-.est { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding: 8px 12px; border-radius: 10px; background: var(--wash); font-size: 13px; color: var(--ink2); }
-.est b { color: var(--ink); font-size: 15px; }
 td .warn-mark { color: var(--warn-ink); font-weight: 650; }
 details.issues ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 13px; }
 details.issues li { margin: 4px 0; }
@@ -150,10 +148,14 @@ table.weeks tr.now td { font-weight: 650; }
 .tip span { color: var(--ink2); }
 
 /* doběhnuto */
-.score { display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
-.score .big { flex: none; white-space: nowrap; font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
-.score .big small { font-size: 15px; font-weight: 600; color: var(--ink2); }
-.score ul { margin: 2px 0 0; padding: 0; list-style: none; color: var(--ink2); font-size: 12.5px; }
+.score { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.score .top { display: flex; align-items: baseline; gap: 10px; }
+.score .big { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.score .big small { margin-left: 2px; font-size: 16px; font-weight: 600; color: var(--ink2); }
+.score .top b { font-size: 15px; }
+.score ul { display: grid; gap: 4px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--grid); list-style: none; color: var(--ink); font-size: 13px; }
+.score li { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
+.score li span { color: var(--ink2); }
 .form { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .form .k { margin: 10px 0 5px; color: var(--ink2); font-size: 12px; font-weight: 600; }
 .form .k:first-child { margin-top: 0; }
@@ -430,7 +432,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   // Forma: odhady VDOT z hodnocených běhů a předpověď na cílovou vzdálenost.
   function fitnessBlock(f, width) {
     var dist = num(Math.round(f.distanceM / 100) / 10) + ' km';
-    var h = '<h3>Forma · odhad z hodnocených běhů</h3><div class="tiles"><div class="tile"><div class="k">Odhad na ' + dist + '</div><div class="v">' + dur(f.predictedSec) + '</div><div class="n">VDOT ' + num(f.vdot) + '</div></div>';
+    var h = '<h3>Forma · odhad z hodnocených běhů</h3><div class="tiles"><div class="tile"><div class="k">Odhad na ' + dist + '</div><div class="v">' + dur(f.predictedSec) + '</div></div>';
     if (f.targetSec) { var gap = f.predictedSec - f.targetSec; h += '<div class="tile"><div class="k">Cíl</div><div class="v">' + dur(f.targetSec) + '</div><div class="n">' + (Math.abs(gap) < 5 ? 'na cíli' : (gap > 0 ? 'chybí ' : 'rezerva ') + dur(Math.abs(gap))) + '</div></div>'; }
     h += '</div>';
     if (f.points.length > 1) {
@@ -652,7 +654,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       }
     }
     if (c) {
-      h += '<div class="sub">Z výkonu ' + num(Math.round(c.distanceM / 100) / 10) + ' km za ' + dur(c.timeSec) + ' · VDOT ' + num(c.vdot) + (c.saved ? ' · uloženo v profilu' : '') + '</div>';
+      h += '<div class="sub">Z výkonu ' + num(Math.round(c.distanceM / 100) / 10) + ' km za ' + dur(c.timeSec) + (c.saved ? ' · uloženo v profilu' : '') + '</div>';
       h += '<h3>Předpověď závodů</h3><div class="pred">' + c.predictions.map(function (x) { return '<div><div class="k">' + esc(x.label) + '</div><div class="v">' + dur(x.timeSec) + '</div></div>'; }).join('') + '</div>';
       if (!c.saved) h += opener('Uložit tato tempa', 'calculate_paces', { distanceM: c.distanceM, timeSec: c.timeSec, save: true }, 'Ulož mi tato tempa do profilu.', ' class="primary"');
     }
@@ -698,12 +700,13 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function renderResult(d, width) {
     var r = d.run, w = d.workout, t = d.target, sc = d.score, c = d.checkin, v = d.verdict || {};
     if (!form || form.id !== w.id) form = { id: w.id, status: c.status === 'scheduled' || c.status === 'skipped' ? (sc ? sc.suggestedStatus : 'completed') : c.status, feel: c.feel, pain: c.pain || 'none', conditions: c.conditions.slice() };
-    var h = head(null, d) + '<div class="eyebrow">Doběhnuto</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
-    h += '<div class="sub">Plán: ' + esc(w.summary) + (r && r.name ? ' · Běh: ' + esc(r.name) : '') + '</div>';
+    var h = head(null, d) + '<div class="eyebrow">Doběhnuto · ' + DOW[w.dow] + ' ' + dm(w.date) + '</div><h2>' + esc(w.title) + '</h2>';
+    h += '<div class="sub">Plán: ' + esc(w.summary) + '</div>';
     if (r) {
       if (sc) {
-        h += '<div class="score"><div class="big">' + sc.total + ' <small>%</small></div><div><b>' + esc(sc.label) + '</b><ul>' + sc.parts.map(function (p) { return '<li>' + esc(p.label) + ': ' + esc(p.text) + '</li>'; }).join('') + '</ul></div></div>';
-        if (d.estimate) h += '<div class="est"><span>Odhad formy</span><b>' + dur(d.estimate.sec) + '</b> na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km · VDOT ' + num(d.estimate.vdot) + '</div>';
+        var rows = sc.parts.map(function (p) { return '<li><span>' + esc(p.label) + '</span>' + esc(p.text) + '</li>'; });
+        if (d.estimate) rows.push('<li><span>Forma</span>' + dur(d.estimate.sec) + ' na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km</li>');
+        h += '<div class="score"><div class="top"><span class="big">' + sc.total + '<small>%</small></span><b>' + esc(sc.label) + '</b></div><ul>' + rows.join('') + '</ul></div>';
       }
       h += '<div class="tiles' + (r.avgHr == null ? '' : ' two') + '">';
       h += '<div class="tile"><div class="k">Vzdálenost</div><div class="v">' + num(Math.round(r.distanceM / 10) / 100) + ' <small>km</small></div><div class="n">plán ' + (w.kmMax ? kmRange(w.kmMin, w.kmMax) + ' km' : '–') + '</div></div>';
