@@ -615,7 +615,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     }
     h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
     if (d.fitness) h += fitnessBlock(d.fitness, width);
-    h += '<details' + (roomy() ? ' open' : '') + '><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
+    h += '<details><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
       // Úzká tabulka: fáze jsou v grafu, km jako splněno z plánu zaokrouhleně.
       h += '<tr' + (w.isCurrent ? ' class="now"' : '') + '><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.isCurrent ? ' · teď' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + Math.round(w.doneKm) + ' <small>z ' + Math.round(w.plannedKmMax) + '</small></td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
@@ -661,7 +661,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     }
     if (d.paces.length) {
       h += '<h3>Pásma</h3>' + zones(d.paces);
-      h += '<details' + (roomy() ? ' open' : '') + '><summary>Převody na 400 m a km/h</summary><table><thead><tr><th>Pásmo</th><th>400 m</th><th>km/h</th></tr></thead><tbody>';
+      h += '<details><summary>Převody na 400 m a km/h</summary><table><thead><tr><th>Pásmo</th><th>400 m</th><th>km/h</th></tr></thead><tbody>';
       d.paces.forEach(function (p) { h += '<tr><td>' + esc(p.label) + '</td><td>' + dur(p.fromSec * 0.4) + '–' + dur(p.toSec * 0.4) + '</td><td>' + num(kmh(p.toSec), 1) + '–' + num(kmh(p.fromSec), 1) + '</td></tr>'; });
       h += '</tbody></table></details>';
     } else h += '<p class="empty">Tempa zatím nejsou zadaná.</p>';
@@ -786,8 +786,6 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   // ne výška rámu od hostitele) a posílá se výška i šířka. Jen tak hostitel kartu po přepnutí
   // na kratší záložku i zmenší; z výšky samotné a z výšky rámu zůstávalo dole prázdné místo.
   var lastSentWidth = 0, tallest = 0;
-  // Karta už byla vyšší (třeba týden): kratší pohled může rozbalit doplňkové části místo prázdného místa.
-  function roomy() { return tallest > 700; }
   function reportSize() {
     var root = document.documentElement, prev = root.style.height;
     app.style.minHeight = '';
