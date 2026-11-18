@@ -445,12 +445,14 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       : 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.');
     if (w.lines.length) h += '<ul>' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
     if (w.status === 'scheduled') {
-      // Doběhnuto a hodnocení až v den tréninku; zkrácení, tempa a hodinky jen dokud je před tebou.
-      if (!future) main.push(opener('Doběhnuto', 'show_result', { workoutId: w.id }, 'Doběhl jsem jednotku ' + name + '. Zapiš ji a zeptej se mě na pocit.', ' class="main"'));
+      // Doběhnuto až v den tréninku. Se Stravou rovnou hodnotí běh (procenta + zápis), bez ní otevře jen zápis.
+      // Zkrácení, tempa a hodinky jen dokud je trénink před tebou.
+      if (!future) main.push(strava
+        ? '<button type="button" class="main" data-say="' + esc('Doběhl jsem jednotku ' + name + '. Najdi běh ve Stravě, zhodnoť ho proti plánu a ukaž mi hodnocení se zápisem.') + '">Doběhnuto</button>'
+        : opener('Doběhnuto', 'show_result', { workoutId: w.id }, 'Doběhl jsem jednotku ' + name + '. Zapiš ji a zeptej se mě na pocit.', ' class="main"'));
       main.push('<button type="button" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">Přesunout</button>');
       main.push(opener('Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.'));
       if (!past) links.push(link(icon('short') + 'Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
-      if (!future) links.push(review);
       if (!past) {
         links.push(opener(icon('pace') + 'Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
         links.push(opener(icon('watch') + 'Hodinky', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
