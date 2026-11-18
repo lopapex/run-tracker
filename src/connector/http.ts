@@ -7,16 +7,22 @@ import { FILE_TOKEN, fileExpired, KEY_PATTERN, workspaceId, type WorkspaceStore 
 const error = (status: number, message: string) =>
   new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-/** Widget je statický soubor webu; funkce si ho stáhne ze stejné domény a drží v paměti instance. */
-let cachedView: Promise<string> | undefined;
+/** Widget je statický soubor webu; funkce si ho stáhne ze stejné domény a drží v paměti instance nejvýš minutu.
+ *  Netlify při nasazení, které mění jen widget, funkci nevymění; bez omezení by teplá instance rozdávala starou verzi. */
+const VIEW_TTL_MS = 60_000;
+let cachedView: { at: number; html: Promise<string> } | undefined;
 export function viewFromOrigin(requestUrl: string): ViewLoader {
   return () => {
-    cachedView ??= fetch(new URL('/widget.html', requestUrl)).then((res) => {
-      if (!res.ok) throw new Error(`widget ${res.status}`);
-      return res.text();
-    });
-    cachedView.catch(() => { cachedView = undefined; });
-    return cachedView;
+    if (!cachedView || Date.now() - cachedView.at > VIEW_TTL_MS) {
+      const html = fetch(new URL('/widget.html', requestUrl), { cache: 'no-store' }).then((res) => {
+        if (!res.ok) throw new Error(`widget ${res.status}`);
+        return res.text();
+      });
+      const entry = { at: Date.now(), html };
+      cachedView = entry;
+      html.catch(() => { if (cachedView === entry) cachedView = undefined; });
+    }
+    return cachedView.html;
   };
 }
 
