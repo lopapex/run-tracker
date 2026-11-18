@@ -33,9 +33,6 @@ html, body { height: auto; min-height: 0; margin: 0; background: transparent; ov
 body { color: var(--ink); font: 14px/1.45 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif); }
 #app { position: relative; max-width: 540px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: opacity .15s; }
 #app.busy { opacity: .6; pointer-events: none; }
-#app.fixed { display: flex; flex-direction: column; }
-#app.fixed > .tabs { flex: none; }
-#app.fixed > .scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -14px -14px; padding: 0 14px 14px; }
 button { font: inherit; color: inherit; }
 button:focus-visible, a:focus-visible, summary:focus-visible, [data-open]:focus-visible, [data-tip]:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
 
@@ -618,7 +615,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     }
     h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
     if (d.fitness) h += fitnessBlock(d.fitness, width);
-    h += '<details><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
+    h += '<details' + (roomy() ? ' open' : '') + '><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
       // Úzká tabulka: fáze jsou v grafu, km jako splněno z plánu zaokrouhleně.
       h += '<tr' + (w.isCurrent ? ' class="now"' : '') + '><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.isCurrent ? ' · teď' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + Math.round(w.doneKm) + ' <small>z ' + Math.round(w.plannedKmMax) + '</small></td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
@@ -664,7 +661,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     }
     if (d.paces.length) {
       h += '<h3>Pásma</h3>' + zones(d.paces);
-      h += '<details><summary>Převody na 400 m a km/h</summary><table><thead><tr><th>Pásmo</th><th>400 m</th><th>km/h</th></tr></thead><tbody>';
+      h += '<details' + (roomy() ? ' open' : '') + '><summary>Převody na 400 m a km/h</summary><table><thead><tr><th>Pásmo</th><th>400 m</th><th>km/h</th></tr></thead><tbody>';
       d.paces.forEach(function (p) { h += '<tr><td>' + esc(p.label) + '</td><td>' + dur(p.fromSec * 0.4) + '–' + dur(p.toSec * 0.4) + '</td><td>' + num(kmh(p.toSec), 1) + '–' + num(kmh(p.fromSec), 1) + '</td></tr>'; });
       h += '</tbody></table></details>';
     } else h += '<p class="empty">Tempa zatím nejsou zadaná.</p>';
@@ -773,33 +770,13 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // ---------- Vykreslení a velikost ----------
   var lastWidth = 0, lastHeight = 0;
-  // Karta se záložkami: stálá výška do CARD_CAP, delší obsah se posouvá uvnitř. Výška jen roste (hostitel nezmenšuje).
-  var CARD_CAP = 680, cardH = 0, scrollKey = '';
   function render() {
-    var oldScroll = app.querySelector('.scroll');
-    var key = data ? data.view + '|' + (data.weekStart || '') : '';
-    var keepScroll = oldScroll && key === scrollKey ? oldScroll.scrollTop : 0;
     tips = []; hideTip();
     var width = app.clientWidth - 28;
     lastWidth = app.clientWidth;
     if (!data) app.innerHTML = head('', null) + '<p class="empty">' + esc(plain) + '</p>';
     else if (data.view === 'none') { app.innerHTML = ''; app.style.display = 'none'; notify('ui/notifications/request-teardown', {}); }
     else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'import' ? renderImport(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
-    var tabs = app.querySelector(':scope > .tabs');
-    app.classList.toggle('fixed', !!tabs);
-    if (tabs) {
-      var sc = document.createElement('div');
-      sc.className = 'scroll';
-      while (tabs.nextSibling) sc.appendChild(tabs.nextSibling);
-      app.appendChild(sc);
-      sc.addEventListener('scroll', hideTip, { passive: true });
-      reportSize();
-      // Rozbalení tréninku nebo zápis překreslí kartu; posun zůstane, kde byl.
-      sc.scrollTop = keepScroll;
-    } else {
-      app.style.height = '';
-    }
-    scrollKey = key;
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);
     setTimeout(reportSize, 60);
@@ -809,20 +786,15 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   // ne výška rámu od hostitele) a posílá se výška i šířka. Jen tak hostitel kartu po přepnutí
   // na kratší záložku i zmenší; z výšky samotné a z výšky rámu zůstávalo dole prázdné místo.
   var lastSentWidth = 0, tallest = 0;
+  // Karta už byla vyšší (třeba týden): kratší pohled může rozbalit doplňkové části místo prázdného místa.
+  function roomy() { return tallest > 700; }
   function reportSize() {
     var root = document.documentElement, prev = root.style.height;
     app.style.minHeight = '';
-    var sc = app.classList.contains('fixed') ? app.querySelector(':scope > .scroll') : null;
-    if (sc) {
-      // Přirozená výška karty = co je mimo posouvanou část + celý její obsah.
-      var natural = Math.ceil(app.offsetHeight - sc.clientHeight + sc.scrollHeight);
-      cardH = Math.max(cardH, Math.min(natural, CARD_CAP));
-      app.style.height = cardH + 'px';
-    }
     root.style.height = 'max-content';
     var natural = Math.ceil(root.getBoundingClientRect().height);
-    // Karty bez záložek: hostitel rámeček nezmenší, karta se roztáhne na dosavadní maximum, aby pod ní nezůstalo prázdno.
-    if (!sc && natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
+    // Hostitel rámeček nezmenší: karta se roztáhne na dosavadní maximum, aby pod ní nezůstalo prázdno.
+    if (natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
     var h = Math.ceil(root.getBoundingClientRect().height);
     tallest = Math.max(tallest, h);
     root.style.height = prev;
