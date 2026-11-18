@@ -583,7 +583,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     h += '<div class="tiles"><div class="tile"><div class="k">Splněné běhy</div><div class="v">' + t.unitsDone + ' <small>z ' + t.units + '</small></div>' + (t.unrecorded ? '<div class="n">' + t.unrecorded + ' nezapsáno</div>' : '') + '</div>';
     h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + t.doneKm + ' <small>z ' + t.plannedKm + '</small></div></div>';
     if (d.daysToRace != null && d.daysToRace >= 0) h += '<div class="tile"><div class="k">Do závodu</div><div class="v">' + d.daysToRace + ' <small>dní</small></div><div class="n">' + dm(d.raceDate) + '</div></div>';
-    h += '</div>' + summaryBox(d.summary) + '<h3>Týdenní objem v km · klepni na týden</h3>';
+    h += '</div><h3>Týdenní objem v km · klepni na týden</h3>';
     h += '<div class="legend"><span><i style="background:var(--s1-soft)"></i>Plán</span><span><i style="background:var(--s1)"></i>Splněno</span><span><i class="dot" style="background:var(--s2)"></i>Dlouhý běh</span></div>';
     var W = Math.max(280, width), H = 210, L = 30, R = 6, T = 16, B = 40, n = d.weeks.length, top = 1;
     d.weeks.forEach(function (w) { top = Math.max(top, w.plannedKmMax, w.longRunKm || 0, w.doneKm); });
@@ -712,7 +712,6 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     if (r) {
       if (sc) {
         h += '<div class="score"><div class="big">' + sc.total + ' <small>%</small></div><div><b>' + esc(sc.label) + '</b><ul>' + sc.parts.map(function (p) { return '<li>' + esc(p.label) + ': ' + esc(p.text) + '</li>'; }).join('') + '</ul></div></div>';
-        h += summaryBox(d.summary);
         if (d.estimate) h += '<div class="est"><span>Odhad formy</span><b>' + dur(d.estimate.sec) + '</b> na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km · VDOT ' + num(d.estimate.vdot) + '</div>';
       }
       h += '<div class="tiles' + (r.avgHr == null ? '' : ' two') + '">';

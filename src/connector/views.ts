@@ -181,11 +181,10 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   const units = weeks.reduce((s, w) => s + w.units, 0);
   const unitsDone = weeks.reduce((s, w) => s + w.unitsDone, 0);
   const current = weeks.find((w) => w.isCurrent);
-  const summary = planSummary(c.all, c.chart, c.today, range?.last ?? null);
   return {
     ok: true,
-    text: (summary.length ? `Shrnutí v kartě: ${summary.join(" ")} ` : "") + `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''} Uživatel widget vidí; jen krátce okomentuj.`,
-    data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) }, fitness: fitnessOf(ws), summary },
+    text: `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''} Uživatel widget vidí; jen krátce okomentuj.`,
+    data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) }, fitness: fitnessOf(ws) },
   };
 }
 
@@ -340,7 +339,6 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
   });
   const score = scoreOf(run.distanceM, planned.minM, planned.maxM, planned.unknown > 0, avgPaceSec, target, steady, conditions, reps);
   const estimate = estimateOf(ws, target?.key, steady, run.distanceM, avgPaceSec, reps, conditions);
-  const summary = runSummary(ws, w.id, w.date, laps, reps, steady, target, estimate);
   const text = [
     `Zobrazeno hodnocení běhu proti jednotce ${w.workout.title} (${w.date}).`,
     `Běh ${formatKm(run.distanceM)}, průměrné tempo ${formatPace(avgPaceSec)}/km; plán ${planned.maxM ? `${String(km(planned.minM)).replace('.', ',')}${planned.maxM !== planned.minM ? `–${String(km(planned.maxM)).replace('.', ',')}` : ''} km` : 'bez dané vzdálenosti'}${planned.unknown ? ' + nevyčíslené úseky' : ''}.`,
@@ -348,7 +346,6 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     target && laps.length && !steady ? `V pásmu ${target.label} bylo ${inTarget} z ${laps.length} kol (počítají se i rozklus a pauzy).` : '',
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
-    summary.length ? `Shrnutí v kartě: ${summary.join(' ')}` : '',
     estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}. Uloží se se zápisem z widgetu.` : '',
     'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Stav, pocit a okolnosti uživatel uloží v kartě sám.',
   ].filter(Boolean).join(' ');
@@ -358,7 +355,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     data: {
       ...base,
       run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps, reps },
-      score, estimate, summary, verdict: { distance, pace, lapsInTarget: inTarget, steady },
+      score, estimate, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
   };
 }
@@ -384,46 +381,6 @@ function weekSummary(cards: Card[], today: string): string[] {
   const out = [`Zbývá ${left.length} ${plural(left.length, 'běh', 'běhy', 'běhů')}, ${kmText(left.reduce((s, w) => s + w.kmMax, 0))} km.`];
   const kind = key.type === 'race' ? 'závod' : key.type === 'long' ? 'dlouhý běh' : key.type === 'tempo' ? 'tempový běh' : 'rychlý trénink';
   if (rank(key) > 1) out.push(`Klíčový je ${kind}${key.kmMax ? ` ${kmText(key.kmMax)} km` : ''} (${key.date === today ? 'dnes' : DOW_CS[dowOf(key.date)]}).`);
-  return out;
-}
-
-/** Plán: plnění do dneška a co zbývá do konce. */
-function planSummary(all: ScheduledWorkout[], chart: PaceChart, today: string, last: string | null): string[] {
-  const runs = all.filter((w) => !NOT_RUN.has(w.workout.type));
-  const due = runs.filter((w) => w.date < today);
-  if (!due.length) return last ? [`Plán začíná; do konce ${Math.ceil((diffDays(last, today) + 1) / 7)} týdnů.`] : [];
-  const doneRuns = due.filter((w) => w.status === 'completed' || w.status === 'partial');
-  const plannedM = due.reduce((s, w) => s + workoutDistance(w.workout, chart).maxM, 0);
-  const doneM = doneRuns.reduce((s, w) => s + workoutDistance(w.workout, chart).maxM, 0);
-  const out = [`Do dneška splněno ${doneRuns.length} z ${due.length} běhů${plannedM ? `, ${Math.round(doneM / plannedM * 100)} % plánovaných km` : ''}.`];
-  if (last && last >= today) { const weeks = Math.ceil((diffDays(last, today) + 1) / 7); out.push(`Do konce ${weeks} ${plural(weeks, 'týden', 'týdny', 'týdnů')}.`); }
-  return out;
-}
-
-/** Doběhnutý běh: rovnoměrnost, posun tepu a forma proti minule. Plnění cíle už ukazuje skóre. */
-function runSummary(ws: Workspace, workoutId: string, date: string, laps: Array<{ distanceM: number; paceSec: number; avgHr: number | null }>, reps: RepRow[], steady: boolean, target: { fastSec: number; slowSec: number } | null, estimate: { vdot: number } | null): string[] {
-  const out: string[] = [];
-  if (reps.length > 1) {
-    const paces = reps.map((r) => r.paceSec);
-    const spread = Math.max(...paces) - Math.min(...paces);
-    out.push(spread <= 3 ? `Úseky rovnoměrné (rozptyl ${spread} s/km).` : `Úseky nerovnoměrné: rozdíl ${spread} s/km mezi nejrychlejším a nejpomalejším.`);
-    const hr = reps.filter((r) => r.avgHr != null);
-    if (hr.length > 1) { const drift = Math.round(hr[hr.length - 1].avgHr! - hr[0].avgHr!); if (Math.abs(drift) >= 4) out.push(`Tep v posledním úseku ${drift > 0 ? '+' : '−'}${Math.abs(drift)} proti prvnímu.`); }
-  } else if (steady) {
-    const full = laps.filter((l) => l.distanceM >= 800);
-    if (full.length >= 4) {
-      const half = Math.floor(full.length / 2);
-      const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
-      const split = Math.round(avg(full.slice(half).map((l) => l.paceSec)) - avg(full.slice(0, half).map((l) => l.paceSec)));
-      out.push(Math.abs(split) <= 3 ? 'Tempo rovnoměrné po celou dobu.' : split < 0 ? `Druhá polovina rychlejší o ${-split} s/km.` : `Druhá polovina pomalejší o ${split} s/km.`);
-      const hr = full.filter((l) => l.avgHr != null);
-      if (hr.length >= 4) { const h = Math.floor(hr.length / 2); const drift = Math.round(avg(hr.slice(h).map((l) => l.avgHr!)) - avg(hr.slice(0, h).map((l) => l.avgHr!))); if (drift >= 5) out.push(`Tep ve druhé polovině +${drift}.`); }
-    }
-  }
-  if (estimate) {
-    const prev = ws.notes.filter((n) => n.vdot != null && n.workoutId !== workoutId && n.date < date).sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (prev?.vdot != null) { const d = Math.round((estimate.vdot - prev.vdot) * 10) / 10; out.push(Math.abs(d) < 0.3 ? 'Forma stejná jako minule.' : `Forma ${d > 0 ? '+' : '−'}${String(Math.abs(d)).replace('.', ',')} VDOT proti minule.`); }
-  }
   return out;
 }
 

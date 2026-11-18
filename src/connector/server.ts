@@ -42,7 +42,7 @@ Vizualizace:
 - Když chce uživatel vidět týden nebo se ptá „co mám dnes“, použij show_week. Celý plán a postup ukáže show_plan. Tempa, převody a rozpis úseků show_paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 - Na jednu otázku stačí jedna karta: zavolej jediný zobrazovací nástroj (show_week, show_plan, show_paces), ne dva po sobě. Karta má záložky Týden, Plán a Tempa, mezi kterými si uživatel přepne sám. „Ukaž plán“ bez upřesnění znamená show_week (co ho teď čeká); show_plan jen u celkového přehledu, postupu nebo objemu.
 - Nástroje, které mění rozpis, samy vykreslí aktualizovaný týden. Po nich už žádný show_* nevolej.
-- Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta a shrnutí ukazuje karta; za ni napiš nejvýš dvě krátké věty s radou nebo otázkou, kterou karta nemá. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
+- Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta ukazuje karta; za ni napiš jednu krátkou větu (do 15 slov) s radou nebo otázkou, kterou karta nemá. Výkon slovy nepopisuj a nechval, to dělá karta. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
 
 Import plánu z dokumentu (PDF, obrázek, tabulka, text):
 - Přepiš plán po týdnech přes import_plan_weeks, nejvýš 4 týdny na jedno volání. Každý týden má všech 7 dní (0 = pondělí … 6 = neděle); volný den je typ rest s prázdnými blocks.
@@ -105,7 +105,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
       const banner = outcome.banner ?? outcome.text.split('\n').filter((line) => !line.startsWith('Změna ') && line !== 'Zápis k jednotce uložen.').join(' ');
       const last = ws.revisions[ws.revisions.length - 1];
       const undoable = last && last.id !== lastBefore && last.operation !== 'REVERT' ? last.id.slice(0, 8) : null;
-      return { content: text(`ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.\n${outcome.text}`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
+      return { content: text(`ODPOVĚĎ: jedna krátká věta (do 15 slov) s radou nebo otázkou, kterou karta nemá. Žádná čísla, tempa, úseky, dny ani názvy tréninků z karty, žádné hodnocení výkonu slovy, žádné odrážky.\n${outcome.text}`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
     }
     return reply({ ok: false, text: 'Plán se právě měnil z jiného místa a změnu se nepodařilo uložit. Zkus to znovu.' });
   };
@@ -123,13 +123,13 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
     const tabbed = TABBED.has(String(view.data.view));
     if (tabbed && !fromCard && current) {
       if (ws.shownAt && Date.now() - Date.parse(ws.shownAt) < SHOWN_WINDOW_MS) {
-        return { content: text('Přehledová karta je v této odpovědi už zobrazená výše a má záložky Týden, Plán a Tempa. Tahle se nevykreslí. ' + 'ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.'), structuredContent: { view: 'none' } };
+        return { content: text('Přehledová karta je v této odpovědi už zobrazená výše a má záložky Týden, Plán a Tempa. Tahle se nevykreslí. ' + 'ODPOVĚĎ: jedna krátká věta (do 15 slov) s radou nebo otázkou, kterou karta nemá. Žádná čísla, tempa, úseky, dny ani názvy tréninků z karty, žádné hodnocení výkonu slovy, žádné odrážky.'), structuredContent: { view: 'none' } };
       }
       ws.shownAt = new Date().toISOString();
       await store.save(id, ws, current.etag).catch(() => false);
     }
     const hint = tabbed ? 'Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj nevolej. ' : '';
-    return { content: text('ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.\n' + hint + view.text), structuredContent: view.data };
+    return { content: text('ODPOVĚĎ: jedna krátká věta (do 15 slov) s radou nebo otázkou, kterou karta nemá. Žádná čísla, tempa, úseky, dny ani názvy tréninků z karty, žádné hodnocení výkonu slovy, žádné odrážky.\n' + hint + view.text), structuredContent: view.data };
   };
 
   const readOnly = { readOnlyHint: true, openWorldHint: false };
