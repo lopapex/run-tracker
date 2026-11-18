@@ -564,7 +564,6 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       });
     });
     h += '</ul>' + (openId ? '' : '<div class="foot">Klepni na trénink pro rozpis a akce.</div>');
-    if (d.authorNote) h += '<details><summary>Poznámka autora plánu</summary><p class="sub">' + esc(d.authorNote) + '</p></details>';
     return h + hints([['Nemůžu o víkendu', 'O víkendu nemůžu běhat, přeplánuj mi týden.'], ['Zhodnotit týden', strava ? 'Podívej se do Stravy a zhodnoť, co jsem tento týden odběhl.' : 'Zhodnoť můj týden. Řeknu ti, co jsem odběhl.']]);
   }
 
