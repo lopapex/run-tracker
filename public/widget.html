@@ -207,6 +207,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // Stav widgetu
   var data = null;        // data posledního pohledu
+  var ownResult = false;  // výsledek volání, ke kterému karta patří, už přišel
   var plain = '';         // text, když pohled nemá data (chyba nástroje)
   var openId = null;      // rozbalená jednotka v týdnu
   var moveId = null;      // jednotka s otevřeným výběrem dne
@@ -245,7 +246,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var m = e.data;
     if (!m || m.jsonrpc !== '2.0') return;
     if (m.method) {
-      if (m.method === 'ui/notifications/tool-result') showResult(m.params, true);
+      // Karta patří k jednomu volání nástroje. Další oznámení o výsledku (hostitel je může poslat i staršímu rámu)
+      // by kartu přepsala jiným pohledem; vlastní akce widgetu chodí jako odpovědi na tools/call, ne sem.
+      if (m.method === 'ui/notifications/tool-result') { if (!ownResult) { ownResult = true; showResult(m.params, true); } }
       else if (m.method === 'ui/notifications/host-context-changed') applyHost(m.params);
       else if (m.method === 'ui/notifications/tool-cancelled') { data = null; plain = 'Zobrazení bylo zrušeno.'; render(); }
       if (m.id != null) post({ jsonrpc: '2.0', id: m.id, result: {} });
