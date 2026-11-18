@@ -131,7 +131,7 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
   const next = days.flatMap((d) => d.workouts).find((w) => w.date >= c.today && w.status === 'scheduled' && w.type !== 'rest');
   return {
     ok: true,
-    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''} Uživatel widget vidí; neopakuj celý rozpis, jen krátce okomentuj.`,
+    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''}`,
     data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
   };
 }
@@ -346,7 +346,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
     estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}. Uloží se se zápisem z widgetu.` : '',
-    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Uživatel může stav, pocit a okolnosti uložit ve widgetu; krátce zhodnoť a případně navrhni úpravu dalších dnů.',
+    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Stav, pocit a okolnosti uživatel uloží v kartě sám.',
   ].filter(Boolean).join(' ');
   return {
     ok: true,

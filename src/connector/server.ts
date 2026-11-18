@@ -42,7 +42,7 @@ Vizualizace:
 - Když chce uživatel vidět týden nebo se ptá „co mám dnes“, použij show_week. Celý plán a postup ukáže show_plan. Tempa, převody a rozpis úseků show_paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 - Na jednu otázku stačí jedna karta: zavolej jediný zobrazovací nástroj (show_week, show_plan, show_paces), ne dva po sobě. Karta má záložky Týden, Plán a Tempa, mezi kterými si uživatel přepne sám. „Ukaž plán“ bez upřesnění znamená show_week (co ho teď čeká); show_plan jen u celkového přehledu, postupu nebo objemu.
 - Nástroje, které mění rozpis, samy vykreslí aktualizovaný týden. Po nich už žádný show_* nevolej.
-- Widget uživatel vidí a má v něm tlačítka pro další kroky. Jeho obsah neopakuj, jen ho krátce okomentuj.
+- Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Za kartu napiš nejvýš dvě krátké věty: jedno zjištění, které z karty není vidět na první pohled, a jedno doporučení nebo otázku. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
 
 Import plánu z dokumentu (PDF, obrázek, tabulka, text):
 - Přepiš plán po týdnech přes import_plan_weeks, nejvýš 4 týdny na jedno volání. Každý týden má všech 7 dní (0 = pondělí … 6 = neděle); volný den je typ rest s prázdnými blocks.
@@ -103,7 +103,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
       const banner = outcome.banner ?? outcome.text.split('\n').filter((line) => !line.startsWith('Změna ') && line !== 'Zápis k jednotce uložen.').join(' ');
       const last = ws.revisions[ws.revisions.length - 1];
       const undoable = last && last.id !== lastBefore && last.operation !== 'REVERT' ? last.id.slice(0, 8) : null;
-      return { content: text(`${outcome.text}\nUživatel vidí aktualizovaný widget.`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
+      return { content: text(`${outcome.text}\nUživatel vidí kartu se všemi čísly. Odpověz nejvýš dvěma krátkými větami: co z toho plyne a co doporučuješ. Čísla, tempa, úseky, data ani rozpis z karty nepiš znovu; žádné nadpisy ani odrážky.`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
     }
     return reply({ ok: false, text: 'Plán se právě měnil z jiného místa a změnu se nepodařilo uložit. Zkus to znovu.' });
   };
@@ -113,7 +113,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   const show = async (fn: (ws: Workspace) => View) => {
     const view = fn(await load());
     if (!view.ok) return { content: text(view.text), isError: true };
-    const hint = TABBED.has(String(view.data.view)) ? ' Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj už nevolej.' : '';
+    const hint = (TABBED.has(String(view.data.view)) ? ' Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj už nevolej.' : '') + ' Uživatel vidí kartu se všemi čísly. Odpověz nejvýš dvěma krátkými větami: co z toho plyne a co doporučuješ. Čísla, tempa, úseky, data ani rozpis z karty nepiš znovu; žádné nadpisy ani odrážky.';
     return { content: text(view.text + hint), structuredContent: view.data };
   };
 
