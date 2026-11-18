@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { blockLines } from './format';
 import { plannedDistance, workoutDistance } from './distance';
 import type { WorkoutSpec } from './types';
 
@@ -20,5 +21,14 @@ describe('kilometry z časových úseků', () => {
     const r = workoutDistance(w, chart);
     expect(r.minM).toBeCloseTo(1800 + 2 * 60 / 360 * 1000);
     expect(r.maxM).toBeCloseTo(2400);
+  });
+});
+
+describe('řádky rozpisu', () => {
+  it('výklus pojmenuje jen s rozklusem a pauzu dá na vlastní řádek', () => {
+    const seg = (role: 'warmup' | 'cooldown' | 'steady', distanceM: number) => ({ kind: 'segment' as const, role, distanceM, intensity: 'easy' as const });
+    expect(blockLines([seg('steady', 5000), seg('cooldown', 3000)])).toEqual(['5 km volně', '3 km volně']);
+    expect(blockLines([seg('warmup', 2000), { kind: 'repeat', count: 4, work: { role: 'work', distanceM: 1600, intensity: '10k_pace' }, recovery: { role: 'recovery', durationSec: 120, intensity: 'walk' }, recoveryAfterLast: false }, seg('cooldown', 2000)]))
+      .toEqual(['Rozklus: 2 km volně', '4× 1,6 km tempo na 10 km', 'mezi úseky 2 min chůze', 'Výklus: 2 km volně']);
   });
 });

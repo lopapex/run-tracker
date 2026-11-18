@@ -75,21 +75,23 @@ function segmentText(s: Segment, chart?: PaceChart): string {
   return `${amount} ${INTENSITY_LABEL[s.intensity]}${pace}`.trim();
 }
 
+/** Jedna část jednotky na řádek. Rozklus a výklus se pojmenují jen spolu: samotný „výklus“ na konci nedává smysl. */
 export function blockLines(blocks: Block[], chart?: PaceChart): string[] {
-  return blocks.map((b) => {
+  const named = blocks.some((b) => b.kind === 'segment' && b.role === 'warmup') && blocks.some((b) => b.kind === 'segment' && b.role === 'cooldown');
+  return blocks.flatMap((b) => {
     switch (b.kind) {
       case 'segment': {
-        const prefix = b.role === 'warmup' ? 'Rozklus: ' : b.role === 'cooldown' ? 'Výklus: ' : '';
-        return prefix + segmentText(b, chart);
+        const prefix = named && b.role === 'warmup' ? 'Rozklus: ' : named && b.role === 'cooldown' ? 'Výklus: ' : '';
+        return [prefix + segmentText(b, chart)];
       }
       case 'repeat': {
-        const rec = b.recovery ? `, mezi úseky ${segmentText(b.recovery)}` : '';
-        return `${b.count}× ${[b.work, ...(b.more ?? [])].map((x) => segmentText(x, chart)).join(' + ')}${rec}`;
+        const work = `${b.count}× ${[b.work, ...(b.more ?? [])].map((x) => segmentText(x, chart)).join(' + ')}`;
+        return b.recovery ? [work, `mezi úseky ${segmentText(b.recovery)}`] : [work];
       }
       case 'strides':
-        return `${b.count}× rovinka ${formatShortDuration(b.durationSec)}`;
+        return [`${b.count}× rovinka ${formatShortDuration(b.durationSec)}`];
       case 'note':
-        return b.text;
+        return [b.text];
     }
   });
 }
