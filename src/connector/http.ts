@@ -20,6 +20,16 @@ export function viewFromOrigin(requestUrl: string): ViewLoader {
   };
 }
 
+/** Otisk widgetu do adresy zdroje: nová verze = nová adresa, takže ji hostitel nenačte ze staré mezipaměti. */
+async function viewVersion(loadView: ViewLoader): Promise<string | undefined> {
+  try {
+    const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(await loadView())));
+    return Array.from(bytes.slice(0, 5), (b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return undefined;
+  }
+}
+
 /** Stažení dočasného souboru (export do hodinek). Odkaz zná jen ten, kdo si export vyžádal. */
 export async function handleFile(token: string | undefined, store: WorkspaceStore): Promise<Response> {
   const file = token && FILE_TOKEN.test(token) ? await store.getFile(token) : null;
@@ -33,7 +43,7 @@ export async function handleMcp(req: Request, key: string | undefined, store: Wo
   // Adresa s klíčem je jediné oprávnění; neplatný tvar se neliší od neexistující adresy.
   if (!key || !KEY_PATTERN.test(key)) return error(404, 'Not found');
   if (req.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST' } });
-  const server = buildServer(store, await workspaceId(key), loadView, new URL(req.url).origin);
+  const server = buildServer(store, await workspaceId(key), loadView, new URL(req.url).origin, await viewVersion(loadView));
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
     await server.connect(transport);

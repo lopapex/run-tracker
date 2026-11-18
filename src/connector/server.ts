@@ -1,5 +1,5 @@
 // MCP server konektoru: registrace nástrojů nad jedním prostorem uživatele.
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { WorkspaceStore } from './store';
 import { activateInput, activatePlan, bulkStatusInput, checkWorkout, describePlan, draftInput, draftPlan, setStatuses, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
@@ -7,8 +7,10 @@ import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput
 import { emptyWorkspace, type Workspace } from './workspace';
 import { weekStartOf } from '../domain/dates';
 
-/** Jeden widget pro všechny pohledy; který se vykreslí, určuje pole `view` ve výsledku nástroje. */
+/** Jeden widget pro všechny pohledy; který se vykreslí, určuje pole `view` ve výsledku nástroje.
+ *  S verzí (otisk obsahu) má adresa tvar view-<otisk>.html: hostitelé si widget drží v mezipaměti podle adresy. */
 export const VIEW_URI = 'ui://run-tracker/view.html';
+export const viewUri = (version?: string) => (version ? `ui://run-tracker/view-${version}.html` : VIEW_URI);
 const VIEW_MIME = 'text/html;profile=mcp-app';
 export type ViewLoader = () => Promise<string>;
 
@@ -39,8 +41,8 @@ Nový plán (žádný není, předchozí skončil, nebo o něj uživatel požád
 6. Ukaž souhrn: fáze, objem po týdnech a klíčové tréninky. Po souhlasu zavolej activate_plan.
 
 Vizualizace:
-- Když chce uživatel vidět týden nebo se ptá „co mám dnes“, použij show_week. Celý plán a postup ukáže show_plan. Tempa, převody a rozpis úseků show_paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
-- Na jednu otázku stačí jedna karta: zavolej jediný zobrazovací nástroj (show_week, show_plan, show_paces), ne dva po sobě. Karta má záložky Týden, Plán a Tempa, mezi kterými si uživatel přepne sám. „Ukaž plán“ bez upřesnění znamená show_week (co ho teď čeká); show_plan jen u celkového přehledu, postupu nebo objemu.
+- Plán ukazuje jediný nástroj show_week: karta se záložkami Týden, Plán a Tempa. „Co mám dnes“, „ukaž plán“ nebo týden = výchozí záložka; celkový postup a objem = tab plan; tempa, převody a rozpis úseků = tab paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
+- Na jednu otázku stačí jedna karta: show_week zavolej jednou, mezi záložkami si uživatel přepne sám.
 - Nástroje, které mění rozpis, samy vykreslí aktualizovaný týden. Po nich už žádný show_* nevolej.
 - Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta ukazuje karta; za ni napiš nejvýš jednu krátkou větu s konkrétní radou na nejbližší dny, nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani věci, které karta umí tlačítkem. Výkon slovy nepopisuj a nechval. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
 
@@ -66,7 +68,8 @@ function touchedDate(ws: Workspace): string | undefined {
   return last.note ? ws.workouts.find((w) => w.id === last.note!.workoutId)?.date : undefined;
 }
 
-export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoader, origin?: string): McpServer {
+export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoader, origin?: string, viewVersion?: string): McpServer {
+  const VIEW = viewUri(viewVersion);
   const server = new McpServer({
     name: 'run-tracker',
     title: 'Run Tracker',
@@ -135,7 +138,9 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   const readOnly = { readOnlyHint: true, openWorldHint: false };
   const change = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
   // Standard MCP Apps a aliasy pro starší klienty, včetně ChatGPT.
-  const ui = { ui: { resourceUri: VIEW_URI }, 'ui/resourceUri': VIEW_URI, 'openai/outputTemplate': VIEW_URI };
+  const ui = { ui: { resourceUri: VIEW }, 'ui/resourceUri': VIEW, 'openai/outputTemplate': VIEW };
+  // Nástroje jen pro kartu (záložky): model je nevidí, takže nemůže vykreslit druhou kartu.
+  const cardOnly = { ui: { resourceUri: VIEW, visibility: ['app'] }, 'ui/resourceUri': VIEW, 'openai/outputTemplate': VIEW, 'openai/visibility': 'private', 'openai/widgetAccessible': true };
   const reason = z.string().max(300).describe('Stručně proč, slovy uživatele.');
   const workoutId = z.string().min(1).describe('Id jednotky z get_plan.');
   const date = z.string().describe('Datum RRRR-MM-DD.');
@@ -147,15 +152,19 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   // Widget kreslí vlastní kartu s okrajem; hostitel ji už nemá orámovat podruhé.
   // ChatGPT otevře odkaz ze widgetu (soubor do hodinek) jen na povolenou doménu.
   const viewMeta = { ui: { prefersBorder: false }, 'openai/widgetPrefersBorder': false, 'openai/widgetCSP': { connect_domains: [], resource_domains: [], redirect_domains: origin ? [origin] : [] } };
-  server.registerResource('Run Tracker – vizualizace', VIEW_URI, { mimeType: VIEW_MIME, description: 'Týden, přehled plánu, tempa a hodnocení běhu.', _meta: viewMeta }, async () => ({
-    contents: [{ uri: VIEW_URI, mimeType: VIEW_MIME, text: await loadView(), _meta: viewMeta }],
+  server.registerResource('Run Tracker – vizualizace', VIEW, { mimeType: VIEW_MIME, description: 'Týden, přehled plánu, tempa a hodnocení běhu.', _meta: viewMeta }, async () => ({
+    contents: [{ uri: VIEW, mimeType: VIEW_MIME, text: await loadView(), _meta: viewMeta }],
+  }));
+  // Starší adresy (hostitel si pamatuje seznam nástrojů z dřívějška) dostanou aktuální widget.
+  server.registerResource('Run Tracker – vizualizace (starší adresa)', new ResourceTemplate('ui://run-tracker/{file}', { list: undefined }), { mimeType: VIEW_MIME, _meta: viewMeta }, async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: VIEW_MIME, text: await loadView(), _meta: viewMeta }],
   }));
 
   // ---------- Čtení a profil ----------
 
   server.registerTool('get_plan', {
     title: 'Načíst plán',
-    description: 'Vrátí dnešní datum, profil, tempa a rozpis běžeckého plánu s id jednotek, stavem splnění a posledními změnami. Bez rozsahu vrací probíhající a příští týden. Je to textový podklad pro tebe; uživateli plán ukaž přes show_week nebo show_plan.',
+    description: 'Vrátí dnešní datum, profil, tempa a rozpis běžeckého plánu s id jednotek, stavem splnění a posledními změnami. Bez rozsahu vrací probíhající a příští týden. Je to textový podklad pro tebe; uživateli plán ukaž přes show_week.',
     inputSchema: planRangeInput.shape,
     annotations: readOnly,
   }, (input) => read((ws) => describePlan(ws, input)));
@@ -180,7 +189,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
 
   server.registerTool('draft_plan', {
     title: 'Postavit kostru nového plánu',
-    description: 'Postaví kostru plánu z profilu běžce: rozložení běhů v týdnu, postupný růst objemu s lehčím každým 4. týdnem, klíčové tréninky a u závodu ubrání před ním. Uloží ji do rozpracovaného importu; jednotlivé týdny pak uprav přes import_plan_weeks a zařaď přes activate_plan.',
+    description: 'Postaví kostru plánu (rozložení běhů, růst objemu s lehčím každým 4. týdnem, ubrání před závodem) do rozpracovaného importu; uprav ji přes import_plan_weeks a zařaď přes activate_plan.',
     inputSchema: draftInput.shape,
     annotations: change,
     _meta: ui,
@@ -284,32 +293,32 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   // ---------- Vizualizace v konverzaci (MCP Apps) ----------
 
   server.registerTool('show_week', {
-    title: 'Ukázat týden',
-    description: 'Vykreslí týden jako widget: sedm dní s jednotkami a jejich stavem, dnešek, splněné kilometry proti plánu a rozbalenou nejbližší jednotku s tlačítky pro splnění, přesun a vynechání. Bez data ukáže probíhající týden.',
-    inputSchema: { ...weekViewInput.shape, fromCard },
+    title: 'Běžecký plán',
+    description: 'Jediný nástroj pro zobrazení plánu: karta se záložkami. tab: week (výchozí; date vybere týden), plan (objem, fáze, forma, závod), paces (pásma; s workoutId rozpis úseků).',
+    inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces']).optional().describe('Úvodní záložka karty; bez ní week.'), workoutId: z.string().optional().describe('Jen pro tab paces: rozpis úseků této jednotky.'), fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, (input) => show((ws) => weekView(ws, input), input.fromCard));
+  }, (input) => show((ws) => (input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date })), input.fromCard));
 
   server.registerTool('show_plan', {
-    title: 'Ukázat celý plán',
-    description: 'Vykreslí přehled celého plánu: týdenní objem po fázích, co je splněno, dlouhé běhy, kde uživatel právě je a kolik zbývá do závodu.',
+    title: 'Záložka Plán',
+    description: 'Jen pro kartu (záložka Plán). Model použije show_week s tab plan.',
     inputSchema: { fromCard },
     annotations: readOnly,
-    _meta: ui,
+    _meta: cardOnly,
   }, (input) => show((ws) => planView(ws), input.fromCard));
 
   server.registerTool('show_paces', {
-    title: 'Pomocník temp',
-    description: 'Vykreslí uložená tréninková tempa jako pásma s převodem na čas 400 m a rychlost na pásu. S workoutId přidá rozpis úseků jednotky: kolik metrů vyjde časový úsek a za kolik se má běžet úsek daný vzdáleností.',
+    title: 'Záložka Tempa',
+    description: 'Jen pro kartu (záložka Tempa). Model použije show_week s tab paces.',
     inputSchema: { ...paceViewInput.shape, fromCard },
     annotations: readOnly,
-    _meta: ui,
+    _meta: cardOnly,
   }, (input) => show((ws) => paceView(ws, input), input.fromCard));
 
   server.registerTool('calculate_paces', {
     title: 'Spočítat tempa z výkonu',
-    description: 'Spočítá tréninková tempa a předpovědi závodních časů z jednoho výkonu (vzorce VDOT Jacka Danielse) a vykreslí je. Použij vždy, když se mluví o tempech nebo cílovém čase, místo vlastního odhadu. S save: true je uloží do profilu, jen se souhlasem uživatele.',
+    description: 'Tempa a předpovědi závodů z jednoho výkonu (VDOT, Daniels). Použij místo vlastního odhadu. save: true je uloží do profilu, jen se souhlasem uživatele.',
     inputSchema: calcInput.shape,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     _meta: ui,
@@ -327,7 +336,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
 
   server.registerTool('show_result', {
     title: 'Doběhnuto: hodnocení a zápis',
-    description: 'Vykreslí widget k doběhnuté jednotce: zápis stavu, pocitu a okolností, a když pošleš čísla běhu, i hodnocení splnění proti plánu (vzdálenost, tempo proti cílovému pásmu, tempo po kolech). Čísla běhu ber z oficiálního konektoru Strava nebo od uživatele; jen se vykreslí a neukládají se. Okolnosti, které uživatel zmínil (zima, vítr, alkohol den předem…), pošli v conditions.',
+    description: 'Karta doběhnuté jednotky: zápis stavu, pocitu a okolností; s čísly běhu (ze Stravy nebo od uživatele, neukládají se) i hodnocení proti plánu. Okolnosti, které uživatel zmínil, pošli v conditions.',
     inputSchema: resultViewInput.shape,
     annotations: readOnly,
     _meta: ui,

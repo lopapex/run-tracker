@@ -274,11 +274,16 @@ describe('konektor Run Tracker', () => {
     const { tools } = await client.listTools();
     for (const name of ['show_week', 'show_plan', 'show_paces', 'show_result', 'export_garmin']) {
       const tool = tools.find((t) => t.name === name)!;
-      expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toBe('ui://run-tracker/view.html');
+      expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toMatch(/^ui:\/\/run-tracker\/view-[0-9a-f]{10}\.html$/);
       // alias pro ChatGPT
-      expect((tool._meta as Record<string, unknown>)['openai/outputTemplate']).toBe('ui://run-tracker/view.html');
+      expect((tool._meta as Record<string, unknown>)['openai/outputTemplate']).toBe((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri);
       expect(tool.annotations?.readOnlyHint).toBe(name !== 'export_garmin');
     }
+    // záložky Plán a Tempa vidí jen karta, model ne
+    expect(tools.filter((t) => ((t._meta as { ui?: { visibility?: string[] } })?.ui?.visibility ?? []).includes('app') && !((t._meta as { ui: { visibility: string[] } }).ui.visibility.includes('model'))).map((t) => t.name).sort()).toEqual(['show_paces', 'show_plan']);
+    const current = (tools.find((t) => t.name === 'show_week')!._meta as { ui: { resourceUri: string } }).ui.resourceUri;
+    expect((await client.readResource({ uri: current })).contents[0].mimeType).toBe('text/html;profile=mcp-app');
+    // starší adresa z mezipaměti hostitele dostane aktuální widget
     const resource = await client.readResource({ uri: 'ui://run-tracker/view.html' });
     expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
     // widget má vlastní kartu; hostitel ji nemá orámovat podruhé
