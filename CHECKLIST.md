@@ -20,6 +20,8 @@ Datum: 17. 11. 2026. `[x]` ověřeno · `[~]` implementováno, čeká na ověře
 - [x] Netlify funkce a Blobs za běhu: živý průchod importem, aktivací, přesunem, splněním, undo, exportem a smazáním dat.
 - [x] Hromadný zápis splnění (`set_statuses`) jako jedna vratná změna; úseky intervalů se hodnotí proti cílovému pásmu.
 - [x] Paměť mezi plány: poznámky trenéra v profilu, historie plánů v `get_plan`, karta dokončeného plánu, kostra dalšího plánu přes `draft_plan`, prompty pro nový plán a týdenní kontrolu.
+- [x] Kontrola importu jako varování (neblokuje): podezřelé jednotky, součty, tempa; karta kontroly ve widgetu.
+- [x] Upozornění na únavu a bolest z posledních zápisů; odhad formy (VDOT) z úseků a tempových běhů, vývoj v přehledu plánu.
 - [x] Odstraněny zbytky původní aplikace (parsování souborů aktivit, drafty, typy chatu a AI).
 - [x] Tvar jednotky je v popisech nástrojů jen jednou (u importu); úprava a přidání vracejí chybu s cestou k poli. Popisy nástrojů 22,7 kB místo 28,6 kB.
 - [x] Ověřeno v Claude: přidání konektoru bez přihlášení, import skutečného PDF, souběh s konektorem Stravy, karty v mobilní aplikaci.

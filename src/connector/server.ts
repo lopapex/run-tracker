@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { WorkspaceStore } from './store';
 import { activateInput, activatePlan, bulkStatusInput, checkWorkout, describePlan, draftInput, draftPlan, setStatuses, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
-import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View } from './views';
+import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View , importView } from './views';
 import { emptyWorkspace, type Workspace } from './workspace';
 import { weekStartOf } from '../domain/dates';
 
@@ -46,8 +46,8 @@ Vizualizace:
 Import plánu z dokumentu (PDF, obrázek, tabulka, text):
 - Přepiš plán po týdnech přes import_plan_weeks, nejvýš 4 týdny na jedno volání. Každý týden má všech 7 dní (0 = pondělí … 6 = neděle); volný den je typ rest s prázdnými blocks.
 - Vzdálenosti převáděj na metry, časy na sekundy, míle na metry (1 mi = 1609,344 m). Strukturu tréninku zapiš do blocks a původní znění buňky nech v rawInstruction. Nic nedomýšlej; nejasné místo ukaž uživateli.
-- Když dokument uvádí týdenní součet, pošli ho v declaredTotalM. Nástroj vrátí kontrolu součtů; nesoulad oprav dřív, než budeš pokračovat.
-- Když dokument obsahuje tabulku temp, zeptej se na cílový čas a pošli odpovídající řádek jako paceChart (sekundy na kilometr).
+- Když dokument uvádí týdenní součet, pošli ho v declaredTotalM. Nástroj vrátí kontrolu součtů a varování k podezřelým jednotkám (rovinky dlouhé kilometry, chybějící pauzy, název nesedí s rozpisem). Jsou to jen varování: ukaž je, oprav podle dokumentu to, co uživatel potvrdí, a když je chce nechat, pokračuj.
+- Když dokument obsahuje tabulku temp, pošli ji jako paceChart (sekundy na kilometr): pásma ve widgetu pak budou podle autora plánu. Má-li tabulka řádky pro různé cílové časy, zeptej se na cílový čas a pošli odpovídající řádek.
 - Nakonec se zeptej, kdy má plán začít nebo kdy je závod, a zavolej activate_plan.`;
 
 const WORKOUT_HELP = 'Předpis jednotky: type, title, volitelně distanceM / durationSec / load / strengthMin / note / rawInstruction a povinné blocks (může být prázdné). Blok je {kind:"segment", role, distanceM nebo durationSec, intensity}, {kind:"repeat", count, work, more?, recovery?, recoveryAfterLast: true|false|null}, {kind:"strides", count, durationSec} nebo {kind:"note", text}. Úseky uvnitř repeat nemají kind.';
@@ -154,14 +154,16 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
     description: `Nahraje týdny plánu do rozpracovaného importu (nejvýš 4 týdny na volání, další volání přidává nebo přepisuje týdny podle čísla). Plán se do kalendáře zařadí až přes activate_plan. Vrací kontrolu týdenních součtů. ${WORKOUT_HELP}`,
     inputSchema: stageInput.shape,
     annotations: change,
-  }, (input) => write((ws) => stageWeeks(ws, input, nowIso())));
+    _meta: ui,
+  }, (input) => write((ws) => stageWeeks(ws, input, nowIso()), (ws) => importView(ws)));
 
   server.registerTool('draft_plan', {
     title: 'Postavit kostru nového plánu',
     description: 'Postaví kostru plánu z profilu běžce: rozložení běhů v týdnu, postupný růst objemu s lehčím každým 4. týdnem, klíčové tréninky a u závodu ubrání před ním. Uloží ji do rozpracovaného importu; jednotlivé týdny pak uprav přes import_plan_weeks a zařaď přes activate_plan.',
     inputSchema: draftInput.shape,
     annotations: change,
-  }, (input) => write((ws) => draftPlan(ws, input, nowIso())));
+    _meta: ui,
+  }, (input) => write((ws) => draftPlan(ws, input, nowIso()), (ws) => importView(ws)));
 
   server.registerTool('activate_plan', {
     title: 'Zařadit plán do kalendáře',

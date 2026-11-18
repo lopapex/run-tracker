@@ -17,6 +17,8 @@ export interface WorkoutNote {
   /** Okolnosti běhu (počasí, spánek, alkohol…), které vysvětlují odchylku od plánu. */
   conditions?: Condition[];
   note?: string;
+  /** Odhad výkonnosti (VDOT) z hodnoceného běhu. Jediné číslo odvozené z běhu, které se ukládá; data běhu ne. */
+  vdot?: number;
   at: string;
 }
 
@@ -47,6 +49,20 @@ export interface Workspace {
 }
 
 export const MAX_REVISIONS = 200;
+
+/** Signál únavy z posledních zápisů: dva ze tří posledních běhů těžké nebo s bolestí, nebo výrazná bolest v posledním týdnu.
+ *  Je to podnět k rozhovoru, ne diagnóza; rozpis se sám nemění. */
+export function fatigueOf(notes: WorkoutNote[], today: IsoDate): { kind: 'pain' | 'tired'; text: string } | null {
+  const from = new Date(Date.parse(today + 'T00:00:00Z') - 10 * 86_400_000).toISOString().slice(0, 10);
+  const recent = notes.filter((n) => n.date <= today && n.date >= from && (n.feel != null || n.pain != null)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+  const weekAgo = new Date(Date.parse(today + 'T00:00:00Z') - 7 * 86_400_000).toISOString().slice(0, 10);
+  if (recent.some((n) => n.pain === 'significant' && n.date >= weekAgo)) return { kind: 'pain', text: 'V posledním týdnu výrazná bolest.' };
+  const hurt = recent.filter((n) => n.pain === 'mild' || n.pain === 'significant').length;
+  const hard = recent.filter((n) => n.feel != null && n.feel <= 2).length;
+  if (hurt >= 2) return { kind: 'pain', text: `Bolest při ${hurt} z posledních ${recent.length} běhů.` };
+  if (hard + hurt >= 2) return { kind: 'tired', text: `${hard + hurt} z posledních ${recent.length} běhů byly těžké nebo bolely.` };
+  return null;
+}
 
 export function emptyWorkspace(): Workspace {
   return {

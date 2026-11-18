@@ -591,6 +591,61 @@ describe('konektor Run Tracker', () => {
     expect(future.text).not.toContain('Nezapsáno');
   });
 
+  it('import varuje u podezřelých jednotek, ale aktivaci nebrání', async () => {
+    const { call } = await connect(new MemoryStore());
+    const strides: WorkoutSpec = { type: 'easy', title: 'Easy 11 km + 5× 20s strides', blocks: [{ kind: 'segment', role: 'steady', distanceM: 11000, intensity: 'strides' }] };
+    const odd = { index: 1, phase: 'BUILD', days: [easy(10), speed, rest, strides, rest, easy(13), long(16)].map((workout, dow) => ({ dow, workout })) };
+    const imported = await call('import_plan_weeks', { name: 'Test', weeks: [odd], paceChart: { easy: { fromSec: 285, toSec: 315 }, '5k_pace': { fromSec: 330, toSec: 340 } } });
+    expect(imported.isError).toBe(false);
+    expect(imported.text).toContain('nejsou to chyby, které by import blokovaly');
+    expect(imported.text).toContain('Rovinky jsou krátké úseky');
+    expect(imported.text).toContain('vychází pomalejší');
+    expect(imported.data).toMatchObject({ view: 'import', name: 'Test', hasPaces: true, banner: { text: 'Nahráno: týden 1.' } });
+    expect(imported.data.warnings).toBeGreaterThanOrEqual(2);
+    expect(imported.data.weeks[0].issues[0]).toMatchObject({ day: 'čt', title: 'Easy 11 km + 5× 20s strides' });
+    // varování nic neblokují
+    expect((await call('activate_plan', { mode: 'start', date: '2026-11-16' })).isError).toBe(false);
+  });
+
+  it('dva těžké běhy po sobě ukážou upozornění na únavu', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const today = new Date().toISOString().slice(0, 10);
+    const plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text;
+    expect((await call('show_week', { date: today })).data.fatigue).toBeNull();
+    await call('set_status', { workoutId: idOf(plan, '2026-11-16', 'Easy Run'), status: 'completed', feel: 2 });
+    await call('set_status', { workoutId: idOf(plan, '2026-11-17', 'Speed Session'), status: 'partial', feel: 1 });
+    const week1 = await call('show_week', { date: today });
+    expect(week1.data.fatigue).toMatchObject({ kind: 'tired' });
+    expect(week1.text).toContain('Únava:');
+    expect((await call('get_plan')).text).toContain('Únava:');
+  });
+
+  it('odhad formy z úseků se uloží se zápisem a ukáže v plánu', async () => {
+    const { call } = await connect(new MemoryStore());
+    const intervals: WorkoutSpec = { type: 'speed', title: 'Speed', blocks: [
+      { kind: 'repeat', count: 4, work: { role: 'work', distanceM: 1600, intensity: '10k_pace' }, recovery: { role: 'recovery', durationSec: 120, intensity: 'walk' }, recoveryAfterLast: false },
+    ] };
+    const days = [intervals, easy(10), rest, easy(10), rest, easy(13), long(16)].map((workout, dow) => ({ dow, workout }));
+    await call('import_plan_weeks', { name: 'Plán', weeks: [{ index: 1, days }], paceChart: { easy: { fromSec: 285, toSec: 315 }, '10k_pace': { fromSec: 227, toSec: 233 } } });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    await call('set_profile', { raceDistanceM: 10000, raceTargetSec: 2310 });
+    const id = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Speed');
+    const reps = [378, 378, 378, 381].map((durationSec) => ({ distanceM: 1600, durationSec }));
+    const result = await call('show_result', { workoutId: id, run: { distanceM: 9000, movingSec: 2900, reps } });
+    expect(result.data.estimate.vdot).toBeGreaterThan(50);
+    expect(result.data.estimate.vdot).toBeLessThan(56);
+    expect(result.text).toContain('Odhad formy: VDOT');
+    // za větru se odhad nedělá: pomalejší úseky by formu podhodnotily
+    expect((await call('show_result', { workoutId: id, run: { distanceM: 9000, movingSec: 2900, reps }, conditions: ['wind'] })).data.estimate).toBeNull();
+    expect((await call('show_plan')).data.fitness).toBeNull();
+    await call('set_status', { workoutId: id, status: 'completed', estimateVdot: result.data.estimate.vdot });
+    const fitness = (await call('show_plan')).data.fitness;
+    expect(fitness).toMatchObject({ vdot: result.data.estimate.vdot, distanceM: 10000, targetSec: 2310 });
+    expect(fitness.predictedSec).toBeGreaterThan(2300);
+  });
+
   it('poznámky trenéra se ukládají do profilu a get_plan je vrací', async () => {
     const { call } = await connect(new MemoryStore());
     expect((await call('get_plan')).text).toContain('Poznámky trenéra: žádné.');

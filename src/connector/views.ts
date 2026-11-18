@@ -2,14 +2,15 @@
 // a strukturovaná data pro widget. Nic se tu neukládá; data běhu ze Stravy se jen přepočítají a vrátí.
 import { z } from 'zod';
 import { addDays, diffDays, dowOf, isIsoDate, todayIso, weekStartOf } from '../domain/dates';
-import { workoutDistance } from '../domain/distance';
+import { plannedDistance, workoutDistance } from '../domain/distance';
+import { lintPaceChart, lintWeek } from '../domain/lint';
 import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, workoutSummary } from '../domain/format';
 import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
 import { planSummaries, resolveId } from './tools';
 import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
-import { trainingPaces } from '../domain/vdot';
-import { CONDITIONS, type Condition, type Workspace } from './workspace';
+import { predictTime, trainingPaces, vdotFromRace } from '../domain/vdot';
+import { CONDITIONS, fatigueOf, type Condition, type Workspace } from './workspace';
 
 export type View = { ok: true; text: string; data: Record<string, unknown> } | { ok: false; text: string };
 const fail = (text: string): View => ({ ok: false, text });
@@ -124,12 +125,39 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
     return { date, dow: i, isToday: date === c.today, isPast: date < c.today, workouts: dayWorkouts(inWeek, date).map((w) => workoutCard(ws, w, c.chart)) };
   });
   const stats = weekStats(inWeek, c.chart, c.today);
+  // Únava se ukazuje jen v probíhajícím týdnu: u minulých a budoucích by rušila.
+  const fatigue = start === weekStartOf(c.today) ? fatigueOf(ws.notes, c.today) : null;
   const label = !mapping ? 'mimo plán' : mapping.sourceWeek == null ? 'pauza' : `týden ${mapping.sourceWeek} z ${template?.weeks.length ?? '?'}`;
   const next = days.flatMap((d) => d.workouts).find((w) => w.date >= c.today && w.status === 'scheduled' && w.type !== 'rest');
   return {
     ok: true,
-    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''} Uživatel widget vidí; neopakuj celý rozpis, jen krátce okomentuj.`,
-    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
+    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''} Uživatel widget vidí; neopakuj celý rozpis, jen krátce okomentuj.`,
+    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
+  };
+}
+
+// ---------- Kontrola importu ----------
+
+/** Rozpracovaný import po týdnech: součty proti autorovi a varování. Nic neblokuje, jen ukazuje. */
+export function importView(ws: Workspace): View {
+  const st = ws.staged;
+  if (!st || !st.weeks.length) return fail('Rozpracovaný import je prázdný.');
+  const chart = resolvePaceChart(ws.profile, st.paceChart);
+  const DAY = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
+  const weeks = st.weeks.map((w) => {
+    const r = plannedDistance(w.days.map((d) => d.workout), chart);
+    const declared = w.declaredTotalM ?? null;
+    const totals = declared == null ? 'none' : declared < r.minM - 500 || (!r.unknown && declared > r.maxM + 500) ? 'off' : r.unknown ? 'unknown' : 'ok';
+    return { index: w.index, phase: w.phase ?? null, kmMin: km(r.minM), kmMax: km(r.maxM), declaredKm: declared == null ? null : km(declared), totals, issues: lintWeek(w, chart).map((x) => ({ day: DAY[x.dow], title: x.title, text: x.text })) };
+  });
+  const missing: number[] = [];
+  for (let i = 1; i <= st.weeks[st.weeks.length - 1].index; i++) if (!st.weeks.some((w) => w.index === i)) missing.push(i);
+  const paceIssues = lintPaceChart(st.paceChart);
+  const count = weeks.reduce((s, w) => s + w.issues.length + (w.totals === 'off' ? 1 : 0), 0) + paceIssues.length;
+  return {
+    ok: true,
+    text: `Zobrazena kontrola importu „${st.name}“: ${st.weeks.length} týdnů, ${count} varování.`,
+    data: { view: 'import', name: st.name, weeks, missing, hasPaces: Boolean(st.paceChart && Object.keys(st.paceChart).length), paceIssues, warnings: count },
   };
 }
 
@@ -155,7 +183,7 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   return {
     ok: true,
     text: `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''} Uživatel widget vidí; jen krátce okomentuj.`,
-    data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) } },
+    data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) }, fitness: fitnessOf(ws) },
   };
 }
 
@@ -309,6 +337,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     return { n: i + 1, distanceM: Math.round(r.distanceM), durationSec: Math.round(r.durationSec), paceSec, avgHr: r.avgHr ?? null, offSec: target ? offBand(paceSec, target) : 0 };
   });
   const score = scoreOf(run.distanceM, planned.minM, planned.maxM, planned.unknown > 0, avgPaceSec, target, steady, conditions, reps);
+  const estimate = estimateOf(ws, target?.key, steady, run.distanceM, avgPaceSec, reps, conditions);
   const text = [
     `Zobrazeno hodnocení běhu proti jednotce ${w.workout.title} (${w.date}).`,
     `Běh ${formatKm(run.distanceM)}, průměrné tempo ${formatPace(avgPaceSec)}/km; plán ${planned.maxM ? `${String(km(planned.minM)).replace('.', ',')}${planned.maxM !== planned.minM ? `–${String(km(planned.maxM)).replace('.', ',')}` : ''} km` : 'bez dané vzdálenosti'}${planned.unknown ? ' + nevyčíslené úseky' : ''}.`,
@@ -316,6 +345,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     target && laps.length && !steady ? `V pásmu ${target.label} bylo ${inTarget} z ${laps.length} kol (počítají se i rozklus a pauzy).` : '',
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
+    estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}. Uloží se se zápisem z widgetu.` : '',
     'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Uživatel může stav, pocit a okolnosti uložit ve widgetu; krátce zhodnoť a případně navrhni úpravu dalších dnů.',
   ].filter(Boolean).join(' ');
   return {
@@ -324,9 +354,41 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     data: {
       ...base,
       run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps, reps },
-      score, verdict: { distance, pace, lapsInTarget: inTarget, steady },
+      score, estimate, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
   };
+}
+
+// ---------- Odhad formy ----------
+
+const RACE_OF: Record<string, { distanceM: number; label: string }> = {
+  '5k_pace': { distanceM: 5000, label: 'tempo na 5 km' }, '10k_pace': { distanceM: 10000, label: 'tempo na 10 km' },
+  hm_pace: { distanceM: 21097.5, label: 'tempo půlmaratonu' }, mp: { distanceM: 42195, label: 'maratonské tempo' },
+};
+const formatTime = (sec: number) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60); return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + ':' + String(s).padStart(2, '0'); };
+
+/** Odhad VDOT jen z úseků v závodním tempu (úseky nebo tempový běh) a bez okolností, které zpomalují.
+ *  Tempo úseků se bere jako závodní tempo dané vzdálenosti; protože jsou úseky kratší než závod, je odhad spíš optimistický. */
+function estimateOf(ws: Workspace, key: string | undefined, steady: boolean, distanceM: number, avgPaceSec: number, reps: RepRow[], conditions: Condition[]) {
+  const race = key ? RACE_OF[key] : undefined;
+  if (!race || conditions.some((x) => SLOWING.includes(x))) return null;
+  const repM = reps.reduce((s, r) => s + r.distanceM, 0);
+  const pace = reps.length && repM >= 2000 ? reps.reduce((s, r) => s + r.durationSec, 0) / (repM / 1000) : steady && distanceM >= 3000 ? avgPaceSec : null;
+  if (!pace) return null;
+  const vdot = Math.round(vdotFromRace(race.distanceM, pace * race.distanceM / 1000) * 10) / 10;
+  if (vdot < 20 || vdot > 90) return null;
+  const goal = ws.profile.raceDistanceM ?? 10000;
+  return { vdot, basis: reps.length ? `úseky v pásmu „${race.label}“` : `běh v pásmu „${race.label}“`, distanceM: goal, sec: predictTime(vdot, goal) };
+}
+
+/** Křivka formy z uložených odhadů: poslední tři zprůměrované jako současná forma. */
+function fitnessOf(ws: Workspace) {
+  const points = ws.notes.filter((n) => n.vdot != null).sort((a, b) => a.date.localeCompare(b.date)).map((n) => ({ date: n.date, vdot: n.vdot! }));
+  if (!points.length) return null;
+  const last = points.slice(-3);
+  const vdot = Math.round(last.reduce((s, p) => s + p.vdot, 0) / last.length * 10) / 10;
+  const distanceM = ws.profile.raceDistanceM ?? 10000;
+  return { points: points.slice(-20), vdot, distanceM, predictedSec: predictTime(vdot, distanceM), targetSec: ws.profile.raceTargetSec ?? null };
 }
 
 // ---------- Tempa z výkonu (VDOT) ----------

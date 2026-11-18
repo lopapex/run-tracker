@@ -7,8 +7,9 @@ import { plannedDistance } from '../domain/distance';
 import { blockLines, formatDistanceRange, formatKm, formatPace, resolvePaceChart, workoutSummary } from '../domain/format';
 import { createActivation, newId, planRange } from '../domain/schedule';
 import { defaultStart, generateWeeks, weeksUntil } from '../domain/generator';
+import { lintPaceChart, lintWeek } from '../domain/lint';
 import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
-import { CONDITIONS, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
+import { CONDITIONS, fatigueOf, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
 /** `banner` je krátké shrnutí pro widget, když je text pro model delší. */
 export type Outcome = { ok: true; text: string; changed: boolean; banner?: string } | { ok: false; text: string };
@@ -85,6 +86,7 @@ export const statusInput = z.object({
   pain: z.enum(['none', 'mild', 'significant']).optional(),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti běhu, které uživatel zmínil: cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore. Prázdné pole okolnosti smaže.'),
   note: z.string().max(300).optional(),
+  estimateVdot: z.number().min(20).max(90).optional().describe('Jen hodnota estimate.vdot z karty show_result; jinak neposílej.'),
 });
 
 // ---------- Pomocné ----------
@@ -112,7 +114,7 @@ function persist(ws: Workspace, snap: ScheduleSnapshot, rev: ConnectorRevision):
 }
 
 const noteOf = (ws: Workspace, workoutId: string): WorkoutNote | null => ws.notes.find((n) => n.workoutId === workoutId) ?? null;
-const sameNote = (a: WorkoutNote | null, b: WorkoutNote | null): boolean => (a?.feel ?? null) === (b?.feel ?? null) && (a?.pain ?? null) === (b?.pain ?? null) && (a?.note ?? null) === (b?.note ?? null) && [...(a?.conditions ?? [])].sort().join() === [...(b?.conditions ?? [])].sort().join();
+const sameNote = (a: WorkoutNote | null, b: WorkoutNote | null): boolean => (a?.feel ?? null) === (b?.feel ?? null) && (a?.pain ?? null) === (b?.pain ?? null) && (a?.note ?? null) === (b?.note ?? null) && [...(a?.conditions ?? [])].sort().join() === [...(b?.conditions ?? [])].sort().join() && (a?.vdot ?? null) === (b?.vdot ?? null);
 function putNote(ws: Workspace, workoutId: string, note: WorkoutNote | null): void {
   ws.notes = [...ws.notes.filter((n) => n.workoutId !== workoutId), ...(note ? [note] : [])];
 }
@@ -163,6 +165,8 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
   ].filter(Boolean);
   lines.push(about.length ? `Profil: ${about.join('; ')}.` : 'Profil je prázdný (záměr, objem a dny bez běhu nejsou zadané).');
   lines.push(p.coachNotes ? `Poznámky trenéra: ${p.coachNotes}` : 'Poznámky trenéra: žádné.');
+  const fatigue = fatigueOf(ws.notes, today);
+  if (fatigue) lines.push(`Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí dny; rozpis měň jen se souhlasem.`);
   const history = planSummaries(ws).filter((s) => !s.active || s.last < today);
   if (history.length) lines.push('Historie plánů:', ...history.slice(-5).map(summaryLine));
 
@@ -249,13 +253,18 @@ export function stageWeeks(ws: Workspace, input: z.infer<typeof stageInput>, now
   const chart = { ...ws.profile.paceChart, ...paceChart };
   const missing: number[] = [];
   for (let i = 1; i <= weeks[weeks.length - 1].index; i++) if (!byIndex.has(i)) missing.push(i);
-  return done([
+  const warnings = [...lintPaceChart(paceChart), ...input.weeks.flatMap((w) => lintWeek(byIndex.get(w.index)!, chart).map((x) => `T${w.index} ${DOW_LONG[x.dow as Dow]} „${x.title}“: ${x.text}`))];
+  const shown = input.weeks.map((w) => w.index);
+  return { ok: true, changed: true, text: [
     `Nahráno do rozpracovaného importu „${input.name}“: týdny ${weeks.map((w) => w.index).join(', ')}.`,
     missing.length ? `Chybí týdny ${missing.join(', ')}; doplň je dalším voláním.` : 'Týdny na sebe navazují od 1.',
     'Kontrola součtů:',
     ...input.weeks.map((w) => weekCheck({ ...w, days: byIndex.get(w.index)!.days }, chart)),
-    'Až budou všechny týdny nahrané a součty zkontrolované, zeptej se uživatele na začátek nebo datum závodu a zavolej activate_plan.',
-  ].join('\n'));
+    warnings.length ? `Varování (${warnings.length}; nejsou to chyby, které by import blokovaly – ukaž je uživateli a oprav jen to, co potvrdí podle dokumentu):` : 'Kontrola jednotek: bez varování.',
+    ...warnings.slice(0, 15).map((x) => '- ' + x),
+    warnings.length > 15 ? `- … a dalších ${warnings.length - 15}, celé jsou v kartě kontroly.` : '',
+    'Uživatel vidí kartu kontroly importu. Až budou všechny týdny nahrané, zeptej se na začátek nebo datum závodu a zavolej activate_plan; varování aktivaci nebrání.',
+  ].filter(Boolean).join('\n'), banner: `Nahráno: ${shown.length > 1 ? `týdny ${shown[0]}–${shown[shown.length - 1]}` : `týden ${shown[0]}`}.` };
 }
 
 export function activatePlan(ws: Workspace, input: z.infer<typeof activateInput>, now: string): Outcome {
@@ -314,7 +323,7 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
   const workout = ws.workouts.find((w) => w.id === wanted && w.activationId === activation.id);
   if (!workout) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
   const previous = noteOf(ws, workout.id);
-  const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}), ...(input.conditions != null ? { conditions: [...new Set(input.conditions)] } : {}) };
+  const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}), ...(input.conditions != null ? { conditions: [...new Set(input.conditions)] } : {}), ...(input.estimateVdot != null ? { vdot: Math.round(input.estimateVdot * 10) / 10 } : {}) };
   const noteChanged = !sameNote(previous, next);
   const statusChanged = workout.status !== input.status;
   if (!statusChanged && !noteChanged) return done('Beze změny, jednotka už tenhle stav i zápis má.', false);
@@ -429,6 +438,7 @@ export function draftPlan(ws: Workspace, input: z.infer<typeof draftInput>, now:
     restDows: input.restDows as Dow[], longRunDow: input.longRunDow as Dow, raceDate: input.raceDate, raceDistanceM: input.raceDistanceM, assumptions: [],
   });
   ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now };
+  // Kostra z generátoru se ukáže ve stejné kartě jako import, i s případnými varováními.
   const chart = resolvePaceChart(ws.profile);
   const volumes = generated.map((w) => `T${w.index} ${formatDistanceRange(plannedDistance(w.days.map((d) => d.workout), chart))} (${w.phase})`);
   return done([
