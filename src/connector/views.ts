@@ -273,7 +273,7 @@ function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, un
     const ratio = distanceM / (plannedMinM > 0 ? plannedMinM : plannedMaxM);
     const tooLong = !unknown && distanceM > plannedMaxM * 1.15;
     const value = ratio >= 0.97 ? (tooLong ? 90 : 100) : Math.max(0, Math.round(ratio * 100));
-    parts.push({ label: 'Vzdálenost', value, text: ratio >= 0.97 ? (tooLong ? 'výrazně delší než plán' : unknown ? 'odpovídá plánu; část jednotky je jen na čas, porovnání je přibližné' : 'odpovídá plánu') : `${Math.round(ratio * 100)} % plánované vzdálenosti` });
+    parts.push({ label: 'Vzdálenost', value, text: ratio >= 0.97 ? (tooLong ? 'výrazně delší než plán' : unknown ? 'odpovídá plánu (část jen na čas)' : 'odpovídá plánu') : `${Math.round(ratio * 100)} % plánované vzdálenosti` });
   }
   let paceWeight = 0.4;
   if (target && steady) {
@@ -281,7 +281,7 @@ function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, un
     const excused = slowerBy > 2 && conditions.some((c) => SLOWING.includes(c));
     const value = fasterBy > 2 ? Math.round(100 - Math.min(40, fasterBy * 2)) : slowerBy > 2 ? Math.round(100 - Math.min(40, slowerBy * 1.5)) : 100;
     if (excused) paceWeight = 0.15;
-    parts.push({ label: 'Tempo', value, text: fasterBy > 2 ? `o ${Math.round(fasterBy)} s/km rychleji než cílové pásmo` : slowerBy > 2 ? `o ${Math.round(slowerBy)} s/km pomaleji než cílové pásmo${excused ? '; okolnosti to vysvětlují, váha tempa je snížená' : ''}` : 'v cílovém pásmu' });
+    parts.push({ label: 'Tempo', value, text: fasterBy > 2 ? `o ${Math.round(fasterBy)} s/km rychleji než cílové pásmo` : slowerBy > 2 ? `o ${Math.round(slowerBy)} s/km pomaleji než cílové pásmo${excused ? ' (okolnosti to vysvětlují)' : ''}` : 'v cílovém pásmu' });
   }
   if (target && !steady && reps.length) {
     // U intervalů rozhoduje tempo rychlých úseků; vzdálenost celého běhu má menší váhu.
@@ -291,7 +291,7 @@ function scoreOf(distanceM: number, plannedMinM: number, plannedMaxM: number, un
     const excused = slower > 0 && conditions.some((c) => SLOWING.includes(c));
     paceWeight = excused ? 0.25 : 0.5;
     const trend = slower > faster ? 'pomaleji' : 'rychleji';
-    parts.push({ label: 'Úseky', value: Math.round(100 - Math.min(40, avgOff * 3)), text: `${inBand} z ${reps.length} v cílovém pásmu${avgOff >= 1 ? `, průměrně o ${Math.round(avgOff)} s/km ${trend}` : ''}${excused ? '; okolnosti to vysvětlují, váha tempa je snížená' : ''}` });
+    parts.push({ label: 'Úseky', value: Math.round(100 - Math.min(40, avgOff * 3)), text: `${inBand} z ${reps.length} v cílovém pásmu${avgOff >= 1 ? `, průměrně o ${Math.round(avgOff)} s/km ${trend}` : ''}${excused ? ' (okolnosti to vysvětlují)' : ''}` });
   }
   if (!parts.length) return null;
   const dist = parts.find((p) => p.label === 'Vzdálenost'), pace = parts.find((p) => p.label === 'Tempo' || p.label === 'Úseky');

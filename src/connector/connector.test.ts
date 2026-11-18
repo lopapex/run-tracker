@@ -487,7 +487,7 @@ describe('konektor Run Tracker', () => {
     // rychlostní trénink: úseky v tempu na 5 km nemají v tempech rozsah, takže jejich délka není známá
     const fast = await call('show_result', { workoutId: idOf(plan, '2026-11-17', 'Speed Session'), run: { distanceM: 9000, movingSec: 2900 } });
     expect(fast.data.score.parts[0]).toMatchObject({ label: 'Vzdálenost', value: 100 });
-    expect(fast.data.score.parts[0].text).toContain('přibližné');
+    expect(fast.data.score.parts[0].text).toContain('část jen na čas');
     expect(fast.data.verdict.distance).toBe('ok');
   });
 
