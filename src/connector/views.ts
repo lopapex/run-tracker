@@ -129,11 +129,10 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
   const fatigue = start === weekStartOf(c.today) ? fatigueOf(ws.notes, c.today) : null;
   const label = !mapping ? 'mimo plán' : mapping.sourceWeek == null ? 'pauza' : `týden ${mapping.sourceWeek} z ${template?.weeks.length ?? '?'}`;
   const next = days.flatMap((d) => d.workouts).find((w) => w.date >= c.today && w.status === 'scheduled' && w.type !== 'rest');
-  const summary = weekSummary(days.flatMap((d) => d.workouts), c.today);
   return {
     ok: true,
-    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${summary.length ? ` Shrnutí v kartě: ${summary.join(' ')}` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''}`,
-    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, summary, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
+    text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''}`,
+    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, authorNote: source?.note ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
   };
 }
 
@@ -358,30 +357,6 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
       score, estimate, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
   };
-}
-
-// ---------- Shrnutí karet ----------
-
-const DOW_CS = ['pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota', 'neděle'];
-const kmText = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
-const plural = (n: number, one: string, few: string, many: string) => (n === 1 ? one : n > 1 && n < 5 ? few : many);
-type Card = ReturnType<typeof workoutCard>;
-
-/** Týden: co zbývá a který trénink je klíčový. */
-function weekSummary(cards: Card[], today: string): string[] {
-  const runs = cards.filter((w) => !NOT_RUN.has(w.type));
-  const left = runs.filter((w) => w.status === 'scheduled' && w.date >= today);
-  if (!runs.length) return [];
-  if (!left.length) {
-    const done = runs.filter((w) => w.status === 'completed' || w.status === 'partial').length;
-    return [runs[runs.length - 1].date < today || done === runs.length ? `Týden je za tebou: splněno ${done} z ${runs.length} běhů.` : 'Na tento týden už nic nezbývá.'];
-  }
-  const rank = (w: Card) => (w.type === 'race' ? 4 : w.type === 'speed' || w.type === 'tempo' ? 3 : w.type === 'long' ? 2 : 1);
-  const key = [...left].sort((a, b) => rank(b) - rank(a) || a.date.localeCompare(b.date))[0];
-  const out = [`Zbývá ${left.length} ${plural(left.length, 'běh', 'běhy', 'běhů')}, ${kmText(left.reduce((s, w) => s + w.kmMax, 0))} km.`];
-  const kind = key.type === 'race' ? 'závod' : key.type === 'long' ? 'dlouhý běh' : key.type === 'tempo' ? 'tempový běh' : 'rychlý trénink';
-  if (rank(key) > 1) out.push(`Klíčový je ${kind}${key.kmMax ? ` ${kmText(key.kmMax)} km` : ''} (${key.date === today ? 'dnes' : DOW_CS[dowOf(key.date)]}).`);
-  return out;
 }
 
 // ---------- Odhad formy ----------
