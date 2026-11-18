@@ -780,14 +780,21 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);
     setTimeout(reportSize, 60);
+    setTimeout(reportSize, 400);
   }
-  // Výška se měří z karty, ne z dokumentu: dokument nikdy neklesne pod výšku, kterou mu hostitel dal,
-  // takže by po zmenšení obsahu zůstalo dole prázdné místo.
+  // Stejně jako oficiální SDK MCP Apps: dokument se změří s height: max-content (vlastní výška obsahu,
+  // ne výška rámu od hostitele) a posílá se výška i šířka. Jen tak hostitel kartu po přepnutí
+  // na kratší záložku i zmenší; z výšky samotné a z výšky rámu zůstávalo dole prázdné místo.
+  var lastSentWidth = 0;
   function reportSize() {
-    var h = Math.ceil(app.getBoundingClientRect().height);
-    if (Math.abs(h - lastHeight) < 1) return;
-    lastHeight = h;
-    notify('ui/notifications/size-changed', { height: h });
+    var root = document.documentElement, prev = root.style.height;
+    root.style.height = 'max-content';
+    var h = Math.ceil(root.getBoundingClientRect().height);
+    root.style.height = prev;
+    var w = Math.ceil(window.innerWidth);
+    if (Math.abs(h - lastHeight) < 1 && w === lastSentWidth) return;
+    lastHeight = h; lastSentWidth = w;
+    notify('ui/notifications/size-changed', { width: w, height: h });
     if (oai && typeof oai.notifyIntrinsicHeight === 'function') { try { oai.notifyIntrinsicHeight(h); } catch (err) { /* hostitel výšku neumí */ } }
   }
   if (window.ResizeObserver) {
