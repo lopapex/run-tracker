@@ -42,7 +42,7 @@ Vizualizace:
 - Když chce uživatel vidět týden nebo se ptá „co mám dnes“, použij show_week. Celý plán a postup ukáže show_plan. Tempa, převody a rozpis úseků show_paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 - Na jednu otázku stačí jedna karta: zavolej jediný zobrazovací nástroj (show_week, show_plan, show_paces), ne dva po sobě. Karta má záložky Týden, Plán a Tempa, mezi kterými si uživatel přepne sám. „Ukaž plán“ bez upřesnění znamená show_week (co ho teď čeká); show_plan jen u celkového přehledu, postupu nebo objemu.
 - Nástroje, které mění rozpis, samy vykreslí aktualizovaný týden. Po nich už žádný show_* nevolej.
-- Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta a shrnutí ukazuje karta; za ni napiš jen krátce radu a souvislosti, které karta nemá (co z toho plyne pro další dny, okolnosti, otázka). Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
+- Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta a shrnutí ukazuje karta; za ni napiš nejvýš dvě krátké věty s radou nebo otázkou, kterou karta nemá. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
 
 Import plánu z dokumentu (PDF, obrázek, tabulka, text):
 - Přepiš plán po týdnech přes import_plan_weeks, nejvýš 4 týdny na jedno volání. Každý týden má všech 7 dní (0 = pondělí … 6 = neděle); volný den je typ rest s prázdnými blocks.
@@ -95,6 +95,8 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
       const outcome = fn(ws);
       if (!outcome.ok || !outcome.changed) return reply(outcome);
       if (JSON.stringify(ws).length > MAX_WORKSPACE_BYTES) return reply({ ok: false, text: 'Plán a jeho historie jsou příliš velké na uložení. Změna se neprovedla.' });
+      // Změna vykreslí kartu sama; show_* hned po ní by přidal duplikát.
+      if (after) ws.shownAt = nowIso();
       if (!(await store.save(id, ws, current?.etag))) continue;
       const view = after?.(ws);
       if (!view?.ok) return reply(outcome);
@@ -103,18 +105,31 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
       const banner = outcome.banner ?? outcome.text.split('\n').filter((line) => !line.startsWith('Změna ') && line !== 'Zápis k jednotce uložen.').join(' ');
       const last = ws.revisions[ws.revisions.length - 1];
       const undoable = last && last.id !== lastBefore && last.operation !== 'REVERT' ? last.id.slice(0, 8) : null;
-      return { content: text(`${outcome.text}\nUživatel vidí kartu se všemi čísly i shrnutím. Odpověz krátce: rada a souvislosti, které karta neukazuje (plán dalších dní, okolnosti, co z toho plyne). Čísla, tempa, úseky, data, rozpis ani shrnutí z karty nepiš znovu; žádné nadpisy ani odrážky.`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
+      return { content: text(`ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.\n${outcome.text}`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
     }
     return reply({ ok: false, text: 'Plán se právě měnil z jiného místa a změnu se nepodařilo uložit. Zkus to znovu.' });
   };
 
   // Přehledové karty mají záložky; druhé volání by jen vykreslilo další kartu pod první.
   const TABBED = new Set(['week', 'plan', 'paces', 'finished', 'empty']);
-  const show = async (fn: (ws: Workspace) => View) => {
-    const view = fn(await load());
+  // Model občas zavolá dvě přehledové karty za sebou (plán i týden). Druhá do 15 s se nevykreslí:
+  // karta má záložky, takže by jen přidala duplikát. Volání z karty samotné (záložky) nesou fromCard.
+  const SHOWN_WINDOW_MS = 15_000;
+  const show = async (fn: (ws: Workspace) => View, fromCard?: boolean) => {
+    const current = await store.load(id);
+    const ws = current?.ws ?? emptyWorkspace();
+    const view = fn(ws);
     if (!view.ok) return { content: text(view.text), isError: true };
-    const hint = (TABBED.has(String(view.data.view)) ? ' Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj už nevolej.' : '') + ' Uživatel vidí kartu se všemi čísly i shrnutím. Odpověz krátce: rada a souvislosti, které karta neukazuje (plán dalších dní, okolnosti, co z toho plyne). Čísla, tempa, úseky, data, rozpis ani shrnutí z karty nepiš znovu; žádné nadpisy ani odrážky.';
-    return { content: text(view.text + hint), structuredContent: view.data };
+    const tabbed = TABBED.has(String(view.data.view));
+    if (tabbed && !fromCard && current) {
+      if (ws.shownAt && Date.now() - Date.parse(ws.shownAt) < SHOWN_WINDOW_MS) {
+        return { content: text('Přehledová karta je v této odpovědi už zobrazená výše a má záložky Týden, Plán a Tempa. Tahle se nevykreslí. ' + 'ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.'), structuredContent: { view: 'none' } };
+      }
+      ws.shownAt = new Date().toISOString();
+      await store.save(id, ws, current.etag).catch(() => false);
+    }
+    const hint = tabbed ? 'Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj nevolej. ' : '';
+    return { content: text('ODPOVĚĎ: nejvýš dvě krátké věty, jen rada nebo otázka, kterou karta nemá. Uživatel v kartě vidí všechna čísla i shrnutí; nic z karty (čísla, tempa, úseky, dny, názvy tréninků) nepiš znovu, žádné nadpisy ani odrážky. Když není co dodat, napiš jen krátkou větu.\n' + hint + view.text), structuredContent: view.data };
   };
 
   const readOnly = { readOnlyHint: true, openWorldHint: false };
@@ -126,6 +141,7 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   const date = z.string().describe('Datum RRRR-MM-DD.');
   // Celé schéma předpisu je jen u import_plan_weeks; tady by se v každé konverzaci opakovalo dvakrát navíc.
   const workoutShape = z.record(z.string(), z.unknown()).describe('Předpis jednotky ve stejném tvaru jako dny v import_plan_weeks (type, title, blocks…).');
+  const fromCard = z.boolean().optional().describe('Jen pro kartu samotnou; nevyplňuj.');
   const touchedWeek = (ws: Workspace) => weekView(ws, { date: touchedDate(ws) });
 
   // Widget kreslí vlastní kartu s okrajem; hostitel ji už nemá orámovat podruhé.
@@ -270,26 +286,26 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   server.registerTool('show_week', {
     title: 'Ukázat týden',
     description: 'Vykreslí týden jako widget: sedm dní s jednotkami a jejich stavem, dnešek, splněné kilometry proti plánu a rozbalenou nejbližší jednotku s tlačítky pro splnění, přesun a vynechání. Bez data ukáže probíhající týden.',
-    inputSchema: weekViewInput.shape,
+    inputSchema: { ...weekViewInput.shape, fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, (input) => show((ws) => weekView(ws, input)));
+  }, (input) => show((ws) => weekView(ws, input), input.fromCard));
 
   server.registerTool('show_plan', {
     title: 'Ukázat celý plán',
     description: 'Vykreslí přehled celého plánu: týdenní objem po fázích, co je splněno, dlouhé běhy, kde uživatel právě je a kolik zbývá do závodu.',
-    inputSchema: {},
+    inputSchema: { fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, () => show((ws) => planView(ws)));
+  }, (input) => show((ws) => planView(ws), input.fromCard));
 
   server.registerTool('show_paces', {
     title: 'Pomocník temp',
     description: 'Vykreslí uložená tréninková tempa jako pásma s převodem na čas 400 m a rychlost na pásu. S workoutId přidá rozpis úseků jednotky: kolik metrů vyjde časový úsek a za kolik se má běžet úsek daný vzdáleností.',
-    inputSchema: paceViewInput.shape,
+    inputSchema: { ...paceViewInput.shape, fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, (input) => show((ws) => paceView(ws, input)));
+  }, (input) => show((ws) => paceView(ws, input), input.fromCard));
 
   server.registerTool('calculate_paces', {
     title: 'Spočítat tempa z výkonu',

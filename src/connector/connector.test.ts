@@ -17,7 +17,9 @@ async function connect(store: MemoryStore, key = KEY_A) {
   });
   await client.connect(transport);
   const call = async (name: string, args: Record<string, unknown> = {}) => {
-    const result = await client.callTool({ name, arguments: args });
+    // Testy přepínají karty rychle za sebou jako záložky; pojistku proti druhé kartě zkouší vlastní test.
+    const withCard = /^show_(week|plan|paces)$/.test(name) && !('fromCard' in args) ? { ...args, fromCard: true } : args;
+    const result = await client.callTool({ name, arguments: withCard });
     const text = (result.content as Array<{ type: string; text: string }>).map((c) => c.text).join('\n');
     return { text, isError: result.isError === true, data: result.structuredContent as any };
   };
@@ -648,6 +650,24 @@ describe('konektor Run Tracker', () => {
     const fitness = (await call('show_plan')).data.fitness;
     expect(fitness).toMatchObject({ vdot: result.data.estimate.vdot, distanceM: 10000, targetSec: 2310 });
     expect(fitness.predictedSec).toBeGreaterThan(2300);
+  });
+
+  it('druhá přehledová karta hned po první se nevykreslí, záložky v kartě ano', async () => {
+    const store = new MemoryStore();
+    const { call } = await connect(store);
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    // zařazení plánu kartu vykreslilo samo
+    expect((await call('show_plan', { fromCard: false })).data).toEqual({ view: 'none' });
+    const saved = (await store.load(await workspaceId(KEY_A)))!;
+    delete saved.ws.shownAt;
+    await store.save(await workspaceId(KEY_A), saved.ws, saved.etag);
+    expect((await call('show_plan', { fromCard: false })).data.view).toBe('plan');
+    const second = await call('show_week', { fromCard: false });
+    expect(second.data).toEqual({ view: 'none' });
+    expect(second.text).toContain('už zobrazená výše');
+    expect((await call('show_week', { fromCard: true })).data.view).toBe('week');
+    expect((await call('show_result', { workoutId: idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run') })).data.view).toBe('result');
   });
 
   it('poznámky trenéra se ukládají do profilu a get_plan je vrací', async () => {

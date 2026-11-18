@@ -394,7 +394,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   });
 
   // ---------- Společné části ----------
+  var CARD_VIEWS = { show_week: 1, show_plan: 1, show_paces: 1 };
   function opener(label, name, args, fallback, extra) {
+    if (CARD_VIEWS[name]) args = Object.assign({}, args, { fromCard: true });
     return '<button type="button" data-open="' + name + '" data-args="' + esc(JSON.stringify(args || {})) + '" data-fallback="' + esc(fallback) + '"' + (extra || '') + '>' + label + '</button>';
   }
   function head(current, d) {
@@ -780,6 +782,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var width = app.clientWidth - 28;
     lastWidth = app.clientWidth;
     if (!data) app.innerHTML = head('', null) + '<p class="empty">' + esc(plain) + '</p>';
+    else if (data.view === 'none') app.innerHTML = '';
     else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'import' ? renderImport(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);

@@ -46,6 +46,8 @@ export interface Workspace {
   revisions: ConnectorRevision[];
   notes: WorkoutNote[];
   staged?: StagedImport;
+  /** Kdy model naposledy vykreslil přehledovou kartu; druhá hned po ní se nevykreslí. */
+  shownAt?: string;
 }
 
 export const MAX_REVISIONS = 200;

@@ -382,7 +382,8 @@ function weekSummary(cards: Card[], today: string): string[] {
   const rank = (w: Card) => (w.type === 'race' ? 4 : w.type === 'speed' || w.type === 'tempo' ? 3 : w.type === 'long' ? 2 : 1);
   const key = [...left].sort((a, b) => rank(b) - rank(a) || a.date.localeCompare(b.date))[0];
   const out = [`Zbývá ${left.length} ${plural(left.length, 'běh', 'běhy', 'běhů')}, ${kmText(left.reduce((s, w) => s + w.kmMax, 0))} km.`];
-  if (rank(key) > 1) out.push(`Klíčový je ${key.title} (${key.date === today ? 'dnes' : DOW_CS[dowOf(key.date)]}).`);
+  const kind = key.type === 'race' ? 'závod' : key.type === 'long' ? 'dlouhý běh' : key.type === 'tempo' ? 'tempový běh' : 'rychlý trénink';
+  if (rank(key) > 1) out.push(`Klíčový je ${kind}${key.kmMax ? ` ${kmText(key.kmMax)} km` : ''} (${key.date === today ? 'dnes' : DOW_CS[dowOf(key.date)]}).`);
   return out;
 }
 
