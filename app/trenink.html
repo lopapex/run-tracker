@@ -157,6 +157,9 @@ html, body { background: var(--bg); color: var(--ink); font-family: var(--font);
   function tool(name, args) {
     if (name === 'strava_evaluate') return evaluate(args);
     if (name === 'strava_fill_week') return fillWeek(args);
+    // Záložky Plán a Tempa jsou nástroje jen pro kartu v chatu; stránka je čte přes show_week s tab.
+    if (name === 'show_plan') return rt('show_week', { tab: 'plan', fromCard: true });
+    if (name === 'show_paces') return rt('show_week', args.workoutId ? { tab: 'paces', workoutId: args.workoutId, fromCard: true } : { tab: 'paces', fromCard: true });
     return rt(name, args);
   }
 
