@@ -2,194 +2,312 @@
 <html lang="cs">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Run Tracker</title>
 <style>
+/* Run Tracker: karta v chatu i celá aplikace (stránka Trénink a PWA). Barva = intenzita tréninku, plná = splněno. */
 :root {
   color-scheme: light;
-  --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --wash: rgba(11,11,11,.04);
-  --s1: #2a78d6; --s1-soft: #b7d3f6; --s2: #eb6834; --band: rgba(42,120,214,.13);
-  --good: #0ca30c; --good-ink: #006300; --warn: #fab219; --warn-ink: #7a5200; --crit: #d03b3b;
+  --bg: #f3f3ef; --surface: #ffffff; --raised: #f5f6f2; --ink: #0f1a14; --ink2: #4d5851; --muted: #858e88;
+  --line: #e5e7e1; --line2: #cdd2ca; --wash: rgba(15,26,20,.05);
+  --primary: #0f1a14; --on-primary: #ffffff; --accent: #1f7a45;
+  --easy: #2a9a8b; --long: #3a66d1; --tempo: #d68a06; --speed: #e0464b; --race: #0f1a14; --other: #8f978f;
+  --good: #1f7a45; --warn: #d99000; --warn-ink: #855700; --crit: #d23b3b;
+  --sat: 0px; --sab: 0px;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
-    --s1: #3987e5; --s1-soft: #23405f; --s2: #d95926; --band: rgba(57,135,229,.18);
-    --good: #0ca30c; --good-ink: #0ca30c; --warn: #fab219; --warn-ink: #fab219; --crit: #e66767;
+    --bg: #0b0f0d; --surface: #141a17; --raised: #1b221e; --ink: #eef2ec; --ink2: #b2bbb4; --muted: #7c867f;
+    --line: #243029; --line2: #36423b; --wash: rgba(255,255,255,.05);
+    --primary: #c8f031; --on-primary: #0f1a14; --accent: #c8f031;
+    --easy: #4fc4b3; --long: #7299f2; --tempo: #f0ae3c; --speed: #ff6b6f; --race: #eef2ec; --other: #7c867f;
+    --good: #74d08f; --warn: #f0ae3c; --warn-ink: #f2bb55; --crit: #ff7474;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
-  --s1: #3987e5; --s1-soft: #23405f; --s2: #d95926; --band: rgba(57,135,229,.18);
-  --good: #0ca30c; --good-ink: #0ca30c; --warn: #fab219; --warn-ink: #fab219; --crit: #e66767;
+  --bg: #0b0f0d; --surface: #141a17; --raised: #1b221e; --ink: #eef2ec; --ink2: #b2bbb4; --muted: #7c867f;
+  --line: #243029; --line2: #36423b; --wash: rgba(255,255,255,.05);
+  --primary: #c8f031; --on-primary: #0f1a14; --accent: #c8f031;
+  --easy: #4fc4b3; --long: #7299f2; --tempo: #f0ae3c; --speed: #ff6b6f; --race: #eef2ec; --other: #7c867f;
+  --good: #74d08f; --warn: #f0ae3c; --warn-ink: #f2bb55; --crit: #ff7474;
 }
+.t-easy { --tone: var(--easy); } .t-long { --tone: var(--long); } .t-tempo { --tone: var(--tempo); }
+.t-speed { --tone: var(--speed); } .t-race { --tone: var(--race); } .t-other, .t-rest { --tone: var(--other); }
+
 * { box-sizing: border-box; }
 html, body { height: auto; min-height: 0; margin: 0; background: transparent; overflow: hidden; }
-body { color: var(--ink); font: 14px/1.45 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif); }
-#app { position: relative; max-width: 540px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: opacity .15s; }
-#app.busy { opacity: .6; pointer-events: none; }
-button { font: inherit; color: inherit; }
-button:focus-visible, a:focus-visible, summary:focus-visible, [data-open]:focus-visible, [data-tip]:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+body { color: var(--ink); font: 14px/1.45 var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+#app { position: relative; max-width: 560px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; transition: opacity .15s; }
+#app.busy { opacity: .62; pointer-events: none; }
+button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, summary:focus-visible, [data-open]:focus-visible, [data-tip]:focus-visible { outline: 2px solid var(--long); outline-offset: 2px; }
+.num, .big, table, .zr, svg text { font-variant-numeric: tabular-nums; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* aplikace: celá obrazovka, záložky dole */
+html.app, html.app body { height: 100%; overflow: auto; background: var(--bg); }
+html.app body { overscroll-behavior-y: none; }
+html.app #app { max-width: 620px; min-height: 100%; margin: 0 auto; padding: calc(14px + var(--sat)) 16px calc(96px + var(--sab)); border: 0; border-radius: 0; background: var(--bg); overflow: visible; font-size: 15px; }
+html.app #app.busy { opacity: 1; }
+html.app #app.busy::before { content: ""; position: fixed; top: var(--sat); left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: load 1s linear infinite; z-index: 9; }
+@keyframes load { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 6px max(8px, calc(50% - 300px)) calc(6px + var(--sab)); background: color-mix(in srgb, var(--surface) 88%, transparent); border-top: 1px solid var(--line); -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px); }
+.tabbar button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; padding: 6px 0 2px; border: 0; background: none; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+.tabbar button svg { width: 24px; height: 24px; }
+.tabbar button[aria-current="true"] { color: var(--ink); }
+.tabbar button[aria-current="true"] svg { color: var(--accent); }
+html:not([data-theme="dark"]) .tabbar button[aria-current="true"] svg { color: var(--ink); }
 
 /* záhlaví */
-.tabs { display: flex; gap: 4px; margin: -2px 0 12px; padding: 3px; border-radius: 10px; background: var(--wash); }
-.tabs button { flex: 1; min-height: 40px; border: 0; border-radius: 8px; background: none; color: var(--ink2); font-weight: 600; cursor: pointer; }
-.tabs button[aria-current="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
-.eyebrow { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-h2 { margin: 2px 0 0; font-size: 19px; line-height: 1.2; letter-spacing: -.01em; }
-h3 { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.tabs { display: flex; gap: 2px; margin: -4px -4px 14px; padding: 3px; border-radius: 12px; background: var(--wash); }
+.tabs button { flex: 1; min-height: 40px; border: 0; border-radius: 9px; background: none; color: var(--ink2); font-weight: 600; cursor: pointer; }
+.tabs button[aria-current="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px var(--line); }
+.eyebrow { color: var(--muted); font-size: 11.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+h2 { margin: 2px 0 0; font-size: 22px; line-height: 1.15; letter-spacing: -.02em; font-weight: 750; }
+h3 { margin: 22px 0 10px; color: var(--ink2); font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
 .sub { color: var(--ink2); font-size: 13px; }
-.head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
-.head .title { text-align: center; }
-.nav { display: flex; gap: 6px; flex: none; }
-.nav button { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 18px; cursor: pointer; }
-.nav button[disabled] { opacity: .35; cursor: default; }
+.top { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.top .mid { text-align: center; min-width: 0; }
+.ib { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); cursor: pointer; transition: transform .12s, border-color .15s; }
+.ib svg { width: 20px; height: 20px; }
+.ib[disabled] { opacity: .3; cursor: default; }
+.ib:active:not([disabled]) { transform: scale(.94); }
+.jump { display: flex; justify-content: center; margin-top: 6px; }
+.jump button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--wash); color: var(--ink); font-size: 12.5px; font-weight: 650; cursor: pointer; }
+
+/* tlačítka */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line2); border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 650; line-height: 1.2; text-decoration: none; cursor: pointer; transition: transform .12s, background-color .15s, border-color .15s, filter .15s; }
+.btn svg { flex: none; width: 18px; height: 18px; }
+.btn:active { transform: scale(.97); }
+.btn.primary { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.btn.block { width: 100%; min-height: 54px; border-radius: 15px; font-size: 16px; }
+.btn.soft { border-color: transparent; background: var(--wash); }
+@media (hover: hover) { .btn:hover { border-color: var(--ink2); } .btn.primary:hover { filter: brightness(1.12); } .btn.soft:hover { background: var(--line); } }
+.a-main { margin-top: 14px; }
+.a-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.a-pair .btn[aria-expanded="true"] { border-color: var(--ink); }
+.a-more { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; }
+.a-more button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 60px; padding: 8px 4px; border: 0; border-radius: 12px; background: var(--wash); color: var(--ink); font-size: 12px; font-weight: 650; line-height: 1.2; text-align: center; cursor: pointer; transition: transform .12s, background-color .15s; }
+.a-more button:active { transform: scale(.96); }
+@media (hover: hover) { .a-more button:hover { background: var(--line); } }
+.a-more svg { width: 20px; height: 20px; color: var(--ink2); }
+.a-more svg.i-strava { color: #fc4c02; }
+.a-more button { position: relative; }
+.a-more svg.ext { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; }
+.ext { width: 13px !important; height: 13px !important; opacity: .6; }
 
 /* hlášky */
-.note { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.note { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: var(--wash); font-size: 13.5px; }
 .note > span { flex: 1; min-width: 0; }
-.note.ok { border-color: var(--good); }
-.note.err { border-color: var(--crit); }
-.note.warn { border-color: var(--warn); }
-.note button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-weight: 600; cursor: pointer; }
+.note.ok { background: color-mix(in srgb, var(--good) 13%, transparent); }
+.note.err { background: color-mix(in srgb, var(--crit) 13%, transparent); }
+.note.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.note .ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 800; }
+.note.ok .ic { background: var(--good); color: var(--surface); }
+.note.warn .ic { background: var(--warn); color: #1a1200; }
+.note.err .ic { background: var(--crit); color: #fff; }
+.note .btn { min-height: 38px; padding: 0 12px; font-size: 13px; }
+
+/* týden: objem a pás dní */
+.vol { margin-top: 14px; padding: 14px 14px 10px; border-radius: 16px; background: var(--raised); }
+html.app .vol { background: var(--surface); }
+.vol-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.k { color: var(--ink2); font-size: 12px; font-weight: 600; }
+.big { font-size: 34px; font-weight: 750; line-height: 1; letter-spacing: -.03em; }
+.big small { margin-left: 3px; color: var(--muted); font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.vol-side { display: grid; gap: 3px; text-align: right; font-size: 12.5px; color: var(--ink2); }
+.vol-side b { color: var(--ink); font-size: 14px; font-weight: 700; }
+.prog { height: 4px; margin-top: 12px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.prog i { display: block; height: 100%; border-radius: 2px; background: var(--ink); }
+.strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.sd { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; padding: 0; border: 0; background: none; text-align: center; cursor: pointer; }
+.sd .sb { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 56px; }
+.sd .sb i { display: block; width: 100%; max-width: 30px; min-height: 6px; border-radius: 6px; }
+.sd .sb i.done { background: var(--tone); }
+.sd .sb i.plan { background: color-mix(in srgb, var(--tone) 22%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 55%, transparent); }
+.sd .sb i.miss { background: color-mix(in srgb, var(--warn) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--warn); }
+.sd .sb i.skip { background: none; box-shadow: inset 0 0 0 1.5px var(--line2); opacity: .7; }
+.sd .sb i.rest { height: 3px; min-height: 3px; max-width: 14px; border-radius: 2px; background: var(--line2); }
+.sd .sl { color: var(--muted); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
+.sd .sn { margin-top: -4px; color: var(--ink2); font-size: 12px; }
+.sd.today .sl, .sd.today .sn { color: var(--ink); }
+.sd.today .sn { display: inline-block; align-self: center; min-width: 22px; padding: 0 5px; border-radius: 999px; background: var(--ink); color: var(--surface); font-weight: 700; }
+div.sd { cursor: default; }
+
+/* hlavní trénink */
+.hero { position: relative; margin-top: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+.hero::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--tone); }
+.hero-k { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--tone) 15%, transparent); color: var(--ink); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
+.hero h2 { margin-top: 6px; font-size: 26px; }
+.hero-m { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-top: 8px; }
+.hero-m .big small { font-size: 14px; }
+.hero-m .pc { color: var(--ink2); font-size: 13px; }
+.hero-m .pc b { color: var(--ink); font-size: 17px; font-weight: 700; }
+.state { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 650; }
+.state .mk { width: 22px; height: 22px; }
+
+/* rozpis jednotky */
+.steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 2px; }
+.steps li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 0 6px 14px; font-size: 13.5px; }
+.steps li::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 4px; border-radius: 2px; background: var(--tone); }
+.steps li.t-rest::before { background: var(--line2); }
+.steps li b { font-weight: 650; }
+.steps .p { color: var(--ink2); font-size: 13px; white-space: nowrap; }
+
+/* seznam dní */
+.days { list-style: none; margin: 16px 0 0; padding: 0; }
+.day + .day { border-top: 1px solid var(--line); }
+.row { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%; min-height: 60px; padding: 10px 4px 10px 14px; border: 0; border-radius: 12px; background: none; text-align: left; cursor: pointer; }
+.row::before { content: ""; position: absolute; left: 2px; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background: var(--tone); opacity: .35; }
+.row.st-completed::before, .row.st-partial::before { opacity: 1; }
+.row.st-skipped::before { opacity: .15; }
+div.row { cursor: default; }
+.day.rest .row::before { display: none; }
+.row[aria-expanded="true"] { background: var(--raised); }
+html.app .row[aria-expanded="true"] { background: var(--surface); }
+.row .when { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.row .when b { display: block; color: var(--ink); font-size: 13px; font-weight: 700; text-transform: capitalize; }
+.day.today .when b::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--accent); vertical-align: 2px; }
+.row .what, .row .t, .row .s { display: block; min-width: 0; }
+.row .t { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .s { margin-top: 1px; color: var(--ink2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.st-skipped .t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line2); }
+.day.rest .t { color: var(--muted); font-weight: 500; }
+.row .end { display: flex; align-items: center; gap: 10px; }
+.row .km { min-width: 28px; text-align: right; font-weight: 700; font-size: 15px; }
+.row .km small { color: var(--muted); font-size: 11px; font-weight: 600; }
+.mk { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line2); color: var(--surface); font-size: 12px; font-weight: 800; }
+.mk svg { width: 14px; height: 14px; }
+.mk-completed { background: var(--tone, var(--good)); box-shadow: none; }
+.mk-partial { background: conic-gradient(var(--tone, var(--good)) 0 50%, transparent 50% 100%); box-shadow: inset 0 0 0 1.5px var(--tone, var(--good)); }
+.mk-skipped { box-shadow: none; background: var(--wash); color: var(--muted); }
+.mk-miss { box-shadow: inset 0 0 0 1.5px var(--warn); color: var(--warn-ink); }
+.mk-now { box-shadow: inset 0 0 0 2px var(--ink); }
+.acts { padding: 4px 4px 16px 14px; }
+.acts .steps { margin-top: 0; }
+
+/* pocit */
+.feel { margin-top: 14px; }
+.feel .fk { display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--ink2); font-size: 12px; font-weight: 600; }
+.feel .fk span { color: var(--ink); }
+.scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.scale button { min-height: 46px; padding: 0; border: 1px solid var(--line2); border-radius: 12px; background: var(--surface); font-size: 16px; font-weight: 700; cursor: pointer; transition: transform .12s, background-color .15s; }
+.scale button:active { transform: scale(.95); }
+.scale button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.daypick { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.daypick button { position: relative; min-height: 48px; padding: 2px 0; border: 1px solid var(--line2); border-radius: 10px; background: var(--surface); font-size: 11.5px; line-height: 1.15; cursor: pointer; }
+.daypick button b { display: block; font-size: 13px; text-transform: capitalize; }
+.daypick button[disabled] { opacity: .3; cursor: default; }
+.daypick button.busy::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--tempo); }
+.hintline { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.back { margin: -4px 0 6px; }
+.back button { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 8px 0 0; border: 0; background: none; color: var(--ink2); font-size: 13.5px; font-weight: 650; cursor: pointer; }
+.back svg { width: 18px; height: 18px; }
 
 /* dlaždice */
-.tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; margin-top: 10px; }
-.tiles.two { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tile { min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
-.tile .k { color: var(--ink2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .v { font-size: 18px; font-weight: 650; line-height: 1.15; letter-spacing: -.01em; }
-.tile .v small { font-size: 13px; font-weight: 500; color: var(--ink2); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.tiles.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tile { min-width: 0; padding: 12px; border-radius: 14px; background: var(--raised); }
+html.app .tile { background: var(--surface); }
+.tile .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .v { margin-top: 2px; font-size: 22px; font-weight: 750; line-height: 1.15; letter-spacing: -.02em; }
+.tile .v small { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 0; }
 .tile .n { margin-top: 2px; color: var(--ink2); font-size: 12px; }
-.meter { height: 6px; margin-top: 7px; border-radius: 3px; background: var(--s1-soft); overflow: hidden; }
-.meter i { display: block; height: 100%; border-radius: 3px; background: var(--s1); }
-.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--ink2); }
-.chip.good { color: var(--good-ink); border-color: var(--good); }
-.chip.warn { color: var(--warn-ink); border-color: var(--warn); }
+.tile .n.good { color: var(--good); font-weight: 650; }
+.tile .n.warn { color: var(--warn-ink); font-weight: 650; }
+.countdown { display: flex; align-items: baseline; gap: 8px; margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--primary); color: var(--on-primary); }
+.countdown .big small { color: inherit; opacity: .75; }
+.countdown .cd { margin-left: auto; font-size: 13px; font-weight: 600; opacity: .8; text-align: right; }
 
-/* týden */
-.days { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--grid); }
-.day { border-bottom: 1px solid var(--grid); }
-.row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; width: 100%; min-height: 52px; padding: 8px 6px; border: 0; border-radius: 8px; background: none; text-align: left; }
-button.row { cursor: pointer; }
-button.row[aria-expanded="true"] { background: var(--wash); }
-.day.next .row { box-shadow: inset 3px 0 0 var(--s1); }
-.chip.next { color: var(--s1); border-color: var(--s1); }
-.row .when, .row .what, .row .t, .row .s, .row .bar { display: block; }
-.row .when { color: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
-.row .when b { display: block; color: var(--ink); font-size: 13px; text-transform: capitalize; }
-.row .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .s { color: var(--ink2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.day.rest .t { font-weight: 500; color: var(--muted); }
-.row .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--s1-soft); }
-.row .bar.done { background: var(--s1); }
-.row .bar.skip { background: none; border: 1px dashed var(--axis); }
-.acts { display: flex; flex-wrap: wrap; gap: 10px 8px; padding: 6px 6px 14px; }
-.acts ul { flex-basis: 100%; margin: 0 0 4px; padding-left: 18px; color: var(--ink2); font-size: 13px; }
-.acts > button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; }
-.acts > button.main { border-color: var(--s1); background: var(--s1); color: #fff; }
-.acts .main3 { flex-basis: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-.acts .main3 button { min-height: 44px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; }
-.acts .main3 button.main { border-color: var(--s1); background: var(--s1); color: #fff; }
-.acts .main3 button[aria-expanded="true"] { border-color: var(--s1); color: var(--s1); }
-.more { flex-basis: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-.more button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; padding: 6px 4px; border: 0; border-radius: 8px; background: var(--wash); color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.2; text-align: center; cursor: pointer; }
-.more.wide button { flex-direction: row; min-height: 44px; font-size: 13px; }
-.more button svg { flex: none; width: 22px; height: 22px; color: var(--s1); }
-.more button svg.i-strava { color: #fc4c02; }
-.more button:hover { background: var(--s1-soft); }
-.quick { padding: 0 6px 10px 66px; }
-.quick button { min-height: 40px; padding: 0 16px; border: 1px solid var(--s1); border-radius: 8px; background: var(--s1); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
-.feel { flex-basis: 100%; }
-.feel .k { margin: 0 0 6px; color: var(--ink2); font-size: 12px; font-weight: 600; }
-.feel .pick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.feel .pick button { padding: 0; }
-.feel .hint { grid-column: 1 / -1; color: var(--ink2); font-size: 12px; }
-.back { margin: 0 0 8px; }
-.back button { min-height: 36px; padding: 0 10px 0 0; border: 0; background: none; color: var(--s1); font-size: 13px; font-weight: 600; cursor: pointer; }
-.daypick { flex-basis: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 2px 0 2px; }
-.daypick button { position: relative; min-height: 44px; padding: 2px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; line-height: 1.15; cursor: pointer; }
-.daypick button b { display: block; font-size: 13px; }
-.daypick button[disabled] { opacity: .35; cursor: default; }
-.daypick button.busy::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--s2); }
-.hintline { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+/* skóre běhu */
+.score { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: center; margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--raised); }
+html.app .score { background: var(--surface); }
+.ring { position: relative; width: 84px; height: 84px; }
+.ring svg { width: 84px; height: 84px; transform: rotate(-90deg); }
+.ring b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
+.ring b small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.score .lbl { font-size: 16px; font-weight: 750; }
+.score ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 13px; }
+.score li span { color: var(--ink2); }
 
 /* grafy a tabulky */
-.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 2px; color: var(--ink2); font-size: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; color: var(--ink2); font-size: 12px; }
 .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 3px; vertical-align: -1px; }
 .legend i.dot { border-radius: 50%; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
-svg text { fill: var(--muted); font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; }
-svg text.strong { fill: var(--ink); font-weight: 650; }
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg text.strong { fill: var(--ink); font-weight: 700; }
 svg .hit { fill: transparent; }
 svg .hit[data-open] { cursor: pointer; }
 svg :not(.hit) { pointer-events: none; }
 svg .hit:hover, svg .hit.on { fill: var(--wash); }
-details { margin-top: 10px; font-size: 13px; }
-summary { min-height: 32px; cursor: pointer; color: var(--ink2); }
-table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
-th { color: var(--ink2); font-weight: 600; }
+details { margin-top: 12px; font-size: 13px; }
+summary { display: flex; align-items: center; min-height: 40px; color: var(--ink2); font-weight: 600; cursor: pointer; }
+summary { list-style: none; gap: 10px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px auto; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .55; transition: transform .15s; }
+details[open] > summary::after { transform: rotate(-135deg); margin-bottom: -3px; }
+table { width: 100%; margin-top: 4px; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { color: var(--muted); font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; }
 th:first-child, td:first-child { text-align: left; white-space: normal; }
 td small { color: var(--ink2); font-size: 11.5px; }
-td .warn-mark { color: var(--warn-ink); font-weight: 650; }
+td .warn-mark { color: var(--warn-ink); font-weight: 700; }
+td .ok { color: var(--good); font-size: 15px; font-weight: 800; }
+.dev { display: inline-block; min-width: 58px; padding: 2px 7px; border-radius: 999px; font-size: 12px; font-weight: 650; text-align: center; }
+.dev.in { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+.dev.off { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn-ink); }
 details.issues ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 13px; }
 details.issues li { margin: 4px 0; }
 details.issues li b { color: var(--ink); }
-table.weeks tr.now td { font-weight: 650; }
-.zones { display: grid; grid-template-columns: minmax(84px, auto) minmax(60px, 1fr) auto; gap: 7px 10px; align-items: center; }
-.zones .zl { font-weight: 600; font-size: 13px; }
-.zones .zr { color: var(--ink2); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.track { position: relative; height: 12px; border-radius: 6px; background: var(--wash); }
-.track i { position: absolute; top: 0; bottom: 0; min-width: 4px; border-radius: 4px; background: var(--s1); }
+table.weeks tr.now td { font-weight: 700; }
+.zones { display: grid; gap: 14px; }
+.zone .zt { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.zone .zl { display: flex; align-items: center; gap: 8px; font-weight: 650; }
+.zone .zl::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--tone); }
+.zone .zr { font-size: 15px; font-weight: 700; }
+.zone .zr small { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.track { position: relative; height: 10px; margin-top: 6px; border-radius: 5px; background: var(--wash); }
+.track i { position: absolute; top: 0; bottom: 0; min-width: 6px; border-radius: 5px; background: var(--tone); }
 .track b { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-.pred { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
-.pred > div { min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
-.pred .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); font-size: 11.5px; }
-.pred .v { font-weight: 650; font-variant-numeric: tabular-nums; }
-.tip { position: absolute; z-index: 5; max-width: 220px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 6px 20px rgba(0,0,0,.18); color: var(--ink); font-size: 12px; pointer-events: none; }
+.pred { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pred > div { min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--raised); }
+html.app .pred > div { background: var(--surface); }
+.pred .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pred .v { font-size: 18px; font-weight: 750; }
+.tip { position: absolute; z-index: 5; max-width: 220px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.18); color: var(--ink); font-size: 12px; pointer-events: none; }
 .tip b { display: block; margin-bottom: 2px; }
 .tip span { color: var(--ink2); }
-
-/* doběhnuto */
-.score { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
-.score .top { display: flex; align-items: baseline; gap: 10px; }
-.score .big { font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.score .big small { margin-left: 2px; font-size: 16px; font-weight: 600; color: var(--ink2); }
-.score .top b { font-size: 15px; }
-.score ul { display: grid; gap: 4px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--grid); list-style: none; color: var(--ink); font-size: 13px; }
-.score li { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
-.score li span { color: var(--ink2); }
-.form { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
-.form .k { margin: 10px 0 5px; color: var(--ink2); font-size: 12px; font-weight: 600; }
-.form .k:first-child { margin-top: 0; }
-.form.log { padding: 0 12px; }
-.form.log[open] { padding-bottom: 12px; }
-.form.log > summary { padding: 12px 0; color: var(--ink); font-size: 13px; font-weight: 600; }
-.form.log > summary + .k { margin-top: 0; }
-td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
-.form details.cond { margin-top: 10px; }
-.form details.cond summary { display: flex; align-items: center; min-height: 44px; color: var(--ink2); font-size: 12px; font-weight: 600; }
-.pick { display: flex; flex-wrap: wrap; gap: 5px; }
-.pick button { min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13px; cursor: pointer; }
-.pick button[aria-pressed="true"] { border-color: var(--s1); background: var(--s1); color: #fff; font-weight: 600; }
-.primary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 12px; padding: 0 16px; border: 0; border-radius: 9px; background: var(--s1); color: #fff; font-weight: 650; text-decoration: none; cursor: pointer; }
+.card { margin-top: 12px; padding: 4px 14px; border-radius: 16px; background: var(--raised); }
+html.app .card { background: var(--surface); }
+.card > summary { min-height: 52px; color: var(--ink); font-size: 14px; }
+.card[open] { padding-bottom: 14px; }
+.fk2 { margin: 14px 0 6px; color: var(--ink2); font-size: 12px; font-weight: 600; }
+.fk2:first-of-type { margin-top: 2px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick button { min-height: 42px; padding: 0 13px; border: 1px solid var(--line2); border-radius: 999px; background: var(--surface); font-size: 13.5px; cursor: pointer; transition: transform .12s; }
+.pick button:active { transform: scale(.96); }
+.pick button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); font-weight: 650; }
+details.cond summary { min-height: 44px; font-size: 12.5px; }
+.save { margin-top: 14px; }
 
 /* ostatní */
-.hints { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--grid); }
-.hints .k { margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+.hints { margin-top: 18px; }
+.hints .k { margin-bottom: 8px; color: var(--muted); }
 .hints div { display: flex; flex-wrap: wrap; gap: 6px; }
-.hints button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13px; text-align: left; cursor: pointer; }
-.steps { margin: 10px 0 0; padding-left: 20px; color: var(--ink2); }
-.steps li { margin-bottom: 4px; }
-.steps.fit { color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
-.foot { margin-top: 12px; color: var(--muted); font-size: 12px; }
+.hints button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform .12s, border-color .15s; }
+.hints button:active { transform: scale(.96); }
+@media (hover: hover) { .hints button:hover { border-color: var(--ink2); } }
+ol.howto { margin: 12px 0 0; padding-left: 20px; color: var(--ink2); }
+ol.howto li { margin-bottom: 6px; }
+ol.fit { color: var(--ink); font-size: 13px; }
+.foot { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .empty { color: var(--ink2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
@@ -201,12 +319,10 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var DOW = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
   var FEEL = ['', 'hodně těžké', 'těžké', 'normální', 'dobré', 'výborné'];
   var PAIN = [['none', 'žádná'], ['mild', 'mírná'], ['significant', 'výrazná']];
-  var STATUS = {
-    completed: { label: 'Splněno', icon: '✓', cls: 'good' },
-    partial: { label: 'Částečně', icon: '◐', cls: 'warn' },
-    skipped: { label: 'Vynecháno', icon: '–', cls: '' },
-    scheduled: { label: 'V plánu', icon: '○', cls: '' }
-  };
+  var STATUS = { completed: 'Splněno', partial: 'Částečně', skipped: 'Vynecháno', scheduled: 'V plánu', miss: 'Nezapsáno' };
+  var TYPE = { easy: 'Volný běh', long: 'Dlouhý běh', speed: 'Rychlost', tempo: 'Tempo', race: 'Závod', strength: 'Posilování', cross: 'Doplňkový', other: 'Trénink' };
+  var TONE = { easy: 'easy', long: 'long', speed: 'speed', tempo: 'tempo', race: 'race' };
+  var PACE_TONE = { easy: 'easy', steady: 'long', mp: 'long', hm_pace: 'tempo', '10k_pace': 'speed', '5k_pace': 'speed', strides: 'speed' };
   // Nástroje, které mění data: model se o změně z widgetu dozví přes kontext.
   var CHANGES = { move_workout: 1, skip_workout: 1, restore_workout: 1, undo_change: 1, set_status: 1 };
   var noop = function () {};
@@ -214,8 +330,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var oai = window.openai || null;
   // Oficiální konektor Stravy je v Claude, v ChatGPT ne: tam se čísla běhu zadávají ručně nebo souborem.
   var strava = !oai;
-  // Hostí-li kartu stránka Trénink, umí Stravu sama: hodnocení a doplnění bez zprávy do konverzace.
-  var appHost = false;
+  // Kdo kartu hostí: chat (karta pod zprávou), stránka Trénink v claude.ai (umí Stravu sama) nebo PWA (bez Stravy;
+  // věty pro Clauda otevře v novém chatu). Obě aplikace zabírají celou obrazovku a mají záložky dole.
+  var mode = 'chat', appHost = false, inApp = false;
   function evalArgs(w) { return { workoutId: w.id, date: w.date, type: w.type, kmMin: w.kmMin, kmMax: w.kmMax }; }
   var lastOutput = '';
 
@@ -233,6 +350,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var keepOpen = null;    // jednotka, která po akci zůstane rozbalená (pocit po Doběhnuto)
   var backDate = null;    // hodnocení otevřené z týdne: kam vede „← Týden“
   var watchTimer = null;  // karta čeká na změnu, kterou dělá model
+  var jumpTo = null;      // po vykreslení posunout na tuto jednotku
+  var shownKey = '';      // pohled, který je na obrazovce (v aplikaci se při změně posune nahoru)
   var STALE_MS = 5 * 60 * 1000;
   var TAB_TOOL = { week: 'show_week', finished: 'show_week', empty: 'show_week', plan: 'show_plan', paces: 'show_paces' };
 
@@ -259,6 +378,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     applyTheme(ctx.theme);
     var vars = ctx.styles && ctx.styles.variables;
     if (vars && vars['--font-sans']) document.documentElement.style.setProperty('--font-sans', vars['--font-sans']);
+    var ins = ctx.safeAreaInsets;
+    if (ins) { document.documentElement.style.setProperty('--sat', (ins.top || 0) + 'px'); document.documentElement.style.setProperty('--sab', (ins.bottom || 0) + 'px'); }
   }
   window.addEventListener('message', function (e) {
     if (e.source !== host) return;
@@ -283,7 +404,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function say(text) {
     request('ui/message', { role: 'user', content: [{ type: 'text', text: text }] }, 10000)
       .then(function (r) { if (r && r.isError) throw new Error('rejected'); })
-      .catch(function () { sayText = text; render(); });
+      .catch(function () { if (text) { sayText = text; render(); } });
   }
 
   // Akce bez psaní: widget zavolá nástroj konektoru přímo. Když to nejde, pošle větu do konverzace.
@@ -305,7 +426,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
         }
         throw new Error('no data');
       })
-      .catch(function () { widgetChange = null; keepOpen = null; say(fallback); })
+      .catch(function () { widgetChange = null; keepOpen = null; if (inApp) { errorText = 'Spojení se nepovedlo. Zkus to znovu.'; render(); } else say(fallback); })
       .then(function () { busy = false; app.classList.remove('busy'); });
   }
 
@@ -315,7 +436,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var key = d ? JSON.stringify(d) : '';
     if (fromHost && key && key === lastOutput) return;
     lastOutput = key;
-    if (widgetChange && d && d.banner) {
+    if (widgetChange && d && d.banner && mode === 'chat') {
       // Změnu udělal uživatel klepnutím, ne model: dát mu vědět, aby radil nad aktuálním stavem.
       var what = widgetChange === true ? d.banner.text : widgetChange;
       request('ui/update-model-context', { content: [{ type: 'text', text: 'Uživatel ve widgetu Run Trackeru: ' + what + ' Než budeš radit, načti aktuální stav přes get_plan.' }] }, 10000).catch(noop);
@@ -323,7 +444,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     widgetChange = null;
     moveId = null;
     if (d && d.view) {
-      // Týden se ukáže sbalený; nejbližší jednotka je jen zvýrazněná. Po Doběhnuto zůstane otevřená kvůli pocitu.
+      // Týden se ukáže sbalený; nejbližší jednotka je nahoře v hlavní kartě. Po Doběhnuto zůstane otevřená kvůli pocitu.
       if (d.view === 'week') { openId = keepOpen; }
       keepOpen = null;
       // Hodnocení otevřené klepnutím z týdne má cestu zpět; karta od modelu ne.
@@ -373,7 +494,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   // Uživatel poslal z karty zprávu a změnu udělá model: karta se ptá, dokud ji nedostane (nejvýš 3 minuty).
   function watchChanges() {
     stopWatch();
-    if (!data || data.view !== 'week') return;
+    if (!data || data.view !== 'week' || mode === 'pwa') return;
     var startRev = data.rev, tries = 0, args = viewArgs(data, { watch: true });
     (function tick() {
       request('tools/call', { name: 'show_week', arguments: args }, 15000).then(function (r) {
@@ -402,12 +523,34 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function kmh(secPerKm) { return 3600 / secPerKm; }
   function meters(m) { return m >= 1000 ? num(Math.round(m / 10) / 100) + ' km' : Math.round(m) + ' m'; }
   function niceMax(v) { var step = v <= 20 ? 5 : v <= 60 ? 10 : 20; return Math.max(step, Math.ceil(v / step) * step); }
-  // Proběhlý den bez zápisu není „v plánu“: ukáže se jako nezapsaný, aby šel doplnit.
-  function chip(status, past) {
-    var s = status === 'scheduled' && past ? { label: 'Nezapsáno', icon: '?', cls: 'warn' } : STATUS[status] || STATUS.scheduled;
-    return '<span class="chip ' + s.cls + '"><span aria-hidden="true">' + s.icon + '</span>' + s.label + '</span>';
-  }
   function plural(n, one, few, many) { return n === 1 ? one : n > 1 && n < 5 ? few : many; }
+  function tone(type) { return TONE[type] || 'other'; }
+  function isRun(w) { return w.type !== 'rest' && w.type !== 'strength' && w.type !== 'cross'; }
+  function kmText(w) { return w.kmMax > 0 ? kmRange(w.kmMin, w.kmMax) + (w.kmUnknown ? '+' : '') : ''; }
+  // Stav jednotky jako značka: plná barvou intenzity = splněno, oranžový kroužek = proběhlé, ale nezapsané.
+  function markOf(w, past, now) {
+    var k = w.status === 'scheduled' && past ? 'miss' : w.status;
+    var inner = k === 'completed' ? icon('check') : k === 'skipped' ? '–' : k === 'miss' ? '?' : '';
+    return '<span class="mk mk-' + k + (now && k === 'scheduled' ? ' mk-now' : '') + '">' + inner + '<span class="sr">' + STATUS[k] + '</span></span>';
+  }
+  // Řádek rozpisu („Rozklus: 15 min volně (5:04–5:36/km)“): popis vlevo, tempo vpravo, barva podle intenzity.
+  function lineTone(s) { return /tempo na (5|10) km|rovinky/.test(s) ? 'speed' : /půlmaraton|maratonsk|svižně/.test(s) ? 'tempo' : /chůze|mezi úseky|pauz|klus mezi/.test(s) ? 'rest' : 'easy'; }
+  function steps(lines) {
+    return '<ol class="steps">' + lines.map(function (l) {
+      var m = l.match(/^(.*?)\s*\((\d+:\d\d)–(\d+:\d\d)\/km\)\s*$/), text = m ? m[1] : l, p = m ? m[2] + '–' + m[3] : '';
+      var lbl = text.match(/^(Rozklus|Výklus|Mezi úseky|Pak)\s*:\s*/);
+      return '<li class="t-' + lineTone(text) + '"><span>' + (lbl ? '<b>' + esc(lbl[1]) + '</b> ' + esc(text.slice(lbl[0].length)) : esc(text)) + '</span>' + (p ? '<span class="p num">' + p + '</span>' : '') + '</li>';
+    }).join('') + '</ol>';
+  }
+  // Klíčové tempo jednotky: nejrychlejší pásmo v rozpisu.
+  function keyPace(lines) {
+    var best = null;
+    lines.forEach(function (l) {
+      var m = l.match(/\((\d+):(\d\d)–(\d+):(\d\d)\/km\)/);
+      if (m) { var s = Number(m[1]) * 60 + Number(m[2]); if (!best || s < best.s) best = { s: s, t: m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] }; }
+    });
+    return best && best.t;
+  }
 
   // ---------- Tooltip ----------
   var tips = [], tipEl = null;
@@ -470,6 +613,14 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       render(); return;
     }
     if (el.closest('[data-save]') && form && data && data.view === 'result') { saveCheckin(data); return; }
+    var hero = el.closest('[data-hero]');
+    if (hero) { var hb = document.getElementById('hero'); if (hb) hb.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    var jump = el.closest('[data-jump]');
+    if (jump) {
+      var id = jump.getAttribute('data-jump');
+      if (data && data.view === 'week' && heroOf(data) && heroOf(data).w.id === id) { var hh = document.getElementById('hero'); if (hh) hh.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+      openId = id; moveId = null; jumpTo = id; render(); return;
+    }
     var row = el.closest('[data-row]');
     if (row) { openId = openId === row.getAttribute('data-row') ? null : row.getAttribute('data-row'); moveId = null; render(); }
   });
@@ -480,26 +631,35 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     if (CARD_VIEWS[name]) args = Object.assign({}, args, { fromCard: true });
     return '<button type="button" data-open="' + name + '" data-args="' + esc(JSON.stringify(args || {})) + '" data-fallback="' + esc(fallback) + '"' + (extra || '') + '>' + label + '</button>';
   }
+  // Věta pro Clauda: v chatu se pošle do konverzace, v PWA otevře nový chat (proto ikona ven).
+  function sayBtn(label, text, extra) { return '<button type="button" data-say="' + esc(text) + '"' + (extra || '') + '>' + label + (mode === 'pwa' ? icon('out', 'ext') : '') + '</button>'; }
+  var TABS = [['week', 'Týden', 'show_week', 'Ukaž mi tento týden.', 'cal'], ['plan', 'Plán', 'show_plan', 'Ukaž mi celý plán.', 'bars'], ['paces', 'Tempa', 'show_paces', 'Ukaž mi moje tempa.', 'gauge']];
+  function tabOf(d) { return !d ? null : d.view === 'week' || d.view === 'finished' || d.view === 'empty' ? 'week' : d.view === 'plan' ? 'plan' : d.view === 'paces' ? 'paces' : null; }
+  function tabBar() {
+    var cur = tabOf(data);
+    return '<nav class="tabbar" aria-label="Pohledy">' + TABS.map(function (x) { return opener(icon(x[4]) + x[1], x[2], {}, x[3], cur === x[0] ? ' aria-current="true"' : ''); }).join('')
+      + '<button type="button" data-say="">' + icon('chat') + (mode === 'pwa' ? 'Claude' : 'Trenér') + '</button></nav>';
+  }
   function head(current, d) {
-    var t = [['week', 'Týden', 'show_week', 'Ukaž mi tento týden.'], ['plan', 'Plán', 'show_plan', 'Ukaž mi celý plán.'], ['paces', 'Tempa', 'show_paces', 'Ukaž mi moje tempa.']];
-    var h = current === null ? '' : '<div class="tabs" role="navigation" aria-label="Pohledy">' + t.map(function (x) { return opener(x[1], x[2], {}, x[3], current === x[0] ? ' aria-current="true"' : ''); }).join('') + '</div>';
-    if (errorText) h += '<div class="note err" role="alert"><span><span aria-hidden="true">⚠ </span>' + esc(errorText) + '</span></div>';
+    var h = current === null || inApp ? '' : '<div class="tabs" role="navigation" aria-label="Pohledy">' + TABS.map(function (x) { return opener(x[1], x[2], {}, x[3], current === x[0] ? ' aria-current="true"' : ''); }).join('') + '</div>';
+    if (errorText) h += '<div class="note err" role="alert"><span class="ic" aria-hidden="true">!</span><span>' + esc(errorText) + '</span></div>';
     if (sayText) h += '<div class="note" role="status"><span>Napiš do konverzace: „' + esc(sayText) + '“</span></div>';
-    if (d && d.banner) h += '<div class="note ok" role="status"><span><span aria-hidden="true">✓ </span>' + esc(d.banner.text) + '</span>' + (d.banner.revisionId ? opener('Vrátit', 'undo_change', { revisionId: d.banner.revisionId }, 'Vrať poslední změnu.') : '') + '</div>';
+    if (d && d.banner) h += '<div class="note ok" role="status"><span class="ic" aria-hidden="true">' + icon('check') + '</span><span>' + esc(d.banner.text) + '</span>' + (d.banner.revisionId ? opener('Vrátit', 'undo_change', { revisionId: d.banner.revisionId }, 'Vrať poslední změnu.', ' class="btn"') : '') + '</div>';
     return h;
   }
-  // Krátký štítek, celá věta se pošle do konverzace až po klepnutí.
+  // Krátký štítek, celá věta se pošle Claudovi až po klepnutí.
   function hints(list) {
-    return '<div class="hints"><div class="k">Zeptat se</div><div>' + list.map(function (t) { return '<button type="button" data-say="' + esc(t[1]) + '" title="' + esc(t[1]) + '">' + esc(t[0]) + '</button>'; }).join('') + '</div></div>';
+    return '<div class="hints"><div class="k">Zeptat se</div><div>' + list.map(function (t) { return sayBtn(esc(t[0]), t[1], ' title="' + esc(t[1]) + '"'); }).join('') + '</div></div>';
   }
+  function tile(k, v, n, ncls) { return '<div class="tile"><div class="k">' + k + '</div><div class="v num">' + v + '</div>' + (n ? '<div class="n' + (ncls ? ' ' + ncls : '') + '">' + n + '</div>' : '') + '</div>'; }
 
   // ---------- Plán dokončen ----------
   function renderFinished(d) {
     var p = d.plan, h = head('week', d) + '<div class="eyebrow">Plán dokončen</div><h2>' + esc(p.name) + '</h2>';
-    h += '<div class="sub">' + dm(p.first) + ' – ' + dm(p.last) + '</div><div class="tiles">';
-    h += '<div class="tile"><div class="k">Splněné běhy</div><div class="v">' + p.done + ' <small>z ' + p.runs + '</small></div><div class="n">' + ([p.partial ? p.partial + ' částečně' : '', p.skipped ? p.skipped + ' vynecháno' : ''].filter(Boolean).join(', ') || 'splněno') + '</div></div>';
-    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + p.doneKm + ' <small>z ' + p.plannedKm + '</small></div></div>';
-    h += '<div class="tile"><div class="k">Pocit</div><div class="v">' + (p.avgFeel != null ? num(p.avgFeel) + ' <small>/ 5</small>' : '–') + '</div>' + (p.painCount ? '<div class="n">bolest ' + p.painCount + '×</div>' : '') + '</div></div>';
+    h += '<div class="sub">' + dm(p.first) + ' – ' + dm(p.last) + '</div><div class="tiles three">';
+    h += tile('Běhy', p.done + ' <small>z ' + p.runs + '</small>', [p.partial ? p.partial + ' částečně' : '', p.skipped ? p.skipped + ' vynecháno' : ''].filter(Boolean).join(', '));
+    h += tile('Km', p.doneKm + ' <small>z ' + p.plannedKm + '</small>');
+    h += tile('Pocit', p.avgFeel != null ? num(p.avgFeel) + ' <small>/ 5</small>' : '–', p.painCount ? 'bolest ' + p.painCount + '×' : '', 'warn') + '</div>';
     if (p.conditions.length) h += '<p class="sub">Nejčastější okolnosti: ' + esc(p.conditions.join(', ')) + '</p>';
     if (d.earlier.length) {
       h += '<h3>Předchozí plány</h3><table><thead><tr><th>Plán</th><th>Běhy</th><th>Km</th></tr></thead><tbody>';
@@ -509,19 +669,19 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     return h + hints([['Další plán', strava ? 'Postav mi další plán podle mé Stravy a toho, co o mně víš.' : 'Postav mi další plán podle toho, co o mně víš. Řeknu ti, kolik teď běhám.'], ['Nahrát plán', 'Mám nový plán v dokumentu, přiložím ho.'], ['Volnější týdny', 'Navrhni mi dva volnější týdny na odpočinek.']]);
   }
 
-  // Forma: odhady VDOT z hodnocených běhů a předpověď na cílovou vzdálenost.
+  // Forma: odhady z hodnocených běhů a předpověď na cílovou vzdálenost.
   function fitnessBlock(f, width) {
     var dist = num(Math.round(f.distanceM / 100) / 10) + ' km';
-    var h = '<h3>Forma · odhad z hodnocených běhů</h3><div class="tiles"><div class="tile"><div class="k">Odhad na ' + dist + '</div><div class="v">' + dur(f.predictedSec) + '</div></div>';
-    if (f.targetSec) { var gap = f.predictedSec - f.targetSec; h += '<div class="tile"><div class="k">Cíl</div><div class="v">' + dur(f.targetSec) + '</div><div class="n">' + (Math.abs(gap) < 5 ? 'na cíli' : (gap > 0 ? 'chybí ' : 'rezerva ') + dur(Math.abs(gap))) + '</div></div>'; }
+    var h = '<h3>Forma</h3><div class="tiles">' + tile('Odhad na ' + dist, dur(f.predictedSec), 'z hodnocených běhů');
+    if (f.targetSec) { var gap = f.predictedSec - f.targetSec; h += tile('Cíl', dur(f.targetSec), Math.abs(gap) < 5 ? 'na cíli' : (gap > 0 ? 'chybí ' : 'rezerva ') + dur(Math.abs(gap)), gap > 0 ? 'warn' : 'good'); }
     h += '</div>';
     if (f.points.length > 1) {
-      var W = Math.max(260, Math.min(width || 320, 640)), H = 70, L = 6, R = 6, T = 8, B = 8;
+      var W = Math.max(260, Math.min(width || 320, 640)), H = 64, L = 6, R = 6, T = 8, B = 8;
       var lo = Math.min.apply(null, f.points.map(function (p) { return p.vdot; })) - 0.5, hi = Math.max.apply(null, f.points.map(function (p) { return p.vdot; })) + 0.5;
       var x = function (i) { return L + (W - L - R) * (f.points.length === 1 ? 0.5 : i / (f.points.length - 1)); };
       var y = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
       var path = f.points.map(function (p, i) { return (i ? 'L' : 'M') + x(i) + ' ' + y(p.vdot); }).join('');
-      h += '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Vývoj odhadu formy"><path d="' + path + '" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>' + f.points.map(function (p, i) { return '<circle cx="' + x(i) + '" cy="' + y(p.vdot) + '" r="3.5" fill="var(--s1)"/>'; }).join('') + '</svg>';
+      h += '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Vývoj odhadu formy" style="margin-top:10px"><path d="' + path + '" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>' + f.points.map(function (p, i) { return '<circle cx="' + x(i) + '" cy="' + y(p.vdot) + '" r="3.5" fill="var(--ink)"/>'; }).join('') + '</svg>';
     }
     return h;
   }
@@ -530,8 +690,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function renderImport(d) {
     var h = head(null, d) + '<div class="eyebrow">Kontrola importu</div><h2>' + esc(d.name) + '</h2>';
     h += '<div class="sub">' + d.weeks.length + ' ' + plural(d.weeks.length, 'týden', 'týdny', 'týdnů') + (d.missing.length ? ' · chybí ' + d.missing.join(', ') : '') + '</div>';
-    h += '<div class="tiles"><div class="tile"><div class="k">Varování</div><div class="v">' + d.warnings + '</div></div>';
-    h += '<div class="tile"><div class="k">Tempa z plánu</div><div class="v">' + (d.hasPaces ? 'ano' : 'ne') + '</div></div></div>';
+    h += '<div class="tiles">' + tile('Varování', d.warnings) + tile('Tempa z plánu', d.hasPaces ? 'ano' : 'ne') + '</div>';
     h += '<table class="weeks"><thead><tr><th>Týden</th><th>Km</th><th>Autor</th><th></th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
       var mark = w.totals === 'off' ? '<span class="warn-mark" title="součet nesedí s dokumentem">⚠</span>' : w.issues.length ? '<span class="warn-mark" title="varování">⚠ ' + w.issues.length + '</span>' : '<span class="ok" title="bez varování">✓</span>';
@@ -545,17 +704,17 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       w.issues.forEach(function (x) { issues.push('<li><b>T' + w.index + ' ' + esc(x.day) + '</b> ' + esc(x.title) + ': ' + esc(x.text) + '</li>'); });
     });
     if (issues.length) h += '<details class="issues"' + (issues.length <= 4 ? ' open' : '') + '><summary>Varování (' + issues.length + ')</summary><ul>' + issues.join('') + '</ul></details>';
-    h += '<div class="acts" style="padding:12px 0 0"><div class="main3">';
-    if (!d.missing.length) h += '<button type="button" class="main" data-say="' + esc('Zařaď importovaný plán do kalendáře. Varování nech být. Když nevíš začátek nebo datum závodu, zeptej se mě.') + '">Zařadit do kalendáře</button>';
-    if (issues.length) h += '<button type="button" data-say="' + esc('Projdi se mnou varování z kontroly importu a oprav podle dokumentu to, co potvrdím.') + '">Projít varování</button>';
-    return h + '</div></div>';
+    h += '<div class="a-pair" style="margin-top:14px">';
+    if (!d.missing.length) h += sayBtn('Zařadit do kalendáře', 'Zařaď importovaný plán do kalendáře. Varování nech být. Když nevíš začátek nebo datum závodu, zeptej se mě.', ' class="btn primary"');
+    if (issues.length) h += sayBtn('Projít varování', 'Projdi se mnou varování z kontroly importu a oprav podle dokumentu to, co potvrdím.', ' class="btn"');
+    return h + '</div>';
   }
 
   // ---------- Bez plánu ----------
   function renderEmpty(d) {
     var h = head('', d) + '<div class="eyebrow">Run Tracker</div><h2>Zatím tu není žádný plán</h2>';
     if (d.staged) h += '<p class="sub">Rozpracovaný import „' + esc(d.staged.name) + '“ má nahrané týdny ' + d.staged.weeks.join(', ') + '. Ještě není zařazený do kalendáře.</p>';
-    h += '<ol class="steps"><li>Přilož do konverzace plán v PDF, obrázku nebo tabulce, nebo si nech plán postavit' + (strava ? ' podle své Stravy' : '') + '.</li><li>Napiš, kdy začínáš nebo kdy máš závod.</li><li>Claude plán přepíše, zkontroluje týdenní součty a zařadí ho do kalendáře.</li></ol>';
+    h += '<ol class="howto"><li>Přilož Claudovi plán v PDF, obrázku nebo tabulce, nebo si nech plán postavit' + (strava ? ' podle své Stravy' : '') + '.</li><li>Napiš, kdy začínáš nebo kdy máš závod.</li><li>Claude plán přepíše, zkontroluje týdenní součty a zařadí ho do kalendáře.</li></ol>';
     return h + hints(d.staged ? [['Dokončit import', 'Dokonči import plánu a zařaď ho do kalendáře.']] : [['Nahrát plán', 'Chci založit plán z dokumentu. Přiložím ho a řeknu ti, kdy mám závod.'], [strava ? 'Plán podle Stravy' : 'Postavit plán', strava ? 'Postav mi plán podle mé Stravy.' : 'Postav mi plán. Řeknu ti, kolik teď běhám.']]);
   }
 
@@ -569,49 +728,49 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       h += opener('<b>' + DOW[day.dow] + '</b>' + dm(day.date), 'move_workout', { workoutId: w.id, toDate: day.date, swap: true, reason: 'přesun ve widgetu' }, fallback,
         (off ? ' disabled' : '') + (other ? ' class="busy"' : '') + ' aria-label="' + esc(DOW[day.dow] + ' ' + dm(day.date) + (other ? ', prohodit s ' + other.title : '')) + '"');
     });
-    return h + '</div><div class="hintline">Den s tečkou už má trénink; ten se prohodí. Jiný týden nebo přesun s úpravou napiš do konverzace.</div>';
+    return h + '</div><div class="hintline">Den s tečkou už má trénink; ten se prohodí. Jiný týden napiš Claudovi.</div>';
   }
-  function actions(w) {
-    var name = w.title + ' (' + when(w) + ')', h = '<div class="acts">', links = [], main = [];
-    var link = function (label, text) { return '<button type="button" data-say="' + esc(text) + '">' + label + '</button>'; };
+  // Akce jednotky: v hlavní kartě (hero) i v rozbaleném řádku stejné, jen bez opakování rozpisu.
+  function actions(w, inHero) {
+    var name = w.title + ' (' + when(w) + ')', h = '', pair = [], more = [], main = '';
     var today = data && data.today, future = today && w.date > today, past = today && w.date < today;
-    var review = appHost ? opener(icon('strava') + 'Hodnocení', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh z ' + dm(w.date) + '.') : link(icon('strava') + 'Hodnocení', strava
+    var review = appHost ? opener(icon('strava') + 'Hodnocení', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh z ' + dm(w.date) + '.') : sayBtn(icon('strava') + 'Hodnocení', strava
       ? 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.'
       : 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.');
-    if (w.lines.length) h += '<ul>' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
+    if (!inHero && w.lines.length) h += steps(w.lines);
     if (w.status === 'scheduled') {
-      // Doběhnuto až v den tréninku: zapíše se hned v kartě, hodnocení podle Stravy je volitelné potom.
-      // Zkrácení, tempa a hodinky jen dokud je trénink před tebou.
-      if (!future) main.push(doneButton(w, name, ' class="main"'));
-      main.push('<button type="button" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">Přesunout</button>');
-      main.push(opener('Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.'));
-      if (!past) links.push(link(icon('short') + 'Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
-      if (!past) {
-        links.push(opener(icon('pace') + 'Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
-        links.push(opener(icon('watch') + 'Hodinky', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
+      // Doběhnuto až v den tréninku: zapíše se hned, hodnocení podle Stravy je volitelné potom.
+      if (!future) main = doneButton(w, name, ' class="btn primary block"');
+      pair.push('<button type="button" class="btn" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">' + icon('move') + 'Přesunout</button>');
+      pair.push(opener(icon('skip') + 'Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.', ' class="btn"'));
+      if (!past && isRun(w)) {
+        more.push(sayBtn(icon('short') + 'Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
+        more.push(opener(icon('gauge') + 'Tempa', 'show_paces', { workoutId: w.id }, 'Ukaž mi tempa pro jednotku ' + name + '.'));
+        more.push(opener(icon('watch') + 'Hodinky', 'export_garmin', { workoutId: w.id }, 'Připrav mi jednotku ' + name + ' jako soubor do hodinek Garmin.'));
       }
     } else if (w.status === 'skipped') {
-      main.push(opener('Obnovit', 'restore_workout', { workoutId: w.id, reason: 'obnoveno ve widgetu' }, 'Obnov jednotku ' + name + '.'));
+      main = opener(icon('undo') + 'Obnovit', 'restore_workout', { workoutId: w.id, reason: 'obnoveno ve widgetu' }, 'Obnov jednotku ' + name + '.', ' class="btn block"');
     } else {
       // Zapsaná jednotka: pocit jedním klepnutím, bolest a okolnosti ve formuláři, hodnocení podle Stravy.
       h += feelRow(w);
-      links.push(opener(icon('note') + 'Bolest, okolnosti', 'show_result', { workoutId: w.id }, 'Chci doplnit zápis k jednotce ' + name + '.'));
-      if (w.type !== 'strength' && w.type !== 'cross') links.push(review);
-      links.push(opener(icon('undo') + 'Zrušit zápis', 'set_status', { workoutId: w.id, status: 'scheduled', seen: w.version }, 'Vrať jednotku ' + name + ' na stav v plánu.'));
+      more.push(opener(icon('note') + 'Bolest, okolnosti', 'show_result', { workoutId: w.id }, 'Chci doplnit zápis k jednotce ' + name + '.'));
+      if (isRun(w)) more.push(review);
+      more.push(opener(icon('undo') + 'Zrušit zápis', 'set_status', { workoutId: w.id, status: 'scheduled', seen: w.version }, 'Vrať jednotku ' + name + ' na stav v plánu.'));
     }
-    if (main.length) h += '<div class="main3">' + main.join('') + '</div>';
+    if (main) h += '<div class="a-main">' + main + '</div>';
+    if (pair.length) h += '<div class="a-pair">' + pair.join('') + '</div>';
     if (moveId === w.id) h += dayPicker(w);
-    return h + (links.length ? '<div class="more' + (links.length < 3 ? ' wide' : '') + '">' + links.join('') + '</div>' : '') + '</div>';
+    return h + (more.length ? '<div class="a-more">' + more.join('') + '</div>' : '');
   }
   function doneButton(w, name, extra) {
-    var label = w.type === 'strength' || w.type === 'cross' ? 'Hotovo' : 'Doběhnuto';
-    if (appHost && label === 'Doběhnuto') return opener(label, 'strava_evaluate', evalArgs(w), 'Doběhl jsem jednotku ' + name + '.', extra);
-    return '<button type="button" data-done="' + esc(w.id) + '" data-version="' + esc(w.version) + '" data-name="' + esc(name) + '"' + (extra || '') + '>' + label + '</button>';
+    var label = isRun(w) ? 'Doběhnuto' : 'Hotovo';
+    if (appHost && label === 'Doběhnuto') return opener(icon('check') + label, 'strava_evaluate', evalArgs(w), 'Doběhl jsem jednotku ' + name + '.', extra);
+    return '<button type="button" data-done="' + esc(w.id) + '" data-version="' + esc(w.version) + '" data-name="' + esc(name) + '"' + (extra || '') + '>' + icon('check') + label + '</button>';
   }
   function feelRow(w) {
-    return '<div class="feel"><div class="k">Pocit</div><div class="pick" role="group" aria-label="Pocit">' + [1, 2, 3, 4, 5].map(function (n) {
+    return '<div class="feel"><div class="fk">Pocit z tréninku<span>' + (w.feel ? w.feel + ' · ' + FEEL[w.feel] : '1 těžké · 5 výborné') + '</span></div><div class="scale" role="group" aria-label="Pocit">' + [1, 2, 3, 4, 5].map(function (n) {
       return '<button type="button" data-feel="' + esc(w.id) + '" data-val="' + n + '" data-version="' + esc(w.version) + '" data-status="' + w.status + '" title="' + FEEL[n] + '" aria-pressed="' + (w.feel === n) + '">' + n + '</button>';
-    }).join('') + '<span class="hint">' + (w.feel ? FEEL[w.feel] : '1 těžké · 5 výborné') + '</span></div></div>';
+    }).join('') + '</div></div>';
   }
   function markDone(el) {
     keepOpen = el.getAttribute('data-done');
@@ -622,49 +781,98 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     keepOpen = id;
     open('set_status', { workoutId: id, status: el.getAttribute('data-status'), feel: n, seen: el.getAttribute('data-version') }, 'Zapiš mi pocit ' + n + ' z 5 k poslednímu běhu.', 'zapsal pocit ' + n + ' z 5 (' + FEEL[n] + ').');
   }
-  // Drobné ikony vedlejších akcí, kreslené barvou textu.
+  // Ikony kreslené barvou textu.
   var ICONS = {
     short: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.1 8.1L20 20M8.1 15.9L20 4"/>',
     strava: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
-    pace: '<circle cx="12" cy="14" r="7"/><path d="M12 14V10.5M10 3h4M12 3v4M18.5 7.5l1.5-1.5"/>',
+    gauge: '<path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="M12 13l4-4"/><circle cx="12" cy="13" r="1.2"/>',
     watch: '<circle cx="12" cy="12" r="6"/><path d="M12 9.5V12l1.5 1.5M9 6.6L9.6 2h4.8l.6 4.6M9 17.4L9.6 22h4.8l.6-4.6"/>',
     undo: '<path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 010 10h-2"/>',
-    note: '<path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h4"/>'
+    note: '<path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h4"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    move: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M10 15h5M13 13l2 2-2 2"/>',
+    skip: '<circle cx="12" cy="12" r="8.5"/><path d="M8 16L16 8"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2"/>',
+    bars: '<path d="M5 20V12M10 20V6M15 20V9M20 20V4"/>',
+    chat: '<path d="M5 18.5V6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7a2.5 2.5 0 0 1-2.5 2.5H9z"/>',
+    out: '<path d="M14 5h5v5M19 5l-8 8M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10"/>',
+    left: '<path d="M14.5 6l-6 6 6 6"/>',
+    right: '<path d="M9.5 6l6 6-6 6"/>'
   };
-  function icon(k) { return '<svg class="i-' + k + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[k] + '</svg>'; }
-  function renderWeek(d) {
-    var s = d.stats, max = 1, h = head('week', d);
+  function icon(k, c) { return '<svg class="i-' + k + (c ? ' ' + c : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (k === 'check' ? 2.6 : 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[k] + '</svg>'; }
+
+  // Hlavní trénink týdne: dnešní jednotka, jinak nejbližší naplánovaná.
+  function heroOf(d) {
+    if (!d.isCurrent) return null;
+    var today = d.days.filter(function (x) { return x.isToday; })[0];
+    var tw = today && today.workouts.filter(function (w) { return w.type !== 'rest' && w.status !== 'skipped'; })[0];
+    if (tw) return { w: tw, label: 'Dnes · ' + when(tw) };
+    var nw = null;
+    d.days.forEach(function (day) { day.workouts.forEach(function (w) { if (w.id === d.nextId) nw = w; }); });
+    if (!nw) return null;
+    return { w: nw, label: (today ? 'Dnes volno · ' : '') + (nw.date === addDays(d.today, 1) ? 'zítra' : 'další') + ' ' + when(nw) };
+  }
+  function renderHero(hero) {
+    var w = hero.w, kp = keyPace(w.lines), km = kmText(w);
+    var h = '<section class="hero t-' + tone(w.type) + '" id="hero"><div class="hero-k"><span class="eyebrow">' + esc(hero.label) + '</span><span class="tag">' + (TYPE[w.type] || 'Trénink') + '</span></div>';
+    h += '<h2>' + esc(w.title) + '</h2>';
+    if (km || kp) h += '<div class="hero-m">' + (km ? '<span class="big num">' + km + '<small>km</small></span>' : '') + (kp ? '<span class="pc">cíl <b class="num">' + kp + '</b> /km</span>' : '') + '</div>';
+    if (w.lines.length) h += steps(w.lines);
+    else if (w.summary && !km) h += '<div class="sub" style="margin-top:6px">' + esc(w.summary) + '</div>';
+    if (w.status !== 'scheduled') h += '<div class="state">' + markOf(w) + STATUS[w.status] + (w.feel ? ' · pocit ' + w.feel + '/5' : '') + '</div>';
+    return h + actions(w, true) + '</section>';
+  }
+  // Pás dní: sloupec = den, výška = km, barva = intenzita, plná = splněno.
+  function strip(d) {
+    var max = 1;
     d.days.forEach(function (day) { day.workouts.forEach(function (w) { max = Math.max(max, w.kmMax); }); });
+    return '<div class="strip">' + d.days.map(function (day) {
+      var list = day.workouts.filter(function (w) { return w.type !== 'rest'; });
+      var w = list.slice().sort(function (a, b) { return b.kmMax - a.kmMax; })[0];
+      var lab = '<span class="sl">' + DOW[day.dow] + '</span><span class="sn num">' + Number(day.date.slice(8)) + '</span>';
+      if (!w) return '<div class="sd t-rest' + (day.isToday ? ' today' : '') + '" aria-label="' + DOW[day.dow] + ' ' + dm(day.date) + ', volno"><span class="sb"><i class="rest"></i></span>' + lab + '</div>';
+      var st = w.status === 'completed' || w.status === 'partial' ? 'done' : w.status === 'skipped' ? 'skip' : day.isPast ? 'miss' : 'plan';
+      var hgt = w.kmMax > 0 ? Math.max(12, Math.round(w.kmMax / max * 100)) : 12;
+      return '<button type="button" class="sd t-' + tone(w.type) + (day.isToday ? ' today' : '') + '" data-jump="' + w.id + '" aria-label="' + esc(DOW[day.dow] + ' ' + dm(day.date) + ', ' + w.title + (kmText(w) ? ', ' + kmText(w) + ' km' : '') + ', ' + STATUS[st === 'miss' ? 'miss' : w.status]) + '"><span class="sb"><i class="' + st + '" style="height:' + hgt + '%"></i></span>' + lab + '</button>';
+    }).join('') + '</div>';
+  }
+  function renderWeek(d) {
+    var s = d.stats, h = head('week', d);
     var prev = addDays(d.weekStart, -7), nxt = addDays(d.weekStart, 7);
+    var title = d.label.charAt(0).toUpperCase() + d.label.slice(1);
     // Šipky po stranách nadpisu, jak je u přepínání období zvykem.
-    h += '<div class="head"><div class="nav">' + opener('‹', 'show_week', { date: prev }, 'Ukaž mi týden od ' + prev + '.', ' aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled')) + '</div>';
-    h += '<div class="title">' + (d.phase ? '<div class="eyebrow">' + esc(d.phase) + '</div>' : '');
-    h += '<h2>' + esc(d.label.charAt(0).toUpperCase() + d.label.slice(1)) + '</h2>';
-    h += '<div class="sub">' + dm(d.weekStart) + ' – ' + dm(addDays(d.weekStart, 6)) + '</div></div>';
-    h += '<div class="nav">' + opener('›', 'show_week', { date: nxt }, 'Ukaž mi týden od ' + nxt + '.', ' aria-label="Další týden"' + (d.hasNext ? '' : ' disabled')) + '</div></div>';
-    h += '<div class="tiles">';
-    h += '<div class="tile"><div class="k">Běhy</div><div class="v">' + s.unitsDone + ' <small>z ' + s.units + '</small></div><div class="n">' + ([s.unitsPartial ? s.unitsPartial + ' částečně' : '', s.unitsSkipped ? s.unitsSkipped + ' vynecháno' : ''].filter(Boolean).join(', ')) + '</div></div>';
-    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + num(s.doneKm) + ' <small>z ' + Math.round(s.plannedKmMax) + '</small></div></div>';
-    if (s.longRunKm != null) h += '<div class="tile"><div class="k">Dlouhý běh</div><div class="v">' + num(s.longRunKm) + ' <small>km</small></div></div>';
-    h += '</div>';
-    if (d.fatigue) h += '<div class="note warn" style="margin:10px 0 0"><span>' + esc(d.fatigue.text) + '</span><button type="button" data-say="' + esc(d.fatigue.kind === 'pain' ? 'Poslední běhy mě bolí. Co s tím a jak upravit zbytek týdne?' : 'Poslední běhy byly těžké. Navrhni lehčí zbytek týdne.') + '">Ubrat</button></div>';
-    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span>' + (appHost ? opener('Doplnit', 'strava_fill_week', { weekStart: d.weekStart, workouts: d.days.reduce(function (a, day) { return a.concat(day.isPast ? day.workouts.filter(function (w) { return w.status === 'scheduled' && w.type !== 'rest' && w.type !== 'strength' && w.type !== 'cross'; }).map(function (w) { return { id: w.id, date: w.date }; }) : []); }, []) }, 'Doplň splnění tohoto týdne podle Stravy.') + '</div>' : '<button type="button"' + (strava ? ' data-watch="1"' : '') + ' data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>');
+    h += '<div class="top">' + opener(icon('left'), 'show_week', { date: prev }, 'Ukaž mi týden od ' + prev + '.', ' class="ib" aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled'));
+    h += '<div class="mid"><div class="eyebrow">' + (d.phase ? esc(d.phase) + ' · ' : '') + dm(d.weekStart) + ' – ' + dm(addDays(d.weekStart, 6)) + '</div><h2>' + esc(title) + '</h2></div>';
+    h += opener(icon('right'), 'show_week', { date: nxt }, 'Ukaž mi týden od ' + nxt + '.', ' class="ib" aria-label="Další týden"' + (d.hasNext ? '' : ' disabled')) + '</div>';
+    if (!d.isCurrent) h += '<div class="jump">' + opener('Tento týden', 'show_week', {}, 'Ukaž mi tento týden.') + '</div>';
+    // Objem týdne: splněné km proti plánu, běhy, dlouhý běh a dny do závodu.
+    var planned = Math.round(s.plannedKmMax), pct = planned ? Math.min(100, Math.round(s.doneKm / planned * 100)) : 0;
+    h += '<section class="vol"><div class="vol-top"><div><div class="k">Objem týdne</div><div class="big num" style="margin-top:4px">' + num(s.doneKm) + '<small>/ ' + (Math.round(s.plannedKmMin) !== planned ? Math.round(s.plannedKmMin) + '–' : '') + planned + ' km</small></div></div>';
+    h += '<div class="vol-side"><div><b class="num">' + s.unitsDone + '</b>/' + s.units + ' ' + plural(s.units, 'běh', 'běhy', 'běhů') + (s.unitsPartial ? ' · ' + s.unitsPartial + ' část.' : '') + '</div>' + (s.longRunKm != null ? '<div>dlouhý <b class="num">' + num(s.longRunKm) + '</b> km</div>' : '') + (d.daysToRace != null ? '<div>závod za <b class="num">' + d.daysToRace + '</b> ' + plural(d.daysToRace, 'den', 'dny', 'dní') + '</div>' : '') + '</div></div>';
+    h += '<div class="prog" aria-hidden="true"><i style="width:' + pct + '%"></i></div>' + strip(d) + '</section>';
+    if (d.fatigue) h += '<div class="note warn" style="margin:12px 0 0"><span class="ic" aria-hidden="true">!</span><span>' + esc(d.fatigue.text) + '</span>' + sayBtn('Ubrat', d.fatigue.kind === 'pain' ? 'Poslední běhy mě bolí. Co s tím a jak upravit zbytek týdne?' : 'Poslední běhy byly těžké. Navrhni lehčí zbytek týdne.', ' class="btn"') + '</div>';
+    if (s.unrecorded) {
+      var missing = d.days.reduce(function (a, day) { return a.concat(day.isPast ? day.workouts.filter(function (w) { return w.status === 'scheduled' && isRun(w); }).map(function (w) { return { id: w.id, date: w.date }; }) : []); }, []);
+      var text = s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.';
+      h += '<div class="note warn" style="margin:12px 0 0"><span class="ic" aria-hidden="true">?</span><span>' + text + '</span>'
+        + (appHost ? opener('Doplnit', 'strava_fill_week', { weekStart: d.weekStart, workouts: missing }, 'Doplň splnění tohoto týdne podle Stravy.', ' class="btn"')
+          : sayBtn('Doplnit', strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.', ' class="btn"' + (strava ? ' data-watch="1"' : ''))) + '</div>';
+    }
+    var hero = heroOf(d);
+    if (hero) h += renderHero(hero);
     h += '<ul class="days">';
     d.days.forEach(function (day) {
       day.workouts.forEach(function (w) {
-        var rest = w.type === 'rest', opened = openId === w.id;
+        var rest = w.type === 'rest', opened = openId === w.id, isHero = hero && hero.w.id === w.id;
         var whenCell = '<span class="when"><b>' + DOW[day.dow] + '</b>' + (day.isToday ? 'dnes' : dm(day.date)) + '</span>';
-        var isNext = w.id === d.nextId;
-        h += '<li class="day' + (day.isToday ? ' today' : '') + (isNext ? ' next' : '') + (rest ? ' rest' : '') + '">';
+        h += '<li class="day' + (day.isToday ? ' today' : '') + (rest ? ' rest' : '') + '">';
         if (rest) { h += '<div class="row">' + whenCell + '<span class="what"><span class="t">Volno</span></span><span></span></div></li>'; return; }
         var sub = [w.summary, w.moved ? 'přesunuto' : '', w.feel ? 'pocit ' + w.feel + '/5' : '', (w.conditions || []).join(', '), w.userNote || ''].filter(Boolean).join(' · ');
-        h += '<button type="button" class="row" data-row="' + w.id + '" aria-expanded="' + opened + '">' + whenCell;
-        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + (isNext ? '<span class="chip next"><span aria-hidden="true">→</span>Na řadě</span>' : chip(w.status, day.isPast));
-        if (w.kmMax > 0) h += '<span class="bar ' + (w.status === 'completed' || w.status === 'partial' ? 'done' : w.status === 'skipped' ? 'skip' : '') + '" style="width:' + Math.max(4, Math.round(w.kmMax / max * 70)) + '%"></span>';
-        h += '</button>';
-        // Dnešní nezapsaný trénink má Doběhnuto rovnou pod řádkem, bez rozbalování.
-        if (!opened && day.isToday && w.status === 'scheduled') h += '<div class="quick">' + doneButton(w, w.title + ' (' + when(w) + ')', ' class="main"') + '</div>';
-        h += (opened ? actions(w) : '') + '</li>';
+        var km = kmText(w);
+        h += '<button type="button" class="row t-' + tone(w.type) + ' st-' + w.status + '" ' + (isHero ? 'data-hero="1"' : 'data-row="' + w.id + '" aria-expanded="' + opened + '"') + '>' + whenCell;
+        h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>';
+        h += '<span class="end">' + (km ? '<span class="km num">' + km + '</span>' : '') + markOf(w, day.isPast, isHero) + '</span></button>';
+        h += (opened && !isHero ? '<div class="acts">' + actions(w, false) + '</div>' : '') + '</li>';
       });
     });
     h += '</ul>';
@@ -673,23 +881,22 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // ---------- Celý plán ----------
   function renderPlan(d, width) {
-    var t = d.totals, h = head('plan', d) + '<div class="eyebrow">Přehled plánu</div><h2>' + esc(d.planName) + '</h2>';
+    var t = d.totals, h = head('plan', d) + '<div class="eyebrow">Plán' + (d.first ? ' · ' + dm(d.first) + ' – ' + dm(d.last) : '') + '</div><h2>' + esc(d.planName) + '</h2>';
     // Plán zařazený od pozdějšího týdne: „týden 6“ je číslo z dokumentu, proto se ukáže, které týdny plánu běží.
     var firstWeek = d.weeks.filter(function (w) { return w.sourceWeek != null; })[0], lastWeek = d.weeks.filter(function (w) { return w.sourceWeek != null; }).slice(-1)[0];
-    if (d.first) h += '<div class="sub">' + dm(d.first) + ' – ' + dm(d.last) + ' · ' + d.weeks.length + ' týdnů' + (firstWeek && firstWeek.sourceWeek > 1 ? ' (týdny ' + firstWeek.sourceWeek + '–' + lastWeek.sourceWeek + ' plánu)' : '') + (d.finished ? ' · dokončen' : '') + '</div>';
-    h += '<div class="tiles"><div class="tile"><div class="k">Splněné běhy</div><div class="v">' + t.unitsDone + ' <small>z ' + t.units + '</small></div>' + (t.unrecorded ? '<div class="n">' + t.unrecorded + ' nezapsáno</div>' : '') + '</div>';
-    h += '<div class="tile"><div class="k">Splněné km</div><div class="v">' + t.doneKm + ' <small>z ' + t.plannedKm + '</small></div></div>';
-    if (d.daysToRace != null && d.daysToRace >= 0) h += '<div class="tile"><div class="k">Do závodu</div><div class="v">' + d.daysToRace + ' <small>dní</small></div><div class="n">' + dm(d.raceDate) + '</div></div>';
-    h += '</div><h3>Týdenní objem v km · klepni na týden</h3>';
-    h += '<div class="legend"><span><i style="background:var(--s1-soft)"></i>Plán</span><span><i style="background:var(--s1)"></i>Splněno</span><span><i class="dot" style="background:var(--s2)"></i>Dlouhý běh</span></div>';
-    var W = Math.max(280, width), H = 210, L = 30, R = 6, T = 16, B = 40, n = d.weeks.length, top = 1;
+    h += '<div class="sub">' + d.weeks.length + ' týdnů' + (firstWeek && firstWeek.sourceWeek > 1 ? ' (týdny ' + firstWeek.sourceWeek + '–' + lastWeek.sourceWeek + ' plánu)' : '') + (d.finished ? ' · dokončen' : '') + '</div>';
+    if (d.daysToRace != null && d.daysToRace >= 0) h += '<div class="countdown"><span class="big num">' + d.daysToRace + '<small>' + plural(d.daysToRace, 'den', 'dny', 'dní') + ' do závodu</small></span><span class="cd">' + dm(d.raceDate) + '</span></div>';
+    h += '<div class="tiles">' + tile('Splněné běhy', t.unitsDone + ' <small>z ' + t.units + '</small>', t.unrecorded ? t.unrecorded + ' nezapsáno' : '', 'warn') + tile('Splněné km', t.doneKm + ' <small>z ' + t.plannedKm + '</small>', t.plannedKm ? Math.round(t.doneKm / t.plannedKm * 100) + ' % plánu' : '') + '</div>';
+    h += '<h3>Týdenní objem · klepni na týden</h3>';
+    h += '<div class="legend"><span><i style="background:var(--line2)"></i>Plán</span><span><i style="background:var(--ink)"></i>Splněno</span><span><i class="dot" style="background:var(--long)"></i>Dlouhý běh</span></div>';
+    var W = Math.max(280, width), H = 200, L = 28, R = 4, T = 16, B = 40, n = d.weeks.length, top = 1;
     d.weeks.forEach(function (w) { top = Math.max(top, w.plannedKmMax, w.longRunKm || 0, w.doneKm); });
-    var yMax = niceMax(top), band = (W - L - R) / n, bw = Math.max(6, Math.min(30, band * 0.62));
+    var yMax = niceMax(top), band = (W - L - R) / n, bw = Math.max(6, Math.min(26, band * 0.64));
     var y = function (v) { return T + (H - T - B) * (1 - v / yMax); };
     var base = y(0), svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Týdenní objem plánu a splněné kilometry">';
     for (var g = 0; g <= 4; g++) {
       var gv = yMax / 4 * g, gy = y(gv);
-      svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + (g ? 'var(--grid)' : 'var(--axis)') + '" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end">' + Math.round(gv) + '</text>';
+      svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + (g ? 'var(--line)' : 'var(--line2)') + '" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end">' + Math.round(gv) + '</text>';
     }
     var bar = function (x, h0, fill) {
       if (h0 <= 0) return '';
@@ -699,28 +906,27 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var line = '', dots = '', hits = '', labels = '', every = n > 16 ? 2 : 1;
     d.weeks.forEach(function (w, i) {
       var cx = L + band * i + band / 2, x = cx - bw / 2, name = w.sourceWeek == null ? 'Pauza' : 'Týden ' + w.sourceWeek;
-      svg += bar(x, base - y(w.plannedKmMax), 'var(--s1-soft)') + bar(x, base - y(Math.min(w.doneKm, w.plannedKmMax)), 'var(--s1)');
-      if (w.longRunKm != null) { line += (line ? 'L' : 'M') + cx + ' ' + y(w.longRunKm); dots += '<circle cx="' + cx + '" cy="' + y(w.longRunKm) + '" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>'; }
+      svg += bar(x, base - y(w.plannedKmMax), w.isCurrent ? 'color-mix(in srgb, var(--accent) 30%, var(--line2))' : 'var(--line2)') + bar(x, base - y(Math.min(w.doneKm, w.plannedKmMax)), 'var(--ink)');
+      if (w.longRunKm != null) { line += (line ? 'L' : 'M') + cx + ' ' + y(w.longRunKm); dots += '<circle cx="' + cx + '" cy="' + y(w.longRunKm) + '" r="4" fill="var(--long)" stroke="var(--surface)" stroke-width="2"/>'; }
       if (i % every === 0 || w.isCurrent) labels += '<text class="' + (w.isCurrent ? 'strong' : '') + '" x="' + cx + '" y="' + (base + 14) + '" text-anchor="middle">' + (w.sourceWeek == null ? '–' : w.sourceWeek) + '</text>';
-      if (w.isCurrent) labels += '<text class="strong" x="' + cx + '" y="' + (y(Math.max(w.plannedKmMax, w.longRunKm || 0)) - 8) + '" text-anchor="middle">teď</text>';
+      if (w.isCurrent) labels += '<text class="strong" x="' + cx + '" y="' + (y(Math.max(w.plannedKmMax, w.longRunKm || 0)) - 9) + '" text-anchor="middle">teď</text>';
       var tip = '<b>' + name + (w.phase ? ' · ' + esc(w.phase) : '') + '</b><span>' + dm(w.weekStart) + ' – ' + dm(addDays(w.weekStart, 6)) + '</span><br>Plán ' + kmRange(w.plannedKmMin, w.plannedKmMax) + ' km<br>Splněno ' + num(w.doneKm) + ' km · ' + w.unitsDone + ' z ' + w.units + ' běhů' + (w.longRunKm != null ? '<br>Dlouhý běh ' + num(w.longRunKm) + ' km' : '') + '<br><span>Klepnutím otevřeš týden</span>';
       // Sloupec týdne otevře jeho rozpis.
-      hits += '<rect class="hit" x="' + (L + band * i) + '" y="' + T + '" width="' + band + '" height="' + (base - T) + '" rx="4" role="button" aria-label="' + esc(name + ', ' + dm(w.weekStart)) + '" data-open="show_week" data-args="' + esc(JSON.stringify({ date: w.weekStart })) + '" data-fallback="' + esc('Ukaž mi týden od ' + w.weekStart + '.') + '"' + tipAttr(tip) + '/>';
+      hits += '<rect class="hit" x="' + (L + band * i) + '" y="' + T + '" width="' + band + '" height="' + (base - T) + '" rx="4" role="button" aria-label="' + esc(name + ', ' + dm(w.weekStart)) + '" data-open="show_week" data-args="' + esc(JSON.stringify({ date: w.weekStart, fromCard: true })) + '" data-fallback="' + esc('Ukaž mi týden od ' + w.weekStart + '.') + '"' + tipAttr(tip) + '/>';
     });
     // fáze pod osou: jeden popisek na souvislou skupinu týdnů
     for (var start = 0, i = 1; i <= n; i++) {
       if (i === n || d.weeks[i].phase !== d.weeks[start].phase) {
         var phase = d.weeks[start].phase, x1 = L + band * start, x2 = L + band * i;
         if (phase && x2 - x1 > phase.length * 6.2) labels += '<text x="' + ((x1 + x2) / 2) + '" y="' + (base + 31) + '" text-anchor="middle">' + esc(phase) + '</text>';
-        if (start > 0) labels += '<line x1="' + x1 + '" x2="' + x1 + '" y1="' + (base + 20) + '" y2="' + (base + 34) + '" stroke="var(--axis)"/>';
+        if (start > 0) labels += '<line x1="' + x1 + '" x2="' + x1 + '" y1="' + (base + 20) + '" y2="' + (base + 34) + '" stroke="var(--line2)"/>';
         start = i;
       }
     }
-    h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
+    h += svg + hits + (line ? '<path d="' + line + '" fill="none" stroke="var(--long)" stroke-width="2" stroke-linejoin="round"/>' : '') + dots + labels + '</svg>';
     if (d.fitness) h += fitnessBlock(d.fitness, width);
-    h += '<details><summary>Tabulka</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
+    h += '<details><summary>Tabulka týdnů</summary><table class="weeks"><thead><tr><th>Týden</th><th>Od</th><th>Km</th><th>Běhy</th><th>Dlouhý</th></tr></thead><tbody>';
     d.weeks.forEach(function (w) {
-      // Úzká tabulka: fáze jsou v grafu, km jako splněno z plánu zaokrouhleně.
       h += '<tr' + (w.isCurrent ? ' class="now"' : '') + '><td>' + (w.sourceWeek == null ? 'pauza' : w.sourceWeek) + (w.isCurrent ? ' · teď' : '') + '</td><td>' + dm(w.weekStart) + '</td><td>' + Math.round(w.doneKm) + ' <small>z ' + Math.round(w.plannedKmMax) + '</small></td><td>' + w.unitsDone + '/' + w.units + '</td><td>' + (w.longRunKm == null ? '–' : num(w.longRunKm)) + '</td></tr>';
     });
     return h + '</tbody></table></details>';
@@ -732,34 +938,36 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     paces.forEach(function (p) { lo = Math.min(lo, p.fromSec); hi = Math.max(hi, p.toSec); });
     if (markerSec != null) { lo = Math.min(lo, markerSec); hi = Math.max(hi, markerSec); }
     lo -= 12; hi += 12;
-    var pos = function (v) { return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)); };
+    // rychlejší tempo vpravo, jako na ose rychlosti
+    var pos = function (v) { return Math.max(0, Math.min(100, (hi - v) / (hi - lo) * 100)); };
     var h = '<div class="zones">';
     paces.forEach(function (p) {
-      h += '<div class="zl">' + esc(p.label) + '</div><div class="track"><i style="left:' + pos(p.fromSec) + '%;width:' + (pos(p.toSec) - pos(p.fromSec)) + '%"></i>' + (markerSec != null ? '<b style="left:' + pos(markerSec) + '%"></b>' : '') + '</div><div class="zr">' + pace(p.fromSec) + '–' + pace(p.toSec) + ' /km</div>';
+      h += '<div class="zone t-' + (PACE_TONE[p.key] || 'other') + '"><div class="zt"><span class="zl">' + esc(p.label.charAt(0).toUpperCase() + p.label.slice(1)) + '</span><span class="zr num">' + pace(p.fromSec) + '–' + pace(p.toSec) + ' <small>/km</small></span></div>';
+      h += '<div class="track"><i style="left:' + pos(p.toSec) + '%;width:' + (pos(p.fromSec) - pos(p.toSec)) + '%"></i>' + (markerSec != null ? '<b style="left:' + pos(markerSec) + '%"></b>' : '') + '</div></div>';
     });
     return h + '</div>' + (markerSec != null ? '<div class="foot">Svislá čárka je ' + markerLabel + '.</div>' : '');
   }
   function renderPaces(d) {
     var w = d.workout, c = d.calc;
-    var h = head('paces', d) + '<div class="eyebrow">Tempa</div><h2>' + (c ? 'Tempa z tvého výkonu' : w ? esc(w.title) + ' · ' + when(w) : 'Tvoje tréninková tempa') + '</h2>';
+    var h = head('paces', d) + '<div class="eyebrow">Tempa' + (w ? ' · ' + when(w) : '') + '</div><h2>' + (c ? 'Tempa z tvého výkonu' : w ? esc(w.title) : 'Tréninková pásma') + '</h2>';
     if (w) {
       h += '<div class="sub">' + esc(w.summary) + '</div>';
       if (w.rows.length) {
-        h += '<h3>Úseky jednotky</h3><table><thead><tr><th>Úsek</th><th>Zadání</th><th>Tempo /km</th><th>Vychází</th></tr></thead><tbody>';
+        h += '<h3>Úseky jednotky</h3><table><thead><tr><th>Úsek</th><th>Zadání</th><th>Tempo</th><th>Vychází</th></tr></thead><tbody>';
         w.rows.forEach(function (r) {
           var given = r.durationSec != null ? (r.durationSec % 60 === 0 ? r.durationSec / 60 + ' min' : r.durationSec < 60 ? r.durationSec + ' s' : dur(r.durationSec) + ' min') : meters(r.distanceM);
           var p = r.paceFastSec ? pace(r.paceFastSec) + '–' + pace(r.paceSlowSec) : esc(r.intensityLabel);
           var out = r.distMinM != null ? meters(r.distMinM) + (r.distMaxM !== r.distMinM ? ' – ' + meters(r.distMaxM) : '') : r.timeMinSec != null ? dur(r.timeMinSec) + (r.timeMaxSec !== r.timeMinSec ? ' – ' + dur(r.timeMaxSec) : '') : '–';
-          h += '<tr><td>' + (r.reps > 1 ? r.reps + '× ' : '') + esc(r.label) + (r.paceFastSec ? ' <span class="sub">' + esc(r.intensityLabel) + '</span>' : '') + '</td><td>' + given + '</td><td>' + p + '</td><td>' + out + '</td></tr>';
+          h += '<tr><td>' + (r.reps > 1 ? r.reps + '× ' : '') + esc(r.label) + (r.paceFastSec ? ' <small>' + esc(r.intensityLabel) + '</small>' : '') + '</td><td>' + given + '</td><td>' + p + '</td><td>' + out + '</td></tr>';
         });
         h += '</tbody></table>';
-        h += '<div class="more wide" style="margin-top:10px">' + opener(icon('watch') + 'Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi tuhle jednotku jako soubor do hodinek Garmin.') + '</div>';
+        h += '<div class="a-main">' + opener(icon('watch') + 'Soubor do hodinek', 'export_garmin', { workoutId: w.id }, 'Připrav mi tuhle jednotku jako soubor do hodinek Garmin.', ' class="btn block"') + '</div>';
       }
     }
     if (c) {
       h += '<div class="sub">Z výkonu ' + num(Math.round(c.distanceM / 100) / 10) + ' km za ' + dur(c.timeSec) + (c.saved ? ' · uloženo v profilu' : '') + '</div>';
-      h += '<h3>Předpověď závodů</h3><div class="pred">' + c.predictions.map(function (x) { return '<div><div class="k">' + esc(x.label) + '</div><div class="v">' + dur(x.timeSec) + '</div></div>'; }).join('') + '</div>';
-      if (!c.saved) h += opener('Uložit tato tempa', 'calculate_paces', { distanceM: c.distanceM, timeSec: c.timeSec, save: true }, 'Ulož mi tato tempa do profilu.', ' class="primary"');
+      h += '<h3>Předpověď závodů</h3><div class="pred">' + c.predictions.map(function (x) { return '<div><div class="k">' + esc(x.label) + '</div><div class="v num">' + dur(x.timeSec) + '</div></div>'; }).join('') + '</div>';
+      if (!c.saved) h += '<div class="a-main">' + opener('Uložit tato tempa', 'calculate_paces', { distanceM: c.distanceM, timeSec: c.timeSec, save: true }, 'Ulož mi tato tempa do profilu.', ' class="btn primary block"') + '</div>';
     }
     if (d.paces.length) {
       h += '<h3>Pásma</h3>' + zones(d.paces);
@@ -771,8 +979,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   }
 
   // ---------- Doběhnuto: hodnocení splnění a zápis ----------
-  function lapChart(r, t, v, width) {
-    var W = Math.max(260, width), H = 180, L = 38, R = 8, T = 10, B = 24, n = r.laps.length, lo = Infinity, hi = -Infinity;
+  function lapChart(r, t, v, width, tn) {
+    var W = Math.max(260, width), H = 170, L = 36, R = 6, T = 10, B = 22, n = r.laps.length, lo = Infinity, hi = -Infinity;
     r.laps.forEach(function (l) { lo = Math.min(lo, l.paceSec); hi = Math.max(hi, l.paceSec); });
     if (t) { lo = Math.min(lo, t.fastSec); hi = Math.max(hi, t.slowSec); }
     var step = hi - lo > 240 ? 60 : hi - lo > 100 ? 30 : 15;
@@ -781,17 +989,17 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var y = function (s) { return T + (H - T - B) * ((s - lo) / (hi - lo)); };
     var band = (W - L - R) / n, x = function (i) { return L + band * i + band / 2; };
     var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Tempo po kolech proti cílovému pásmu">';
-    for (var s = lo; s <= hi; s += step) svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(s) + '" y2="' + y(s) + '" stroke="var(--grid)"/><text x="' + (L - 6) + '" y="' + (y(s) + 4) + '" text-anchor="end">' + pace(s) + '</text>';
-    if (t) svg += '<rect x="' + L + '" y="' + y(t.fastSec) + '" width="' + (W - L - R) + '" height="' + Math.max(2, y(t.slowSec) - y(t.fastSec)) + '" fill="var(--band)"/>';
+    for (var s = lo; s <= hi; s += step) svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(s) + '" y2="' + y(s) + '" stroke="var(--line)"/><text x="' + (L - 6) + '" y="' + (y(s) + 4) + '" text-anchor="end">' + pace(s) + '</text>';
+    if (t) svg += '<rect x="' + L + '" y="' + y(t.fastSec) + '" width="' + (W - L - R) + '" height="' + Math.max(2, y(t.slowSec) - y(t.fastSec)) + '" fill="color-mix(in srgb, var(--' + tn + ') 20%, transparent)"/>';
     var path = '', dots = '', hits = '', every = Math.ceil(n / Math.max(1, Math.floor((W - L - R) / 26)));
     r.laps.forEach(function (l, i) {
       path += (i ? 'L' : 'M') + x(i) + ' ' + y(l.paceSec);
-      dots += '<circle cx="' + x(i) + '" cy="' + y(l.paceSec) + '" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>';
-      if (i % every === 0) svg += '<text x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + l.n + '</text>';
+      dots += '<circle cx="' + x(i) + '" cy="' + y(l.paceSec) + '" r="3.5" fill="var(--ink)" stroke="var(--surface)" stroke-width="2"/>';
+      if (i % every === 0) svg += '<text x="' + x(i) + '" y="' + (H - 5) + '" text-anchor="middle">' + l.n + '</text>';
       var inT = t ? (l.paceSec >= t.fastSec - 2 && l.paceSec <= t.slowSec + 2 ? 'v cílovém pásmu' : l.paceSec < t.fastSec ? 'rychleji než cíl' : 'pomaleji než cíl') : '';
       hits += '<rect class="hit" x="' + (L + band * i) + '" y="' + T + '" width="' + band + '" height="' + (H - T - B) + '" rx="4"' + tipAttr('<b>Kolo ' + l.n + '</b>' + pace(l.paceSec) + ' /km · ' + meters(l.distanceM) + ' za ' + dur(l.durationSec) + (l.avgHr != null ? '<br>tep ' + Math.round(l.avgHr) : '') + (inT ? '<br><span>' + inT + '</span>' : '')) + '/>';
     });
-    svg += hits + '<path d="' + path + '" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>' + dots + '</svg>';
+    svg += hits + '<path d="' + path + '" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>' + dots + '</svg>';
     return svg + (t && v.steady && v.lapsInTarget != null ? '<div class="foot">V cílovém pásmu ' + v.lapsInTarget + ' z ' + n + ' kol.</div>' : '');
   }
   function pickRow(key, options, current, label) {
@@ -800,54 +1008,61 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       return '<button type="button" data-pick="' + key + '" data-val="' + esc(o[0]) + '" aria-pressed="' + on + '">' + esc(o[1]) + '</button>';
     }).join('') + '</div>';
   }
+  function ring(total, tn) {
+    var r = 36, c = 2 * Math.PI * r, f = Math.max(0, Math.min(100, total)) / 100 * c;
+    return '<div class="ring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="8"/><circle cx="42" cy="42" r="' + r + '" fill="none" stroke="var(--' + tn + ')" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + f + ' ' + c + '"/></svg><b class="num">' + total + '<small>%</small></b></div>';
+  }
   function renderResult(d, width) {
-    var r = d.run, w = d.workout, t = d.target, sc = d.score, c = d.checkin, v = d.verdict || {};
+    var r = d.run, w = d.workout, t = d.target, sc = d.score, c = d.checkin, v = d.verdict || {}, tn = tone(w.type) === 'other' ? 'good' : tone(w.type);
+    if (tn === 'race') tn = 'ink';
     if (!form || form.id !== w.id) form = { id: w.id, status: c.status === 'scheduled' || c.status === 'skipped' ? (sc ? sc.suggestedStatus : 'completed') : c.status, feel: c.feel, pain: c.pain || 'none', conditions: c.conditions.slice() };
-    var h = head(null, d) + (backDate ? '<div class="back">' + opener('← Týden', 'show_week', { date: backDate }, 'Ukaž mi týden.') + '</div>' : '') + '<div class="eyebrow">Doběhnuto · ' + DOW[w.dow] + ' ' + dm(w.date) + '</div><h2>' + esc(w.title) + '</h2>';
+    var recorded = c.status === 'completed' || c.status === 'partial';
+    var h = head(null, d) + (backDate ? '<div class="back">' + opener(icon('left') + 'Týden', 'show_week', { date: backDate }, 'Ukaž mi týden.') + '</div>' : '');
+    h += '<div class="hero-k"><span class="eyebrow">Hodnocení · ' + DOW[w.dow] + ' ' + dm(w.date) + '</span>' + (recorded ? '<span class="tag t-' + tone(w.type) + '">' + STATUS[c.status] + '</span>' : '') + '</div><h2>' + esc(w.title) + '</h2>';
     h += '<div class="sub">Plán: ' + esc(w.summary) + '</div>';
     if (r) {
       if (sc) {
-        var rows = sc.parts.map(function (p) { return '<li><span>' + esc(p.label) + '</span>' + esc(p.text) + '</li>'; });
-        if (d.estimate) rows.push('<li><span>Forma</span>' + dur(d.estimate.sec) + ' na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km</li>');
-        h += '<div class="score"><div class="top"><span class="big">' + sc.total + '<small>%</small></span><b>' + esc(sc.label) + '</b></div><ul>' + rows.join('') + '</ul></div>';
+        var rows = sc.parts.map(function (p) { return '<li><span>' + esc(p.label) + ':</span> ' + esc(p.text) + '</li>'; });
+        if (d.estimate) rows.push('<li><span>Forma:</span> ' + dur(d.estimate.sec) + ' na ' + num(Math.round(d.estimate.distanceM / 100) / 10) + ' km</li>');
+        h += '<div class="score">' + ring(sc.total, tn) + '<div><div class="lbl">' + esc(sc.label) + '</div><ul>' + rows.join('') + '</ul></div></div>';
       }
-      h += '<div class="tiles' + (r.avgHr == null ? '' : ' two') + '">';
-      h += '<div class="tile"><div class="k">Vzdálenost</div><div class="v">' + num(Math.round(r.distanceM / 10) / 100) + ' <small>km</small></div><div class="n">plán ' + (w.kmMax ? kmRange(w.kmMin, w.kmMax) + ' km' : '–') + '</div></div>';
-      h += '<div class="tile"><div class="k">Tempo</div><div class="v">' + pace(r.avgPaceSec) + ' <small>/km</small></div>' + (t && v.steady ? '<div class="n">cíl ' + pace(t.fastSec) + '–' + pace(t.slowSec) + '</div>' : '<div class="n">průměr celého běhu</div>') + '</div>';
-      h += '<div class="tile"><div class="k">Čas</div><div class="v">' + dur(r.movingSec) + '</div>' + (r.elevGainM != null ? '<div class="n">+' + Math.round(r.elevGainM) + ' m</div>' : '') + '</div>';
-      if (r.avgHr != null) h += '<div class="tile"><div class="k">Tep</div><div class="v">' + Math.round(r.avgHr) + ' <small>/min</small></div></div>';
+      var dOk = v.distance === 'ok', pOk = v.pace === 'in';
+      h += '<div class="tiles">';
+      h += tile('Vzdálenost', num(Math.round(r.distanceM / 10) / 100) + ' <small>km</small>', 'plán ' + (w.kmMax ? kmRange(w.kmMin, w.kmMax) + ' km' : '–'), v.distance ? (dOk ? 'good' : 'warn') : '');
+      h += tile('Tempo', pace(r.avgPaceSec) + ' <small>/km</small>', t && v.steady ? 'cíl ' + pace(t.fastSec) + '–' + pace(t.slowSec) : 'průměr celého běhu', v.pace ? (pOk ? 'good' : 'warn') : '');
+      h += tile('Čas', dur(r.movingSec), r.elevGainM != null ? '+' + Math.round(r.elevGainM) + ' m' : '');
+      h += r.avgHr != null ? tile('Tep', Math.round(r.avgHr) + ' <small>/min</small>') : tile('Kola', r.laps.length || '–');
       h += '</div>';
       if (r.reps && r.reps.length) {
         // Stejně dlouhé úseky: délka jednou v nadpisu; u kilometrových je čas totéž co tempo.
         var same = r.reps.every(function (x) { return x.distanceM === r.reps[0].distanceM; });
         var showTime = !same || r.reps[0].distanceM !== 1000;
         var showHr = r.reps.some(function (x) { return x.avgHr != null; });
-        h += '<h3>Rychlé úseky' + (same ? ' · ' + r.reps.length + '× ' + meters(r.reps[0].distanceM) : '') + (t ? ' · cíl ' + pace(t.fastSec) + '–' + pace(t.slowSec) : '') + '</h3><table><thead><tr><th>#</th>' + (same ? '' : '<th>Délka</th>') + (showTime ? '<th>Čas</th>' : '') + '<th>Tempo</th>' + (showHr ? '<th>Tep</th>' : '') + '<th>Proti cíli</th></tr></thead><tbody>';
+        h += '<h3>Rychlé úseky' + (same ? ' · ' + r.reps.length + '× ' + meters(r.reps[0].distanceM) : '') + (t ? ' · cíl ' + pace(t.fastSec) + '–' + pace(t.slowSec) : '') + '</h3><table><thead><tr><th>#</th>' + (same ? '' : '<th>Délka</th>') + (showTime ? '<th>Čas</th>' : '') + '<th>Tempo</th>' + (showHr ? '<th>Tep</th>' : '') + '<th>Cíl</th></tr></thead><tbody>';
         r.reps.forEach(function (x) {
-          var off = x.offSec === 0 ? '<span class="ok" title="v cílovém pásmu" aria-label="v cílovém pásmu">✓</span>' :'<span title="' + (x.offSec > 0 ? 'pomaleji' : 'rychleji') + ' než cíl">' + (x.offSec > 0 ? '+' : '−') + Math.abs(Math.round(x.offSec)) + ' s/km</span>';
-          h += '<tr><td>' + x.n + '</td>' + (same ? '' : '<td>' + meters(x.distanceM) + '</td>') + (showTime ? '<td>' + dur(x.durationSec) + '</td>' : '') + '<td>' + pace(x.paceSec) + '</td>' + (showHr ? '<td>' + (x.avgHr != null ? Math.round(x.avgHr) : '–') + '</td>' : '') + '<td>' + off + '</td></tr>';
+          var off = x.offSec === 0 ? '<span class="dev in" title="v cílovém pásmu">v pásmu</span>' : '<span class="dev off" title="' + (x.offSec > 0 ? 'pomaleji' : 'rychleji') + ' než cíl">' + (x.offSec > 0 ? '+' : '−') + Math.abs(Math.round(x.offSec)) + ' s</span>';
+          h += '<tr><td>' + x.n + '</td>' + (same ? '' : '<td>' + meters(x.distanceM) + '</td>') + (showTime ? '<td>' + dur(x.durationSec) + '</td>' : '') + '<td><b>' + pace(x.paceSec) + '</b></td>' + (showHr ? '<td>' + (x.avgHr != null ? Math.round(x.avgHr) : '–') + '</td>' : '') + '<td>' + off + '</td></tr>';
         });
         h += '</tbody></table>';
       }
-      if (r.laps.length > 1 && r.reps && r.reps.length) h += '<details><summary>Tempo po kolech</summary>' + lapChart(r, t, v, width) + '</details>';
-      else if (r.laps.length > 1) h += '<h3>Tempo po kolech' + (t ? ' · pruh je cíl „' + esc(t.label) + '“' : '') + '</h3>' + lapChart(r, t, v, width);
+      if (r.laps.length > 1 && r.reps && r.reps.length) h += '<details><summary>Tempo po kolech</summary>' + lapChart(r, t, v, width, tn) + '</details>';
+      else if (r.laps.length > 1) h += '<h3>Tempo po kolech' + (t ? ' · pruh je cíl' : '') + '</h3>' + lapChart(r, t, v, width, tn);
     }
     // Zápis je volitelný: u běhu s čísly je sbalený a otevře se jen na přání. Bez čísel je to hlavní obsah karty.
     var logOpen = form.showLog != null ? form.showLog : !r;
-    var recorded = c.status === 'completed' || c.status === 'partial';
-    if (recorded) h += '<div class="acts">' + feelRow({ id: w.id, version: c.version, status: c.status, feel: c.feel }) + '</div>';
-    var logSum = recorded ? 'Zapsáno: ' + STATUS[c.status].label.toLowerCase() + (c.feel ? ' · pocit ' + c.feel + '/5' : '') + ' · upravit' : 'Zapsat splnění a pocit';
-    h += '<details class="form log" data-log="1"' + (logOpen ? ' open' : '') + '><summary>' + esc(logSum) + '</summary><div class="k">Stav</div>' + pickRow('status', [['completed', 'Splněno'], ['partial', 'Částečně']], form.status, 'Stav');
-    h += '<div class="k">Pocit</div>' + pickRow('feel', [1, 2, 3, 4, 5].map(function (n) { return [n, n + ' · ' + FEEL[n]]; }), form.feel, 'Pocit');
-    h += '<div class="k">Bolest</div>' + pickRow('pain', PAIN, form.pain, 'Bolest');
+    if (recorded) h += feelRow({ id: w.id, version: c.version, status: c.status, feel: c.feel });
+    var logSum = recorded ? 'Upravit zápis: ' + STATUS[c.status].toLowerCase() + (c.pain && c.pain !== 'none' ? ' · bolest' : '') + (c.saved && c.saved.length ? ' · okolnosti ' + c.saved.length : '') : 'Zapsat splnění a pocit';
+    h += '<details class="card" data-log="1"' + (logOpen ? ' open' : '') + '><summary>' + esc(logSum) + '</summary><div class="fk2">Stav</div>' + pickRow('status', [['completed', 'Splněno'], ['partial', 'Částečně']], form.status, 'Stav');
+    h += '<div class="fk2">Pocit</div>' + pickRow('feel', [1, 2, 3, 4, 5].map(function (n) { return [n, n + ' · ' + FEEL[n]]; }), form.feel, 'Pocit');
+    h += '<div class="fk2">Bolest</div>' + pickRow('pain', PAIN, form.pain, 'Bolest');
     // Okolnosti jsou sbalené, dokud žádná není vybraná: běžný zápis je pak krátký.
     var condOpen = form.showCond || form.conditions.length > 0;
     h += '<details class="cond" data-cond="1"' + (condOpen ? ' open' : '') + '><summary>Okolnosti' + (form.conditions.length ? ' (' + form.conditions.length + ')' : ': zima, vítr, spánek, alkohol…') + '</summary>' + pickRow('cond', Object.keys(d.conditionLabels).map(function (k) { return [k, d.conditionLabels[k]]; }), form.conditions, 'Okolnosti') + '</details>';
-    h += '<button type="button" class="primary" data-save="1">Uložit zápis</button></details>';
-    if (!r) h += '<div class="acts">' + (appHost ? opener(icon('strava') + 'Zhodnotit podle Stravy', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh.') : strava
-      ? '<button type="button" data-say="' + esc('Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.') + '">Zhodnotit podle Stravy</button>'
-      : '<button type="button" data-say="' + esc('Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + w.title + '. Zeptej se mě na vzdálenost, čas a případně kola.') + '">Zadat čísla běhu</button>') + '</div>';
-    if (w.lines.length) h += '<details><summary>Předpis jednotky</summary><ul class="sub">' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></details>';
+    h += '<div class="save"><button type="button" class="btn primary block" data-save="1">Uložit zápis</button></div></details>';
+    if (!r) h += '<div class="a-main">' + (appHost ? opener(icon('strava') + 'Zhodnotit podle Stravy', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh.', ' class="btn block"') : strava
+      ? sayBtn(icon('strava') + 'Zhodnotit podle Stravy', 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.', ' class="btn block"')
+      : sayBtn('Zadat čísla běhu', 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + w.title + '. Zeptej se mě na vzdálenost, čas a případně kola.', ' class="btn block"')) + '</div>';
+    if (w.lines.length) h += '<details><summary>Předpis jednotky</summary><div class="t-' + tone(w.type) + '">' + steps(w.lines) + '</div></details>';
     return h + hints([['Co dál?', 'Co z toho plyne pro další dny?']]);
   }
   function saveCheckin(d) {
@@ -870,10 +1085,10 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // ---------- Soubor do hodinek ----------
   function renderGarmin(d) {
-    var w = d.workout, h = head(null, d) + '<div class="eyebrow">Soubor do hodinek Garmin</div><h2>' + esc(w.title) + ' · ' + DOW[w.dow] + ' ' + dm(w.date) + '</h2>';
+    var w = d.workout, h = head(null, d) + '<div class="eyebrow">Soubor do hodinek Garmin · ' + DOW[w.dow] + ' ' + dm(w.date) + '</div><h2>' + esc(w.title) + '</h2>';
     h += '<div class="sub">' + d.steps.length + ' kroků' + (d.hasPaces ? ' s cílovými tempy' : '') + '</div>';
-    h += '<a class="primary" data-link="1" href="' + esc(d.url) + '" target="_blank" rel="noopener">Stáhnout soubor .fit</a>';
-    h += '<details><summary>Kroky a jak soubor nahrát</summary><ol class="steps fit">' + d.steps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>';
+    h += '<div class="a-main"><a class="btn primary block" data-link="1" href="' + esc(d.url) + '" target="_blank" rel="noopener">Stáhnout soubor .fit</a></div>';
+    h += '<details><summary>Kroky a jak soubor nahrát</summary><ol class="howto fit">' + d.steps.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>';
     return h + '<p class="sub">Hodinky připoj kabelem k počítači a soubor zkopíruj do složky GARMIN/NewFiles. Odkaz platí 24 hodin.</p></details>';
   }
 
@@ -881,11 +1096,19 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var lastWidth = 0, lastHeight = 0;
   function render() {
     tips = []; hideTip();
-    var width = app.clientWidth - 28;
+    var width = app.clientWidth - (inApp ? 32 : 34);
     lastWidth = app.clientWidth;
-    if (!data) app.innerHTML = head(retry ? null : '', null) + '<p class="empty">' + esc(plain) + '</p>' + (retry ? '<div class="acts">' + opener('Načíst aktuální týden', 'show_week', {}, 'Ukaž mi tento týden.', ' class="main"') + '</div>' : '');
-    else if (data.view === 'none') { app.innerHTML = ''; app.style.display = 'none'; notify('ui/notifications/request-teardown', {}); }
-    else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'import' ? renderImport(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
+    var html;
+    if (!data) html = head(retry || inApp ? null : '', null) + '<p class="empty">' + esc(plain) + '</p>' + (retry ? '<div class="a-main">' + opener('Načíst aktuální týden', 'show_week', {}, 'Ukaž mi tento týden.', ' class="btn primary block"') + '</div>' : '');
+    else if (data.view === 'none') { app.innerHTML = ''; app.style.display = 'none'; notify('ui/notifications/request-teardown', {}); return; }
+    else html = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'import' ? renderImport(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
+    app.innerHTML = html + (inApp ? tabBar() : '');
+    // V aplikaci nový pohled (jiná záložka, jiný týden) začíná nahoře; po akci v témž pohledu zůstane pozice.
+    var key = data ? data.view + '|' + (data.weekStart || (data.workout && data.workout.id) || '') : '';
+    if (inApp && key !== shownKey) window.scrollTo(0, 0);
+    shownKey = key;
+    if (jumpTo) { var row = app.querySelector('[data-row="' + jumpTo + '"]'); jumpTo = null; if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    if (inApp) return;
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
     requestAnimationFrame(reportSize);
     setTimeout(reportSize, 60);
@@ -896,12 +1119,13 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   // na kratší záložku i zmenší; z výšky samotné a z výšky rámu zůstávalo dole prázdné místo.
   var lastSentWidth = 0, tallest = 0;
   function reportSize() {
+    if (inApp) return;
     var root = document.documentElement, prev = root.style.height;
     app.style.minHeight = '';
     root.style.height = 'max-content';
     var natural = Math.ceil(root.getBoundingClientRect().height);
     // Hostitel rámeček nezmenší: karta se roztáhne na dosavadní maximum, aby pod ní nezůstalo prázdno.
-    if (!appHost && natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
+    if (natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
     var h = Math.ceil(root.getBoundingClientRect().height);
     tallest = Math.max(tallest, h);
     root.style.height = prev;
@@ -919,8 +1143,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
 
   // Hostitel data nepošle (karta znovu načtená po čase): po 8 s nabídne načíst aktuální stav místo nekonečného čekání.
   var retry = false;
-  setTimeout(function () { if (!data && !plain) { retry = true; plain = 'Karta se nenačetla.'; render(); } }, 8000);
-  if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude nebo ChatGPT, když je připojený konektor Run Tracker.</p>'; return; }
+  setTimeout(function () { if (!data && !plain) { retry = true; plain = 'Karta se nenačetla.'; render(); } }, inApp ? 15000 : 8000);
+  if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude nebo ChatGPT, když je připojený konektor Run Tracker. Aplikace je na adrese /app/.</p>'; return; }
   if (oai) {
     applyTheme(oai.theme);
     if (oai.toolOutput && oai.toolOutput.view) showResult({ structuredContent: oai.toolOutput }, true);
@@ -931,8 +1155,16 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       if (g.toolOutput && g.toolOutput.view) showResult({ structuredContent: g.toolOutput }, true);
     });
   }
-  request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.5.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' }, 10000)
-    .then(function (result) { applyHost(result && result.hostContext); appHost = !!(result && result.hostInfo && result.hostInfo.name === 'run-tracker-app'); notify('ui/notifications/initialized'); if (appHost && data) render(); })
+  request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.6.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' }, 10000)
+    .then(function (result) {
+      var name = result && result.hostInfo && result.hostInfo.name;
+      mode = name === 'run-tracker-app' ? 'app' : name === 'run-tracker-pwa' ? 'pwa' : 'chat';
+      appHost = mode === 'app'; inApp = mode !== 'chat';
+      if (inApp) document.documentElement.classList.add('app');
+      applyHost(result && result.hostContext);
+      notify('ui/notifications/initialized');
+      if (inApp) render();
+    })
     .catch(function () { notify('ui/notifications/initialized'); });
 })();
 </script>

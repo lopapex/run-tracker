@@ -17,6 +17,7 @@ Stav a zbývající kroky jsou v [CHECKLIST.md](CHECKLIST.md).
 9. `calculate_paces` spočítá tempa a předpovědi závodů z jednoho výkonu vzorci VDOT (`src/domain/vdot.ts`, test proti tabulkám Danielse); instrukce konektoru říkají modelu, aby tempa neodhadoval.
 10. Ve widgetu jde přesunout (výběrem dne), vynechat, obnovit a vrátit klepnutím: widget volá nástroje přímo a model se o změně dozví přes kontext.
 11. `export_garmin` převede jednotku na strukturovaný trénink FIT (kroky, opakování, cílová tempa) a vystaví ho 24 hodin na `/garmin/<token>`; prošlé soubory se při dalším exportu smažou a `delete_all_data` smaže i soubory daného prostoru. Kódování je v `src/connector/fit.ts` a test ho čte nezávislým dekodérem.
+12. Aplikace Trénink na `/app/` je PWA pro telefon: tentýž widget přes celou obrazovku se záložkami dole. Nástroje volá přímo na adrese konektoru (klíč je jen v prohlížeči, z úvodní stránky přijde v kotvě odkazu), poslední týden drží pro offline start a věty pro Clauda otevře v novém chatu. Stejný obal (`public/app/shell.js`) běží i jako stránka v claude.ai (`app/trenink.html`), kde Doběhnuto a Doplnit čtou běhy z oficiálního konektoru Stravy.
 
 ## ChatGPT
 
@@ -48,7 +49,8 @@ Netlify: `netlify.toml`, statická stránka z `public/`, funkce `netlify/functio
 | `src/connector/server.ts` | registrace nástrojů, UI metadat a instrukcí pro model |
 | `src/connector/http.ts` | bezstavový HTTP vstup MCP |
 | `src/connector/store.ts`, `blobStore.ts` | úložiště s podmíněným zápisem |
-| `public/widget.html` | widget pro konverzaci; samostatný soubor bez závislostí, mluví protokolem MCP Apps |
+| `public/widget.html` | widget pro konverzaci i aplikaci; samostatný soubor bez závislostí, mluví protokolem MCP Apps |
+| `public/app/` | PWA Trénink: obal karty, manifest, service worker |
 | `public/` | úvodní stránka s vytvořením adresy a návodem, ikony |
 
 Původní PWA je v historii gitu do commitu `6fcdf7d`.

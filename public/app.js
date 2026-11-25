@@ -34,6 +34,7 @@
 
   const show = (key, message) => {
     url.value = `${location.origin}/mcp/${key}`;
+    $('open-app').href = `/app/#k=${key}`;
     result.hidden = false;
     create.hidden = true;
     status.textContent = message;
