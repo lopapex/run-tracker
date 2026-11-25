@@ -353,7 +353,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
     estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}.` : '',
-    'Čísla běhu se jen přepočítala, Run Tracker je neuložil. Pocit a bolest zapiš přes set_status, když je uživatel řekne.',
+    'Čísla běhu se jen přepočítala, RPM je neuložil. Pocit a bolest zapiš přes set_status, když je uživatel řekne.',
   ].filter(Boolean).join(' ');
   return {
     ok: true,

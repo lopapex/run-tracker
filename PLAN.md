@@ -56,7 +56,7 @@ Vzor je měřicí přístroj nebo sequencer, ne fitness dashboard. Jedna plocha,
      - **profil jednotky**: vodorovný proužek složený z úseků v poměru délky a v barvě intenzity (rozklus, úseky, pauzy, výklus). Je to hlavní vizuální prvek appky, dnes chybí úplně.
      - km;
      - stav: tečka, plná = hotovo.
-   - **Dnešek je rozbalený v místě** (ne zvláštní karta): rozpis s tempy a jedno tlačítko **Hotovo**. Po klepnutí se objeví pět teček pocitu.
+   - **Dnešek je rozbalený v místě** (ne zvláštní karta): rozpis s tempy a jedno tlačítko **Odběhnuto** a pod ním tiché odkazy (Přesunout, Vynechat, Do hodinek). Pocit se v appce nezadává.
    - Ostatní akce (přesunout, vynechat, do hodinek) jsou v nabídce `⋯` řádku, ne jako tlačítka.
 2. **Plán**: **matice týdny × dny** (12 × 7 buněk).
    - Buňka má barvu intenzity, plná znamená splněno, prázdná naplánováno; dnešek má rámeček.
@@ -118,7 +118,7 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
 3. ~~**Server:**~~ **Hotovo 25. 11.** zeštíhlit podle sekce 5 a upravit testy. Data a `show_week` jen pro appku (`?client=app`).
 4. ~~**Appka:**~~ **Hotovo 25. 11.** (shell.js a karta v rámu z appky pryč) přepsat na prototyp a volat API přímo, bez rámu a postMessage. Přidat profil jednotky a matici.
 5. **Mazání:** ~~karta v chatu~~, ~~ChatGPT~~ (hotovo 25. 11.); zbývá stránka v claude.ai (smaže se po tvém souhlasu).
-6. **Název a instalace:**
+6. ~~**Název a instalace:**~~ **Hotovo 25. 11.** (konektor se jmenuje RPM, appka nabízí instalaci)
    - manifest, ikona, úvodní stránka (appka první, Claude jako mozek), README;
    - v appce tlačítko Nainstalovat: na Androidu přes výzvu prohlížeče, na iPhonu jednořádkový návod „Sdílet → Přidat na plochu“.
    - Odkaz na appku nahoře na úvodní stránce je hotový od 25. 11. Nese adresu konektoru, pokud ji prohlížeč má uloženou.

@@ -47,7 +47,7 @@ const idOf = (plan: string, date: string, title: string) => {
   return line.split(' | ')[0];
 };
 
-describe('konektor Run Tracker', () => {
+describe('konektor RPM', () => {
   // Testy počítají s „dnes“ uprostřed testovacího týdne; skutečné datum by je časem rozbilo.
   beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-18T10:00:00Z')); });
   afterEach(() => { vi.useRealTimers(); });
@@ -335,7 +335,7 @@ describe('konektor Run Tracker', () => {
     expect(result.data.run.avgPaceSec).toBe(313);
     expect(result.data.target).toMatchObject({ key: 'easy', fastSec: 304, slowSec: 336 });
     expect(result.data.verdict).toMatchObject({ distance: 'ok', pace: 'in', lapsInTarget: 8 });
-    expect(result.text).toContain('Run Tracker je neuložil');
+    expect(result.text).toContain('RPM je neuložil');
     // stav se zapsal podle hodnocení a jde vrátit
     expect(result.data.checkin.status).toBe('completed');
     expect(result.data.banner).toMatchObject({ text: 'Zapsáno jako splněno.' });

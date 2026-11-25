@@ -38,7 +38,7 @@
   }
 
   // ---------- Stav ----------
-  var S = { tab: 'week', week: null, plan: null, paces: null, staged: null, sub: null, open: null, feelFor: null, form: null, calc: null };
+  var S = { tab: 'week', week: null, plan: null, paces: null, staged: null, sub: null, open: null, form: null, calc: null };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function num(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
@@ -128,27 +128,21 @@
     var p = S.paces.paces.filter(function (x) { return x.key === k; })[0];
     return p ? pace(p.fromSec) + '–' + pace(p.toSec) : '';
   }
+  // Jedna jasná akce, zbytek jako tiché odkazy (bez nabídky ···).
+  function link(act, id, label, cls) { return '<button type="button"' + (cls ? ' class="' + cls + '"' : '') + ' data-do="' + act + '" data-id="' + id + '">' + label + '</button>'; }
   function detail(w, day) {
-    var h = '<div class="open">' + steps(w);
+    var h = '<div class="open">' + steps(w), id = w.id;
     if (w.planNote) h += '<p class="note">' + esc(w.planNote) + '</p>';
     if (w.status === 'skipped') {
-      h += '<div class="done-line"><span>Vynecháno' + (w.skipReason ? ': ' + esc(w.skipReason) : '') + '</span><button type="button" data-do="restore" data-id="' + w.id + '">Obnovit</button></div>';
+      h += '<p class="state">Vynecháno' + (w.skipReason ? ': ' + esc(w.skipReason) : '') + '</p><div class="links">' + link('restore', id, 'Obnovit') + '</div>';
     } else if (w.status === 'completed' || w.status === 'partial') {
-      h += '<div class="done-line"><span>' + (w.status === 'partial' ? 'Částečně' : 'Hotovo') + (w.feel ? ' · pocit ' + w.feel + '/5' : '') + '</span><button type="button" data-do="unset" data-id="' + w.id + '">Zrušit zápis</button></div>';
-      if (S.feelFor === w.id || !w.feel) h += feel(w);
-      h += '<div class="acts sm"><button type="button" class="btn ext" data-do="eval" data-id="' + w.id + '">Zhodnotit podle Stravy</button></div>';
-    } else if (!day.isPast && !day.isToday) {
-      h += '<div class="acts sm"><button type="button" class="btn" data-do="menu" data-id="' + w.id + '">Přesunout nebo vynechat</button></div>';
+      if (w.status === 'partial') h += '<p class="state">Odběhnuto jen částečně</p>';
+      h += '<div class="links">' + link('eval', id, 'Zhodnotit se Stravou', 'ext') + (w.status === 'completed' ? link('partial', id, 'Jen část') : '') + link('unset', id, 'Zrušit') + '</div>';
     } else {
-      // Hotovo zapíše hned; Zhodnotit pošle běh Claudovi, ten ho porovná se Stravou a zapíše sám.
-      h += '<div class="acts sm"><button type="button" class="btn go' + (day.isToday ? ' accent' : '') + '" data-do="done" data-id="' + w.id + '">Hotovo</button><button type="button" class="btn ext" data-do="eval" data-id="' + w.id + '">Zhodnotit</button><button type="button" class="btn more" aria-label="Další možnosti" data-do="menu" data-id="' + w.id + '">···</button></div>';
+      if (day.isPast || day.isToday) h += '<div class="acts sm"><button type="button" class="btn go' + (day.isToday ? ' accent' : '') + '" data-do="done" data-id="' + id + '">Odběhnuto</button></div>';
+      h += '<div class="links">' + link('move', id, 'Přesunout') + link('skip', id, 'Vynechat') + link('fit', id, 'Do hodinek') + '</div>';
     }
     return h + '</div>';
-  }
-  function feel(w) {
-    var h = '<div class="feel"><p>Jak to šlo?</p><div class="dots">';
-    for (var i = 1; i <= 5; i++) h += '<button type="button" class="n' + (w.feel === i ? ' on' : '') + '" data-do="feel" data-id="' + w.id + '" data-v="' + i + '">' + i + '</button>';
-    return h + '</div><div class="ends"><span>těžko</span><span>lehce</span></div></div>';
   }
   function renderWeek() {
     var d = S.week;
@@ -176,7 +170,16 @@
         h += '</li>';
       });
     });
-    return h + '</ul>';
+    return h + '</ul>' + installRow();
+  }
+  // Instalace na plochu: Android a Chrome přes výzvu prohlížeče, iPhone jednou větou. Po zavření se neukáže.
+  function standalone() { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  function installRow() {
+    var off; try { off = localStorage.getItem('rpm.noInstall'); } catch (x) { off = '1'; }
+    if (off || theme || standalone()) return '';
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (!S.install && !ios) return '';
+    return '<div class="install"><p>' + (S.install ? 'RPM jako appka na ploše' : 'Na plochu: <b>Sdílet</b> → <b>Přidat na plochu</b>') + '</p>' + (S.install ? '<button type="button" class="btn go" data-do="install">Nainstalovat</button>' : '') + '<button type="button" class="x" data-do="noinstall" aria-label="Skrýt">×</button></div>';
   }
   function dw(day) { return '<span class="dw">' + DOW[day.dow] + '<b>' + +day.date.slice(8) + '</b></span>'; }
   // Rozbalí se nejbližší nezapsaný běh: dnešek, jinak včerejší nezapsaný, jinak nejbližší další.
@@ -197,16 +200,7 @@
     return '<div class="blank"><p>Zatím nemáš plán.</p><p><button type="button" class="btn go accent" data-do="tab" data-v="plan">Založit plán</button></p></div>';
   }
 
-  // ---------- Nabídka jednotky ----------
-  function menu(id) {
-    var x = findW(id), w = x[0], day = x[1];
-    var h = '<div class="back" data-do="close"></div><section class="panel" role="dialog" aria-label="' + esc(w.title) + '"><h2>' + esc(w.title) + ' <button type="button" data-do="close">Zavřít</button></h2><ul class="menu">';
-    if (day.isPast || day.isToday) h += '<li><button type="button" data-do="partial" data-id="' + id + '">Jen částečně</button></li>';
-    h += '<li><button type="button" data-do="move" data-id="' + id + '">Přesunout <span>na jiný den</span></button></li>';
-    h += '<li><button type="button" data-do="skip" data-id="' + id + '">Vynechat</button></li>';
-    h += '<li><button type="button" data-do="fit" data-id="' + id + '">Do hodinek <span>soubor .fit</span></button></li>';
-    openSheet(h + '</ul></section>');
-  }
+  // ---------- Přesun jednotky ----------
   function moveMenu(id) {
     var x = findW(id), w = x[0], start = S.week.weekStart;
     var h = '<div class="back" data-do="close"></div><section class="panel" role="dialog" aria-label="Přesunout"><h2>Přesunout ' + esc(w.title) + ' <button type="button" data-do="close">Zavřít</button></h2><div class="seg n wk7">';
@@ -366,17 +360,17 @@
       render(); return;
     }
     switch (t.getAttribute('data-do')) {
-      case 'open': S.open = (S.open == null ? autoOpen(S.week) : S.open) === id ? '' : id; S.feelFor = null; render(); break;
+      case 'open': S.open = (S.open == null ? autoOpen(S.week) : S.open) === id ? '' : id; render(); break;
       case 'prev': goWeek(-1); break;
+      case 'install': if (S.install) { S.install.prompt(); S.install.userChoice.then(function () { S.install = null; render(); }); } break;
+      case 'noinstall': try { localStorage.setItem('rpm.noInstall', '1'); } catch (x) { /* nic */ } render(); break;
       case 'next': goWeek(1); break;
-      case 'done': S.open = id; S.feelFor = id; act('set_status', { workoutId: id, status: 'completed' }, 'Zapsáno', true); break;
-      case 'feel': S.feelFor = null; act('set_status', { workoutId: id, status: findW(id)[0].status === 'partial' ? 'partial' : 'completed', feel: +v }); break;
+      case 'done': S.open = id; act('set_status', { workoutId: id, status: 'completed' }, 'Odběhnuto', true); break;
       case 'unset': act('set_status', { workoutId: id, status: 'scheduled' }, 'Zápis zrušen', true); break;
       case 'restore': act('restore_workout', { workoutId: id, reason: '' }, 'Obnoveno', true); break;
-      case 'menu': menu(id); break;
-      case 'eval': var ew = findW(id)[0]; toClaude('Zhodnoť můj běh „' + ew.title + '“ z ' + dm(ew.date) + ' podle Stravy (run connector, show_result) a zapiš ho.'); break;
+      case 'eval': var ew = findW(id)[0]; toClaude('Zhodnoť můj běh „' + ew.title + '“ z ' + dm(ew.date) + ' podle Stravy (konektor RPM, show_result) a zapiš ho.'); break;
       case 'close': closeSheet(); break;
-      case 'partial': closeSheet(); S.open = id; S.feelFor = id; act('set_status', { workoutId: id, status: 'partial' }, 'Zapsáno jako částečně', true); break;
+      case 'partial': closeSheet(); S.open = id; act('set_status', { workoutId: id, status: 'partial' }, 'Zapsáno jako částečně', true); break;
       case 'skip': closeSheet(); act('skip_workout', { workoutId: id, reason: '' }, 'Vynecháno', true); break;
       case 'move': moveMenu(id); break;
       case 'moveto': closeSheet(); act('move_workout', { workoutId: id, toDate: v, reason: '' }, 'Přesunuto na ' + DOW[(new Date(v + 'T12:00:00Z').getUTCDay() + 6) % 7], true); break;
@@ -389,7 +383,7 @@
       case 'km': S.form.km = Math.min(200, Math.max(10, S.form.km + +v)); render(); break;
       case 'rest': var r = S.form.rest, i = r.indexOf(+v); if (i >= 0) r.splice(i, 1); else r.push(+v); render(); break;
       case 'draft': draft(); break;
-      case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes run connector do rozpracovaného importu (import_plan_weeks) a do kalendáře ho nezařazuj; schválím ho v appce RPM.'); break;
+      case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes konektor RPM do rozpracovaného importu (import_plan_weeks) a do kalendáře ho nezařazuj; schválím ho v appce RPM.'); break;
       case 'activate':
         var a = S.staged.activate || { mode: S.amode || 'start', date: S.adate || nextMonday() };
         act('activate_plan', a, 'Plán je v kalendáři').then(function (d) { if (d && d.view === 'plan') { S.sub = null; S.staged = null; S.fromForm = false; S.form = null; if (S.week) S.week.staged = null; render(); } });
@@ -412,7 +406,7 @@
     else S.form[f] = e.target.value;
   });
   document.addEventListener('input', function (e) { if (e.target.getAttribute('data-f') === 'ctime') S.calcForm.time = e.target.value; });
-  $('#claude').addEventListener('click', function () { toClaude('Podívej se přes run connector na můj aktuální týden.'); });
+  $('#claude').addEventListener('click', function () { toClaude('Podívej se přes konektor RPM na můj aktuální týden.'); });
 
   // Týden gestem do stran: dny jdou za prstem, bez dalšího týdne kladou odpor, po puštění dojedou ven
   // (nebo se vrátí). Další týden se načítá už během odjezdu, takže nebliká prázdno.
@@ -434,7 +428,7 @@
   function goWeek(dir) {
     var el = view.querySelector('.days');
     if (busy || !hasWeek(dir)) { if (el) slide(el, 0, BACK_MS); return; }
-    busy = true; S.open = null; S.feelFor = null;
+    busy = true; S.open = null;
     var data = call('show_week', { date: addDays(S.week.weekStart, dir * 7) });
     var out = new Promise(function (ok) {
       if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return ok();
@@ -503,6 +497,8 @@
     });
   }
   var CACHE_KEY = 'rpm.lastWeek';
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); S.install = e; if (S.tab === 'week') render(); });
+  window.addEventListener('appinstalled', function () { S.install = null; render(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function () { /* bez offline startu */ });
   if (key) start(); else setup();
 })();
