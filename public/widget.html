@@ -214,6 +214,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var oai = window.openai || null;
   // Oficiální konektor Stravy je v Claude, v ChatGPT ne: tam se čísla běhu zadávají ručně nebo souborem.
   var strava = !oai;
+  // Hostí-li kartu stránka Trénink, umí Stravu sama: hodnocení a doplnění bez zprávy do konverzace.
+  var appHost = false;
+  function evalArgs(w) { return { workoutId: w.id, date: w.date, type: w.type, kmMin: w.kmMin, kmMax: w.kmMax }; }
   var lastOutput = '';
 
   // Stav widgetu
@@ -289,7 +292,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     busy = true; errorText = ''; sayText = '';
     if (CHANGES[name] || (args && args.save)) widgetChange = note || true;
     app.classList.add('busy');
-    request('tools/call', { name: name, arguments: args || {} }, 20000)
+    request('tools/call', { name: name, arguments: args || {} }, appHost ? 90000 : 20000)
       .then(function (r) {
         // Změnu si vyzvedla jiná čekající karta: tahle se jen obnoví.
         if (r && r.structuredContent && r.structuredContent.view === 'none') { widgetChange = null; refresh(true); return; }
@@ -572,7 +575,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var name = w.title + ' (' + when(w) + ')', h = '<div class="acts">', links = [], main = [];
     var link = function (label, text) { return '<button type="button" data-say="' + esc(text) + '">' + label + '</button>'; };
     var today = data && data.today, future = today && w.date > today, past = today && w.date < today;
-    var review = link(icon('strava') + 'Hodnocení', strava
+    var review = appHost ? opener(icon('strava') + 'Hodnocení', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh z ' + dm(w.date) + '.') : link(icon('strava') + 'Hodnocení', strava
       ? 'Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + name + '.'
       : 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.');
     if (w.lines.length) h += '<ul>' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
@@ -602,6 +605,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   }
   function doneButton(w, name, extra) {
     var label = w.type === 'strength' || w.type === 'cross' ? 'Hotovo' : 'Doběhnuto';
+    if (appHost && label === 'Doběhnuto') return opener(label, 'strava_evaluate', evalArgs(w), 'Doběhl jsem jednotku ' + name + '.', extra);
     return '<button type="button" data-done="' + esc(w.id) + '" data-version="' + esc(w.version) + '" data-name="' + esc(name) + '"' + (extra || '') + '>' + label + '</button>';
   }
   function feelRow(w) {
@@ -644,7 +648,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     if (s.longRunKm != null) h += '<div class="tile"><div class="k">Dlouhý běh</div><div class="v">' + num(s.longRunKm) + ' <small>km</small></div></div>';
     h += '</div>';
     if (d.fatigue) h += '<div class="note warn" style="margin:10px 0 0"><span>' + esc(d.fatigue.text) + '</span><button type="button" data-say="' + esc(d.fatigue.kind === 'pain' ? 'Poslední běhy mě bolí. Co s tím a jak upravit zbytek týdne?' : 'Poslední běhy byly těžké. Navrhni lehčí zbytek týdne.') + '">Ubrat</button></div>';
-    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span><button type="button"' + (strava ? ' data-watch="1"' : '') + ' data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>';
+    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span>' + (appHost ? opener('Doplnit', 'strava_fill_week', { weekStart: d.weekStart, workouts: d.days.reduce(function (a, day) { return a.concat(day.isPast ? day.workouts.filter(function (w) { return w.status === 'scheduled' && w.type !== 'rest' && w.type !== 'strength' && w.type !== 'cross'; }).map(function (w) { return { id: w.id, date: w.date }; }) : []); }, []) }, 'Doplň splnění tohoto týdne podle Stravy.') + '</div>' : '<button type="button"' + (strava ? ' data-watch="1"' : '') + ' data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>');
     h += '<ul class="days">';
     d.days.forEach(function (day) {
       day.workouts.forEach(function (w) {
@@ -831,6 +835,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     // Zápis je volitelný: u běhu s čísly je sbalený a otevře se jen na přání. Bez čísel je to hlavní obsah karty.
     var logOpen = form.showLog != null ? form.showLog : !r;
     var recorded = c.status === 'completed' || c.status === 'partial';
+    if (recorded) h += '<div class="acts">' + feelRow({ id: w.id, version: c.version, status: c.status, feel: c.feel }) + '</div>';
     var logSum = recorded ? 'Zapsáno: ' + STATUS[c.status].label.toLowerCase() + (c.feel ? ' · pocit ' + c.feel + '/5' : '') + ' · upravit' : 'Zapsat splnění a pocit';
     h += '<details class="form log" data-log="1"' + (logOpen ? ' open' : '') + '><summary>' + esc(logSum) + '</summary><div class="k">Stav</div>' + pickRow('status', [['completed', 'Splněno'], ['partial', 'Částečně']], form.status, 'Stav');
     h += '<div class="k">Pocit</div>' + pickRow('feel', [1, 2, 3, 4, 5].map(function (n) { return [n, n + ' · ' + FEEL[n]]; }), form.feel, 'Pocit');
@@ -839,7 +844,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var condOpen = form.showCond || form.conditions.length > 0;
     h += '<details class="cond" data-cond="1"' + (condOpen ? ' open' : '') + '><summary>Okolnosti' + (form.conditions.length ? ' (' + form.conditions.length + ')' : ': zima, vítr, spánek, alkohol…') + '</summary>' + pickRow('cond', Object.keys(d.conditionLabels).map(function (k) { return [k, d.conditionLabels[k]]; }), form.conditions, 'Okolnosti') + '</details>';
     h += '<button type="button" class="primary" data-save="1">Uložit zápis</button></details>';
-    if (!r) h += '<div class="acts">' + (strava
+    if (!r) h += '<div class="acts">' + (appHost ? opener(icon('strava') + 'Zhodnotit podle Stravy', 'strava_evaluate', evalArgs(w), 'Zhodnoť můj běh.') : strava
       ? '<button type="button" data-say="' + esc('Najdi ve Stravě můj běh z ' + dm(w.date) + ' a zhodnoť ho proti jednotce ' + w.title + '.') + '">Zhodnotit podle Stravy</button>'
       : '<button type="button" data-say="' + esc('Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + w.title + '. Zeptej se mě na vzdálenost, čas a případně kola.') + '">Zadat čísla běhu</button>') + '</div>';
     if (w.lines.length) h += '<details><summary>Předpis jednotky</summary><ul class="sub">' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></details>';
@@ -896,7 +901,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     root.style.height = 'max-content';
     var natural = Math.ceil(root.getBoundingClientRect().height);
     // Hostitel rámeček nezmenší: karta se roztáhne na dosavadní maximum, aby pod ní nezůstalo prázdno.
-    if (natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
+    if (!appHost && natural < tallest) app.style.minHeight = (tallest - (natural - Math.ceil(app.getBoundingClientRect().height))) + 'px';
     var h = Math.ceil(root.getBoundingClientRect().height);
     tallest = Math.max(tallest, h);
     root.style.height = prev;
@@ -927,7 +932,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     });
   }
   request('ui/initialize', { appInfo: { name: 'run-tracker-view', version: '0.5.0' }, appCapabilities: {}, protocolVersion: '2026-01-26' }, 10000)
-    .then(function (result) { applyHost(result && result.hostContext); notify('ui/notifications/initialized'); })
+    .then(function (result) { applyHost(result && result.hostContext); appHost = !!(result && result.hostInfo && result.hostInfo.name === 'run-tracker-app'); notify('ui/notifications/initialized'); if (appHost && data) render(); })
     .catch(function () { notify('ui/notifications/initialized'); });
 })();
 </script>
