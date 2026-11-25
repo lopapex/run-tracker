@@ -1,6 +1,6 @@
 // Prostor jednoho uživatele konektoru: jeden JSON dokument v úložišti.
 // Neobsahuje žádná data aktivit ze Stravy; jen plán, rozpis, stav splnění a vlastní poznámky.
-import type { AthleteProfile, IsoDate, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, ScheduleRevision, TemplateWeek } from '../domain/types';
+import type { AthleteProfile, IsoDate, PaceChart, PaceTableRow, PlanActivation, PlanTemplate, ScheduledWorkout, ScheduleRevision, TemplateWeek } from '../domain/types';
 
 export const CONDITIONS = {
   cold: 'zima', heat: 'horko', wind: 'vítr', rain: 'déšť', hills: 'kopce', poor_sleep: 'špatný spánek', alcohol: 'alkohol den předem',
@@ -32,6 +32,7 @@ export interface StagedImport {
   name: string;
   units: 'km' | 'mi';
   paceChart?: PaceChart;
+  paceTable?: PaceTableRow[];
   weeks: TemplateWeek[];
   updatedAt: string;
   /** Jak plán zařadit, když ho postavil generátor (závod, nebo začátek); appka to nabídne jedním klepnutím. */

@@ -7,8 +7,9 @@ import { plannedDistance } from '../domain/distance';
 import { blockLines, formatDistanceRange, formatKm, formatPace, resolvePaceChart, workoutSummary } from '../domain/format';
 import { createActivation, newId, planRange } from '../domain/schedule';
 import { defaultStart, generateWeeks, weeksUntil } from '../domain/generator';
-import { lintPaceChart, lintWeek } from '../domain/lint';
-import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
+import { predictTime, trainingPaces } from '../domain/vdot';
+import { autofixWorkout, checkWeekTotal, lintPaceChart, lintWeek } from '../domain/lint';
+import type { Dow, PaceChart, PaceTableRow, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
 import { checkinVersion, CONDITIONS, fatigueOf, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
 /** `banner` je krátké shrnutí pro appku, když je text pro model delší. */
@@ -56,6 +57,8 @@ export const stageInput = z.object({
   name: z.string().min(1).max(80),
   units: z.enum(['km', 'mi']).default('km'),
   paceChart: paceChartSchema.optional(),
+  paceTable: z.array(z.object({ goalSec: z.number().int().min(600).max(8 * 3600), paces: paceChartSchema })).min(2).max(10).optional()
+    .describe('Celá tabulka temp, má-li dokument řádky pro různé cílové časy: každý řádek s cílovým časem závodu v sekundách. Appka pak tempa přepočítá podle cíle.'),
   restart: z.boolean().default(false),
   weeks: z.array(z.object({
     index: z.number().int().min(1).max(52),
@@ -65,6 +68,8 @@ export const stageInput = z.object({
     days: z.array(z.object({ dow, workout: workoutSpecSchema })).length(7),
   })).min(1).max(8),
 });
+
+export const goalInput = z.object({ goalSec: z.number().int().min(600).max(8 * 3600).describe('Cílový čas závodu v sekundách.') });
 
 export const activateInput = z.object({
   mode: z.enum(['start', 'race']),
@@ -145,12 +150,12 @@ function workoutLine(ws: Workspace, w: ScheduledWorkout, chart: PaceChart): stri
 }
 
 function weekCheck(week: Pick<TemplateWeek, 'index' | 'declaredTotalM' | 'days'>, chart?: PaceChart): string {
-  const range = plannedDistance(week.days.map((d) => d.workout), chart);
-  const sum = formatDistanceRange(range);
-  if (week.declaredTotalM == null) return `T${week.index}: součet ${sum}`;
-  // Míň než součet známých délek je chyba vždy; víc jde posoudit jen bez nevyčíslených úseků.
-  const off = week.declaredTotalM < range.minM - 500 || (!range.unknown && week.declaredTotalM > range.maxM + 500);
-  return `T${week.index}: součet ${sum}, autor uvádí ${formatKm(week.declaredTotalM)}${off ? ' – NESEDÍ, zkontroluj přepis proti dokumentu' : range.unknown ? ' (část jednotek je jen časem, nejde ověřit)' : ' – sedí'}`;
+  // Úseky na čas se pro kontrolu odhadnou i bez temp z dokumentu, takže vypadlý den nebo závod bez délky se ukáže.
+  const c = checkWeekTotal(week, chart);
+  const sum = formatDistanceRange({ minM: c.minM, maxM: c.maxM, estimated: c.minM !== c.maxM, unknown: c.unknown ? 1 : 0 });
+  if (c.declaredM == null) return `T${week.index}: součet ${sum}`;
+  const verdict = c.status === 'off' ? ' – NESEDÍ, najdi v dokumentu, co v přepisu chybí nebo přebývá, a týden pošli znovu' : c.status === 'unknown' ? ' (část jednotek nemá délku ani čas, nejde ověřit)' : ' – sedí';
+  return `T${week.index}: součet ${sum}, autor uvádí ${formatKm(c.declaredM)}${verdict}`;
 }
 
 // ---------- Čtení ----------
@@ -244,18 +249,25 @@ export function stageWeeks(ws: Workspace, input: z.infer<typeof stageInput>, now
   for (const w of input.weeks) if (new Set(w.days.map((d) => d.dow)).size !== 7) return fail(`Týden ${w.index} musí obsahovat každý den právě jednou (0 = pondělí … 6 = neděle); volný den zapiš jako typ rest.`);
   const base = input.restart || !ws.staged ? [] : ws.staged.weeks;
   const byIndex = new Map(base.map((w) => [w.index, w]));
+  const fixed: string[] = [];
   for (const w of input.weeks) {
     byIndex.set(w.index, {
       index: w.index,
       phase: w.phase,
       note: w.note,
       declaredTotalM: w.declaredTotalM,
-      days: [...w.days].sort((a, b) => a.dow - b.dow).map((d) => ({ dow: d.dow as Dow, workout: d.workout, source: { method: 'generated' as const, review: 'unreviewed' as const, issues: [] } })),
+      days: [...w.days].sort((a, b) => a.dow - b.dow).map((d) => {
+        // Skoro jisté chyby přepisu (závod bez délky, běh vedený jako rovinky) se opraví hned; model dostane, co se změnilo.
+        const { workout, fixes } = autofixWorkout(d.workout);
+        for (const f of fixes) fixed.push(`T${w.index} ${DOW_LONG[d.dow as Dow]} „${workout.title}“: ${f}`);
+        return { dow: d.dow as Dow, workout, source: { method: 'generated' as const, review: 'unreviewed' as const, issues: fixes } };
+      }),
     });
   }
   const weeks = [...byIndex.values()].sort((a, b) => a.index - b.index);
   const paceChart = input.paceChart ?? (input.restart ? undefined : ws.staged?.paceChart);
-  ws.staged = { name: input.name, units: input.units, paceChart, weeks, updatedAt: now, activate: input.restart ? undefined : ws.staged?.activate };
+  const paceTable = input.paceTable ? [...input.paceTable].sort((a, b) => a.goalSec - b.goalSec) : input.restart ? undefined : ws.staged?.paceTable;
+  ws.staged = { name: input.name, units: input.units, paceChart, paceTable, weeks, updatedAt: now, activate: input.restart ? undefined : ws.staged?.activate };
   const chart = { ...ws.profile.paceChart, ...paceChart };
   const missing: number[] = [];
   for (let i = 1; i <= weeks[weeks.length - 1].index; i++) if (!byIndex.has(i)) missing.push(i);
@@ -266,6 +278,9 @@ export function stageWeeks(ws: Workspace, input: z.infer<typeof stageInput>, now
     missing.length ? `Chybí týdny ${missing.join(', ')}; doplň je dalším voláním.` : 'Týdny na sebe navazují od 1.',
     'Kontrola součtů:',
     ...input.weeks.map((w) => weekCheck({ ...w, days: byIndex.get(w.index)!.days }, chart)),
+    fixed.length ? `Opraveno automaticky (${fixed.length}; uživateli stačí říct souhrnně, další volání to už posílat nemusí):` : '',
+    ...fixed.slice(0, 12).map((x) => '- ' + x),
+    fixed.length > 12 ? `- … a dalších ${fixed.length - 12}.` : '',
     warnings.length ? `Varování (${warnings.length}; nejsou to chyby, které by import blokovaly – ukaž je uživateli a oprav jen to, co potvrdí podle dokumentu):` : 'Kontrola jednotek: bez varování.',
     ...warnings.slice(0, 15).map((x) => '- ' + x),
     warnings.length > 15 ? `- … a dalších ${warnings.length - 15}, celé jsou v appce.` : '',
@@ -278,7 +293,7 @@ export function activatePlan(ws: Workspace, input: z.infer<typeof activateInput>
   if (!staged || !staged.weeks.length) return fail('Není co aktivovat. Nejdřív nahraj týdny přes import_plan_weeks.');
   const gap = staged.weeks.findIndex((w, i) => w.index !== i + 1);
   if (gap >= 0) return fail(`Týdny musí jít od 1 po sobě; chybí týden ${gap + 1}.`);
-  const template: PlanTemplate = { id: newId(), name: staged.name, origin: 'import', createdAt: now, verifiedAt: now, units: staged.units, paceChart: staged.paceChart, weeks: staged.weeks };
+  const template: PlanTemplate = { id: newId(), name: staged.name, origin: 'import', createdAt: now, verifiedAt: now, units: staged.units, paceChart: staged.paceChart, paceTable: staged.paceTable, weeks: staged.weeks };
   const { activation, workouts } = createActivation(template, { mode: input.mode, date: input.date, startFromWeek: input.startFromWeek, skipWeeks: input.skipWeeks }, now);
   if (!activation.mapping.length) return fail('Po přeskočení nezbyl žádný týden k zařazení.');
   const first = activation.mapping[0].weekStart;
@@ -473,4 +488,64 @@ export function undoChange(ws: Workspace, revisionId: string | undefined, now: s
   }
   persist(ws, snap, revision);
   return done(`${result.summary.join('\n')}${rev.reason ? ` (${rev.reason})` : ''}`);
+}
+
+// ---------- Cílový čas a tempa ----------
+
+const RACE_KEY: Array<[number, keyof PaceChart]> = [[5000, '5k_pace'], [10000, '10k_pace'], [21097.5, 'hm_pace'], [42195, 'mp']];
+const hms = (sec: number) => `${Math.floor(sec / 3600)}:${String(Math.floor(sec % 3600 / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+/** Tempa pro cílový čas mezi dvěma řádky tabulky z plánu (lineárně). Mimo rozsah tabulky nic nedomýšlí. */
+export function interpolatePaces(table: PaceTableRow[], goalSec: number): PaceChart {
+  const rows = [...table].sort((a, b) => a.goalSec - b.goalSec);
+  const above = rows.findIndex((r) => r.goalSec >= goalSec);
+  const i = Math.max(0, Math.min(rows.length - 2, (above < 0 ? rows.length : above) - 1));
+  const lo = rows[i], hi = rows[i + 1];
+  const t = Math.max(0, Math.min(1, (goalSec - lo.goalSec) / (hi.goalSec - lo.goalSec)));
+  const out: PaceChart = {};
+  for (const k of Object.keys(lo.paces) as Array<keyof PaceChart>) {
+    const a = lo.paces[k], b = hi.paces[k];
+    if (a && b) out[k] = { fromSec: Math.round(a.fromSec + (b.fromSec - a.fromSec) * t), toSec: Math.round(a.toSec + (b.toSec - a.toSec) * t) };
+  }
+  return out;
+}
+
+export interface GoalOptions { source: 'table' | 'vdot'; distanceM: number | null; minSec: number; maxSec: number; sec: number }
+
+/** Co jde v appce nastavit jako cílový čas: v rozsahu tabulky z plánu, jinak podle VDOT na délku závodu. */
+export function goalOptions(ws: Workspace): GoalOptions | null {
+  const activation = activeOf(ws);
+  const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
+  const raceInPlan = template?.weeks.flatMap((w) => w.days).find((d) => d.workout.type === 'race' && d.workout.distanceM)?.workout.distanceM;
+  const distanceM = ws.profile.raceDistanceM ?? raceInPlan ?? null;
+  const table = template?.paceTable && template.paceTable.length >= 2 ? [...template.paceTable].sort((a, b) => a.goalSec - b.goalSec) : null;
+  if (table) {
+    const minSec = table[0].goalSec, maxSec = table[table.length - 1].goalSec;
+    // Bez uloženého cíle řádek, podle kterého je plán (shoda tempa půlmaratonu), jinak prostřední.
+    const hm = template!.paceChart?.hm_pace?.fromSec;
+    const matching = hm != null ? table.find((r) => r.paces.hm_pace?.fromSec === hm) : undefined;
+    const saved = ws.profile.raceTargetSec;
+    const sec = saved != null && saved >= minSec && saved <= maxSec ? saved : (matching ?? table[Math.floor(table.length / 2)]).goalSec;
+    return { source: 'table', distanceM, minSec, maxSec, sec };
+  }
+  if (!distanceM) return null;
+  const minSec = Math.round(predictTime(85, distanceM)), maxSec = Math.round(predictTime(30, distanceM));
+  const key = RACE_KEY.find(([d]) => Math.abs(d - distanceM) < 200)?.[1];
+  const pace = key ? resolvePaceChart(ws.profile, template?.paceChart)[key] : undefined;
+  const guess = ws.profile.raceTargetSec ?? (pace ? Math.round((pace.fromSec + pace.toSec) / 2 * distanceM / 1000) : Math.round(predictTime(45, distanceM)));
+  return { source: 'vdot', distanceM, minSec, maxSec, sec: Math.min(maxSec, Math.max(minSec, guess)) };
+}
+
+/** Nastaví cílový čas a podle něj tempa v profilu (mají přednost před tempy plánu). */
+export function setGoal(ws: Workspace, input: z.infer<typeof goalInput>): Outcome {
+  const opts = goalOptions(ws);
+  if (!opts) return fail('Cílový čas jde nastavit u plánu na závod (s tabulkou temp nebo se známou délkou závodu).');
+  if (input.goalSec < opts.minSec || input.goalSec > opts.maxSec) {
+    return fail(opts.source === 'table' ? `Tabulka temp v plánu má řádky pro ${hms(opts.minSec)} až ${hms(opts.maxSec)}; mimo ně tempa nedopočítávám.` : `Cílový čas musí být mezi ${hms(opts.minSec)} a ${hms(opts.maxSec)}.`);
+  }
+  const activation = activeOf(ws);
+  const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
+  const chart = opts.source === 'table' ? interpolatePaces(template!.paceTable!, input.goalSec) : trainingPaces(opts.distanceM!, input.goalSec).chart;
+  ws.profile = { ...ws.profile, raceTargetSec: input.goalSec, paceChart: chart, paceSource: 'profile' };
+  return { ok: true, changed: true, banner: `Cíl ${hms(input.goalSec)}, tempa přepočítána.`, text: `Cílový čas ${hms(input.goalSec)} uložen. Tempa jsou přepočítaná ${opts.source === 'table' ? 'podle tabulky temp z plánu' : 'podle VDOT'}: ${Object.entries(chart).map(([k, v]) => `${k} ${formatPace(v!.fromSec)}–${formatPace(v!.toSec)}`).join('; ')}.` };
 }

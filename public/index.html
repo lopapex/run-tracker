@@ -17,7 +17,7 @@
     <header>
       <img src="/brand/run-tracker-v2.svg" alt="" width="48" height="48">
       <h1>RPM: tréninkový plán v telefonu, Claude jako trenér</h1>
-      <p class="lead">Appka ukáže, co dnes běžet a jak rychle, a zapíšeš v ní splnění. Claude plán založí z PDF od trenéra, postaví podle Stravy a přeplánuje, když nemůžeš.</p>
+      <p class="lead">Claude přepíše plán z PDF od trenéra (nebo ho postaví podle Stravy) a appka ti každý den ukáže, co běžet a jak rychle.</p>
       <div class="app-cta">
         <a id="app-link" class="cta" href="/app/">Stáhnout aplikaci</a>
         <p id="app-hint">Na iPhonu se aplikace otevře v Safari; na plochu ji přidáš přes Sdílet → Přidat na plochu.</p>
@@ -27,7 +27,7 @@
     <ol class="steps">
       <li>
         <h2>Vytvoř si adresu</h2>
-        <p>Adresa je klíč k tvému plánu. Appka i Claude pracují se stejnými daty pod ní. Vzniká v tomhle prohlížeči a bez účtu.</p>
+        <p>Adresa je klíč k tvému plánu: Claude i appka pracují se stejnými daty pod ní. Vzniká v tomhle prohlížeči, bez účtu.</p>
         <button type="button" id="create" class="primary">Vytvořit moji adresu</button>
         <div id="result" hidden>
           <label for="url">Tvoje adresa</label>
@@ -41,23 +41,22 @@
         </div>
       </li>
       <li>
-        <h2>Otevři appku a založ plán</h2>
-        <p>Tlačítko Stáhnout aplikaci nahoře už adresu nese. V appce zvolíš cíl, závod, kolik teď běháš a které dny. Před zařazením do kalendáře uvidíš celý plán.</p>
-        <p>Máš plán od trenéra v PDF, na fotce nebo v tabulce? Appka ho pošle Claudovi, ten ho přepíše a schválíš ho zase v appce.</p>
-      </li>
-      <li>
         <h2>Přidej adresu do Claude</h2>
         <p>V Claude na webu otevři nastavení konektorů, přidej vlastní konektor a vlož adresu. Přihlášení se nevyplňuje. Ve stejném nastavení připoj oficiální konektor Strava, aby Claude viděl tvoje běhy.</p>
         <p><a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" rel="noopener noreferrer">Návod Claude k vlastním konektorům</a></p>
       </li>
       <li>
-        <h2>Ptej se Clauda</h2>
-        <p>Claude vidí plán, splnění i Stravu a odpoví větou. Změny se hned ukážou v appce.</p>
+        <h2>Pošli Claudovi plán</h2>
+        <p>Přilož plán od trenéra (PDF, fotku nebo tabulku) a napiš „Přepiš mi tenhle plán do RPM“. Claude ho přepíše po týdnech. Když je v PDF rozpis v mílích i v km, vezme kilometry. Součty týdnů porovná s dokumentem a běžné chyby přepisu opraví sám.</p>
+        <p>Nemáš plán? Napiš „Postav mi plán na půlmaraton 11. dubna podle mé Stravy“.</p>
+      </li>
+      <li>
+        <h2>Zkontroluj a běhej podle appky</h2>
+        <p>V appce uvidíš přepsaný plán týden po týdnu, vedle každého dne znění z dokumentu. Zařadíš ho podle data závodu. Pak v ní každý den vidíš, co běžet a jak rychle, a zapisuješ splnění. Cílový čas změníš v Tempech a tempa se přepočítají podle tabulky z plánu.</p>
         <ul class="prompts">
           <li>O víkendu nemůžu běhat, přeplánuj to.</li>
           <li>Zhodnoť včerejší intervaly podle Stravy.</li>
           <li>Doplň splnění tohoto týdne podle Stravy.</li>
-          <li>Postav mi plán na půlmaraton 11. dubna podle mé Stravy.</li>
         </ul>
       </li>
     </ol>

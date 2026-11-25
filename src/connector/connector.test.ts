@@ -62,7 +62,7 @@ describe('konektor RPM', () => {
   it('nabídne nástroje s popsaným tvarem jednotky a instrukce pro model', async () => {
     const { client } = await connect(new MemoryStore());
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'draft_plan', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'set_statuses', 'shift_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'draft_plan', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_goal_time', 'set_profile', 'set_status', 'set_statuses', 'shift_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
     expect(tools.find((t) => t.name === 'get_plan')?.annotations?.readOnlyHint).toBe(true);
     const edit = JSON.stringify(tools.find((t) => t.name === 'import_plan_weeks')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
@@ -614,17 +614,54 @@ describe('konektor RPM', () => {
   it('import varuje u podezřelých jednotek, ale aktivaci nebrání', async () => {
     const { call } = await connect(new MemoryStore());
     const strides: WorkoutSpec = { type: 'easy', title: 'Easy 11 km + 5× 20s strides', blocks: [{ kind: 'segment', role: 'steady', distanceM: 11000, intensity: 'strides' }] };
-    const odd = { index: 1, phase: 'BUILD', days: [easy(10), speed, rest, strides, rest, easy(13), long(16)].map((workout, dow) => ({ dow, workout })) };
+    const named: WorkoutSpec = { type: 'easy', title: 'Volný běh s rovinkami', distanceM: 8000, blocks: [] };
+    const odd = { index: 1, phase: 'BUILD', days: [easy(10), speed, rest, strides, named, easy(13), long(16)].map((workout, dow) => ({ dow, workout })) };
     const imported = await call('import_plan_weeks', { name: 'Test', weeks: [odd], paceChart: { easy: { fromSec: 285, toSec: 315 }, '5k_pace': { fromSec: 330, toSec: 340 } } });
     expect(imported.isError).toBe(false);
     expect(imported.text).toContain('nejsou to chyby, které by import blokovaly');
-    expect(imported.text).toContain('Rovinky jsou krátké úseky');
+    // 11 km „rovinek“ je skoro jistá chyba přepisu: opraví se hned a model dostane, co se změnilo.
+    expect(imported.text).toContain('Opraveno automaticky');
+    expect(imported.text).toContain('rovinky 5× 20 s zvlášť');
+    expect(imported.data.weeks[0].days[3]).toMatchObject({ fixes: [expect.stringContaining('změněn na volný')] });
+    expect(imported.text).toContain('Název zmiňuje rovinky');
     expect(imported.text).toContain('vychází pomalejší');
     expect(imported.data).toMatchObject({ view: 'import', name: 'Test', hasPaces: true, banner: { text: 'Nahráno: týden 1.' } });
     expect(imported.data.warnings).toBeGreaterThanOrEqual(2);
-    expect(imported.data.weeks[0].issues[0]).toMatchObject({ day: 'čt', title: 'Easy 11 km + 5× 20s strides' });
+    expect(imported.data.weeks[0].issues[0]).toMatchObject({ day: 'pá', title: 'Volný běh s rovinkami' });
     // varování nic neblokují
     expect((await call('activate_plan', { mode: 'start', date: '2026-11-16' })).isError).toBe(false);
+  });
+
+  it('závod bez délky dostane délku z názvu a součet týdne odhalí vypadlý den', async () => {
+    const { call } = await connect(new MemoryStore());
+    const race: WorkoutSpec = { type: 'race', title: 'Half Marathon!', blocks: [] };
+    const timed: WorkoutSpec = { type: 'easy', title: 'Optional Easy Run', durationSec: 1200, blocks: [] };
+    const last = { index: 1, declaredTotalM: 48000, days: [rest, speed, easy(10), easy(8), rest, timed, race].map((workout, dow) => ({ dow, workout })) };
+    const ok = await call('import_plan_weeks', { name: 'Závod', weeks: [last] });
+    expect(ok.text).toContain('doplněno 21,1 km');
+    expect(ok.data.weeks[0].totals).toBe('ok');
+    expect(ok.data.suggest).toMatchObject({ mode: 'race', dow: 6 });
+    // Bez středečního běhu chybí 10 km: i s úseky jen na čas (bez temp z dokumentu) to kontrola pozná.
+    const short = { ...last, days: [rest, speed, rest, easy(8), rest, timed, race].map((workout, dow) => ({ dow, workout })) };
+    const off = await call('import_plan_weeks', { name: 'Závod', weeks: [short] });
+    expect(off.text).toContain('NESEDÍ');
+    expect(off.data.weeks[0].totals).toBe('off');
+  });
+
+  it('cílový čas přepočítá tempa podle tabulky z plánu jen v jejím rozsahu', async () => {
+    const { call } = await connect(new MemoryStore());
+    const row = (e: number, h: number) => ({ easy: { fromSec: e, toSec: e + 30 }, hm_pace: { fromSec: h, toSec: h + 6 } });
+    const paceTable = [{ goalSec: 5100, paces: row(286, 239) }, { goalSec: 5400, paces: row(304, 252) }, { goalSec: 5700, paces: row(317, 267) }];
+    await call('import_plan_weeks', { name: 'Půlmaraton', weeks: [week(1)], paceChart: paceTable[1].paces, paceTable });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const before = await call('show_week', { tab: 'paces' });
+    expect(before.data.goal).toMatchObject({ source: 'table', minSec: 5100, maxSec: 5700, sec: 5400 });
+    const set = await call('set_goal_time', { goalSec: 5250 });
+    expect(set.isError).toBe(false);
+    const hm = set.data.paces.find((p: { key: string }) => p.key === 'hm_pace');
+    expect(hm).toMatchObject({ fromSec: 246, toSec: 252 });
+    expect(set.data.goal.sec).toBe(5250);
+    expect((await call('set_goal_time', { goalSec: 4800 })).text).toContain('1:25:00 až 1:35:00');
   });
 
   it('dva těžké běhy po sobě ukážou upozornění na únavu', async () => {
@@ -748,7 +785,7 @@ describe('konektor RPM', () => {
   it('nabízí připravené prompty pro nový plán a týdenní kontrolu', async () => {
     const { client } = await connect(new MemoryStore());
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((x) => x.name).sort()).toEqual(['novy-plan', 'tydenni-kontrola']);
+    expect(prompts.map((x) => x.name).sort()).toEqual(['novy-plan', 'plan-z-dokumentu', 'tydenni-kontrola']);
     const newPlan = await client.getPrompt({ name: 'novy-plan' });
     expect(JSON.stringify(newPlan.messages)).toContain('draft_plan');
     const review = await client.getPrompt({ name: 'tydenni-kontrola' });

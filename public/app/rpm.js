@@ -80,8 +80,20 @@
       : call('show_week', { tab: 'paces' });
     return p.then(function (d) { take(d); render(); }, fail);
   }
+  // Načtené týdny podle pondělí: sousední týden je při listování hned po ruce.
+  var weeks = {}, fetching = {};
+  function prefetch() {
+    var d = S.week;
+    if (!d || d.view !== 'week') return;
+    [-1, 1].forEach(function (dir) {
+      var k = addDays(d.weekStart, dir * 7);
+      if (!hasWeek(dir) || weeks[k] || fetching[k]) return;
+      fetching[k] = true;
+      call('show_week', { date: k }).then(function (x) { if (x.view === 'week') weeks[x.weekStart] = x; }, function () { /* zkusí se příště */ }).then(function () { delete fetching[k]; });
+    });
+  }
   function take(d) {
-    if (d.view === 'week') S.week = d;
+    if (d.view === 'week') { S.week = d; weeks[d.weekStart] = d; }
     else if (d.view === 'plan') S.plan = d;
     else if (d.view === 'paces') { if (d.calc) S.calc = d; else { S.paces = d; S.calc = null; } }
     else if (d.view === 'import') { S.staged = d; S.sub = 'staged'; S.tab = 'plan'; }
@@ -91,6 +103,8 @@
   // Zápis: server vrátí přepočítaný týden nebo plán, ten se rovnou ukáže.
   function act(name, args, msg, undo) {
     return call(name, args).then(function (d) {
+      // Změna mohla zasáhnout i sousední týden (přesun, vrácení); uložené týdny se načtou znovu.
+      weeks = {};
       take(d); render(); if (msg) toast(msg, undo); return d;
     }, fail);
   }
@@ -111,9 +125,10 @@
   }
   function steps(w) {
     var lines = w.lines && w.lines.length ? w.lines : [(/^[\d,.]+ km$/.test(w.summary) ? mainLabel(w) : w.summary) + (mainPace(w) ? ' (' + mainPace(w) + '/km)' : '')];
+    // Tempa z textu do pravého sloupce; řádek s víc úseky (800 m + 200 m) má víc temp pod sebou.
     return '<ul class="steps">' + lines.map(function (l) {
-      var m = l.match(/^(.*?)\s*\(([^()]*\d:\d\d[^()]*)\)\s*$/);
-      return '<li><span>' + esc(m ? m[1] : l) + '</span>' + (m ? '<span class="p">' + esc(m[2].replace('/km', '')) + '</span>' : '') + '</li>';
+      var paces = [], text = l.replace(/\s*\(([^()]*\d:\d\d[^()]*)\)/g, function (_, p) { paces.push(p.replace('/km', '')); return ''; });
+      return '<li><span>' + esc(text) + '</span>' + (paces.length ? '<span class="p">' + paces.map(esc).join('<br>') + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   function mainZone(w) {
@@ -133,6 +148,9 @@
   function detail(w, day) {
     var h = '<div class="open">' + steps(w), id = w.id;
     if (w.planNote) h += '<p class="note">' + esc(w.planNote) + '</p>';
+    // Doslovné znění z dokumentu trenéra: kontrola, že přepis sedí.
+    var raw = w.raw ? w.raw.replace(/\s*\n\s*/g, ' ').trim() : '';
+    if (raw && raw.toLowerCase() !== String(w.title).toLowerCase()) h += '<p class="note raw">V plánu: ' + esc(raw) + '</p>';
     if (w.status === 'skipped') {
       h += '<p class="state">Vynecháno' + (w.skipReason ? ': ' + esc(w.skipReason) : '') + '</p><div class="links">' + link('restore', id, 'Obnovit') + '</div>';
     } else if (w.status === 'completed' || w.status === 'partial') {
@@ -147,14 +165,18 @@
   function renderWeek() {
     var d = S.week;
     if (!d || d.view !== 'week') return emptyHint();
-    var st = d.stats, max = 1;
-    d.days.forEach(function (day) { day.workouts.forEach(function (w) { var t = (w.profile || []).reduce(function (s, p) { return s + p[1]; }, 0); if (t > max) max = t; }); });
+    var st = d.stats;
     var m = d.label.match(/týden (\d+) z (\d+)/);
     var h = '<header class="hd"><h1>' + (m ? 'Týden ' + m[1] + '<span class="n"> z ' + m[2] + '</span>' : esc(d.label.charAt(0).toUpperCase() + d.label.slice(1))) + '</h1>';
     h += '<div class="nav"><button type="button" data-do="prev" aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled') + '>‹</button><button type="button" data-do="next" aria-label="Další týden"' + (d.hasNext ? '' : ' disabled') + '>›</button></div></header>';
     h += '<p class="meta"><b>' + num(st.doneKm) + '</b> z ' + Math.round(st.plannedKmMax) + ' km' + (d.isCurrent && d.daysToRace != null ? '<span>závod za ' + d.daysToRace + ' dní</span>' : d.phase ? '<span>' + esc(d.phase.toLowerCase()) + '</span>' : '') + '<span class="prog"><i data-wpct="' + Math.min(100, Math.round(st.doneKm / Math.max(1, st.plannedKmMax) * 100)) + '"></i></span></p>';
-    h += '<ul class="days">';
-    var auto = S.open == null ? autoOpen(d) : S.open;
+    if (d.staged) h += '<button type="button" class="pending" data-do="staged"><span>Nový plán „' + esc(d.staged.name) + '“ čeká na kontrolu.</span><b>Zkontrolovat ›</b></button>';
+    return h + daysHtml(d, S.open == null ? autoOpen(d) : S.open) + installRow();
+  }
+  // Řádky dní jednoho týdne; stejné HTML slouží i pro sousední týden, který při listování jede vedle.
+  function daysHtml(d, auto) {
+    var max = 1, h = '<ul class="days">';
+    d.days.forEach(function (day) { day.workouts.forEach(function (w) { var t = (w.profile || []).reduce(function (s, p) { return s + p[1]; }, 0); if (t > max) max = t; }); });
     d.days.forEach(function (day) {
       var list = day.workouts.filter(function (w) { return w.type !== 'rest'; });
       if (!list.length) {
@@ -170,7 +192,7 @@
         h += '</li>';
       });
     });
-    return h + '</ul>' + installRow();
+    return h + '</ul>';
   }
   // Instalace na plochu: Android a Chrome přes výzvu prohlížeče, iPhone jednou větou. Po zavření se neukáže.
   function standalone() { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
@@ -182,14 +204,11 @@
     return '<div class="install"><p>' + (S.install ? 'RPM jako appka na ploše' : 'Na plochu: <b>Sdílet</b> → <b>Přidat na plochu</b>') + '</p>' + (S.install ? '<button type="button" class="btn go" data-do="install">Nainstalovat</button>' : '') + '<button type="button" class="x" data-do="noinstall" aria-label="Skrýt">×</button></div>';
   }
   function dw(day) { return '<span class="dw">' + DOW[day.dow] + '<b>' + +day.date.slice(8) + '</b></span>'; }
-  // Rozbalí se nejbližší nezapsaný běh: dnešek, jinak včerejší nezapsaný, jinak nejbližší další.
+  // Sám se rozbalí jen dnešní trénink; ostatní dny až na klepnutí.
   function autoOpen(d) {
-    var runs = [];
-    d.days.forEach(function (day) { day.workouts.forEach(function (w) { if (w.type !== 'rest') runs.push([day, w]); }); });
-    var today = runs.filter(function (x) { return x[0].isToday; })[0];
-    if (today) return today[1].id;
-    var next = runs.filter(function (x) { return !x[0].isPast && x[1].status === 'scheduled'; })[0];
-    return next ? next[1].id : null;
+    var hit = null;
+    (d.days || []).forEach(function (day) { if (day.isToday && !hit) day.workouts.forEach(function (w) { if (w.type !== 'rest' && !hit) hit = w.id; }); });
+    return hit;
   }
   function findW(id) {
     var out = null;
@@ -225,11 +244,18 @@
       var ph = (w.phase || '').toLowerCase();
       if (ph && ph !== phase) h += '<tr class="ph"><td colspan="9">' + esc(ph) + '</td></tr>';
       phase = ph || phase;
-      var cls = 'w' + (w.isCurrent ? ' cur' : '') + (w.isPast ? ' past' : '');
-      h += '<tr class="' + cls + '"' + (opts.link ? ' data-do="week" data-v="' + w.weekStart + '"' : '') + '><td class="wk">' + (w.sourceWeek != null ? w.sourceWeek : w.index != null ? w.index : '–') + '</td>';
+      var flag = opts.stage && (w.issues.length || w.totals === 'off'), open = opts.stage && S.sweek === w.index;
+      var cls = 'w' + (w.isCurrent ? ' cur' : '') + (w.isPast ? ' past' : '') + (flag ? ' flag' : '') + (open ? ' open' : '');
+      var target = opts.link ? ' data-do="week" data-v="' + w.weekStart + '"' : opts.stage ? ' data-do="sweek" data-v="' + w.index + '" aria-expanded="' + open + '"' : '';
+      h += '<tr class="' + cls + '"' + target + '><td class="wk">' + (w.sourceWeek != null ? w.sourceWeek : w.index != null ? w.index : '–') + '</td>';
       w.cells.forEach(function (c, i) { h += '<td>' + cell(c, opts.link && w.weekStart && addDays(w.weekStart, i) === today) + '</td>'; });
-      var plannedKm = w.plannedKmMax != null ? w.plannedKmMax : w.kmMax;
-      h += '<td class="vol">' + (opts.link && (w.isPast || w.isCurrent) ? num(w.doneKm) + '<span class="mute"> / ' + Math.round(plannedKm) + '</span>' : Math.round(plannedKm)) + '</td></tr>';
+      var plannedKm = w.plannedKmMax != null ? w.plannedKmMax : w.kmMax, vol;
+      if (opts.link && (w.isPast || w.isCurrent)) vol = num(w.doneKm) + '<span class="mute"> / ' + Math.round(plannedKm) + '</span>';
+      // Při kontrole součet přepisu vedle součtu, který uvádí autor plánu.
+      else if (opts.stage && w.declaredKm != null) vol = '<span' + (w.totals === 'off' ? ' class="bad"' : '') + '>' + Math.round(w.kmMax) + '</span><span class="mute"> / ' + Math.round(w.declaredKm) + '</span>';
+      else vol = Math.round(plannedKm);
+      h += '<td class="vol">' + vol + '</td></tr>';
+      if (open) h += '<tr class="wd"><td colspan="9">' + weekDetail(w) + '</td></tr>';
     });
     return h + '</tbody></table>' + legend();
   }
@@ -240,6 +266,8 @@
     if (S.sub === 'new') return renderForm();
     if (S.sub === 'staged' && S.staged) return renderStaged();
     var d = S.plan;
+    // Plán se ještě načítá: místo formuláře nového plánu (problikl by) jen prázdná plocha.
+    if (!d && S.week && S.week.view === 'week') return '<p class="blank">Načítám…</p>';
     if (!d || d.view !== 'plan') return renderForm();
     var t = d.totals;
     var h = '<header class="hd"><h1>' + esc(d.planName) + '</h1><button type="button" class="tb" data-do="new">Nový</button></header>';
@@ -257,10 +285,19 @@
       return '<button type="button" data-f="' + name + '" data-v="' + it[0] + '"' + (String(it[0]) === String(val) ? ' class="on"' : '') + '>' + it[1] + '</button>';
     }).join('') + '</div>';
   }
-  function renderForm() {
-    var f = S.form || (S.form = defaults());
+  // Nový plán: nejčastěji plán od trenéra (PDF), pak plán podle Stravy; obojí čte Claude. Ruční formulář je záloha.
+  function renderChoice() {
     var hasPlan = S.plan && S.plan.view === 'plan';
-    var h = '<header class="hd line"><h1>Nový plán</h1>' + (hasPlan ? '<button type="button" class="tb" data-do="cancel">Zrušit</button>' : '') + '</header><div class="form">';
+    var h = '<header class="hd line"><h1>Nový plán</h1>' + (hasPlan ? '<button type="button" class="tb" data-do="cancel">Zrušit</button>' : '') + '</header><div class="form choice">';
+    h += '<button type="button" class="doc main" data-do="doc"><b>Plán od trenéra</b><span>PDF, fotka nebo tabulka. Otevře se Claude s připravenou zprávou, přiložíš soubor a odešleš. Přepsaný plán se objeví tady ke kontrole.</span></button>';
+    h += '<button type="button" class="doc" data-do="strava"><b>Plán podle mé Stravy</b><span>Claude projde tvoje běhy za poslední 2–3 měsíce, zeptá se na cíl a postaví plán ke kontrole.</span></button>';
+    h += '<p class="hint">Obojí potřebuje adresu RPM přidanou v Claude jako konektor; pro Stravu i oficiální konektor Strava.</p>';
+    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button></div>';
+  }
+  function renderForm() {
+    if (!S.manual) return renderChoice();
+    var f = S.form || (S.form = defaults());
+    var h = '<header class="hd line"><h1>Sestavit plán</h1><button type="button" class="tb" data-do="choice">Zpět</button></header><div class="form">';
     h += '<div class="f"><span class="lab">Cíl</span>' + seg('intent', [['race', 'Závod'], ['improve', 'Zlepšit se'], ['maintain', 'Udržet']], f.intent) + '</div>';
     if (f.intent === 'race') {
       h += '<div class="f"><span class="lab">Závod</span>' + seg('dist', RACES, f.dist, 'n') + '<input class="in n gap" type="date" data-f="race" value="' + esc(f.race) + '" aria-label="Datum závodu" min="' + addDays(todayIso(), 14) + '"></div>';
@@ -273,7 +310,6 @@
     h += '<div class="f"><span class="lab">Volné dny</span><div class="seg wk7">' + DOW.map(function (x, i) { return '<button type="button" data-do="rest" data-v="' + i + '"' + (f.rest.indexOf(i) >= 0 ? ' class="on"' : '') + (i === f.long ? ' disabled' : '') + '>' + x + '</button>'; }).join('') + '</div></div>';
     h += '<div class="f"><span class="lab">Začátek</span><input class="in n" type="date" data-f="start" value="' + esc(f.start) + '" aria-label="Začátek plánu"></div>';
     if (f.err) h += '<p class="err">' + esc(f.err) + '</p>';
-    h += '<div class="or">nebo</div><button type="button" class="doc" data-do="doc"><b>Nahrát plán od trenéra</b><span>PDF, fotka nebo tabulka. Přečte ho Claude a plán se objeví tady ke schválení.</span></button>';
     h += '</div><div class="sticky"><button type="button" class="btn go accent" data-do="draft">Sestavit náhled</button></div>';
     return h;
   }
@@ -290,18 +326,45 @@
   }
 
   // ---------- Rozpracovaný plán ----------
+  // Kontrola plánu před zařazením. U plánu z PDF je tohle místo, kde se chyba přepisu najde:
+  // týden jde rozkliknout a přepis každého dne stojí vedle doslovného znění z dokumentu.
+  function stagedMode(d) { return S.amode || (d.suggest && d.suggest.mode) || 'start'; }
+  function stagedDate(d) { return S.adate != null ? S.adate : stagedMode(d) === 'race' ? '' : nextMonday(); }
+  function weekDetail(w) {
+    var rest = [], h = '<ul class="sd">';
+    w.days.forEach(function (x) {
+      if (x.type === 'rest') { rest.push(x.day); return; }
+      var what = x.lines && x.lines.length ? x.lines.join(' · ') : x.summary;
+      h += '<li><span class="dw">' + x.day + '</span><div><p class="t"><b>' + esc(x.title) + '</b><span class="n">' + (x.kmMax ? num(x.kmMax) + ' km' : '') + (x.kmUnknown ? ' +' : '') + '</span></p>';
+      if (what && what !== x.title) h += '<p>' + esc(what) + '</p>';
+      if (x.raw) h += '<p class="raw">Dokument: ' + esc(x.raw.replace(/\s*\n\s*/g, ' ')) + '</p>';
+      x.fixes.forEach(function (t) { h += '<p class="fix">Opraveno: ' + esc(t) + '</p>'; });
+      x.issues.forEach(function (t) { h += '<p class="iss">' + esc(t) + '</p>'; });
+      h += '</div></li>';
+    });
+    if (rest.length) h += '<li class="rest"><span class="dw"></span><div><p>Volno: ' + rest.join(', ') + '</p></div></li>';
+    return h + '</ul>';
+  }
   function renderStaged() {
-    var d = S.staged, peak = 0, total = 0;
-    d.weeks.forEach(function (w) { peak = Math.max(peak, w.kmMax); total += w.kmMax; });
-    var a = d.activate;
+    var d = S.staged, peak = 0;
+    d.weeks.forEach(function (w) { peak = Math.max(peak, w.kmMax); });
+    var a = d.activate, mode = stagedMode(d);
     var h = '<header class="hd"><h1>' + esc(d.name) + '</h1><button type="button" class="tb" data-do="' + (S.fromForm ? 'new' : 'cancel') + '">' + (S.fromForm ? 'Upravit' : 'Zpět') + '</button></header>';
-    h += '<p class="meta"><b>' + d.weeks.length + '</b> týdnů · vrchol <b>' + Math.round(peak) + '</b> km<span>náhled</span></p>';
-    var issues = [];
-    d.weeks.forEach(function (w) { w.issues.forEach(function (x) { issues.push('T' + w.index + ' ' + x.day + ': ' + x.text); }); });
-    if (d.missing.length) issues.unshift('Chybí týden ' + d.missing.join(', ') + '.');
-    if (issues.length) h += '<div class="warn"><b>' + issues.length + ' k ověření.</b> ' + esc(issues.slice(0, 3).join(' ')) + (issues.length > 3 ? ' …' : '') + '</div>';
-    h += matrix(d.weeks, { link: false });
-    if (!a) h += '<div class="form"><div class="f"><span class="lab">Zařadit</span>' + seg('amode', [['start', 'Začít týdnem od'], ['race', 'Závod v den']], S.amode || 'start') + '<input class="in n gap" type="date" data-f="adate" value="' + esc(S.adate || nextMonday()) + '" aria-label="Datum"></div></div>';
+    h += '<p class="meta"><b>' + d.weeks.length + '</b> týdnů · vrchol <b>' + Math.round(peak) + '</b> km<span>ke kontrole</span></p>';
+    var off = d.weeks.filter(function (w) { return w.totals === 'off'; }).map(function (w) { return w.index; });
+    var flagged = d.weeks.filter(function (w) { return w.issues.length; }).map(function (w) { return w.index; });
+    var lines = [];
+    if (d.missing.length) lines.push('<b>Chybí týden ' + d.missing.join(', ') + '.</b>');
+    if (off.length) lines.push('<b>Součet nesedí s dokumentem:</b> týden ' + off.join(', ') + '.');
+    if (flagged.length) lines.push('<b>K ověření:</b> týden ' + flagged.join(', ') + '.');
+    if (d.fixes) lines.push('Opraveno automaticky: ' + d.fixes + '×.');
+    if (!S.fromForm) lines.push('Klepni na týden a porovnej přepis se zněním z dokumentu.');
+    h += '<div class="warn">' + lines.join('<br>') + '</div>';
+    h += matrix(d.weeks, { stage: true });
+    if (!a) {
+      h += '<div class="form"><div class="f"><span class="lab">Zařadit</span>' + seg('amode', [['race', 'Závod v den'], ['start', 'Začít týdnem od']], mode) + '<input class="in n gap" type="date" data-f="adate" value="' + esc(stagedDate(d)) + '" aria-label="' + (mode === 'race' ? 'Datum závodu' : 'Začátek plánu') + '">';
+      h += '<p class="hint">' + (mode === 'race' ? 'Poslední týden plánu bude ten se závodem.' : 'Plán začne pondělím týdne s tímto dnem.') + '</p></div></div>';
+    }
     return h + '<div class="sticky"><button type="button" class="btn go accent" data-do="activate"' + (d.missing.length ? ' disabled' : '') + '>Zařadit do kalendáře</button></div>';
   }
 
@@ -310,11 +373,18 @@
     var d = S.calc || S.paces;
     var h = '<header class="hd"><h1>Tempa</h1></header>';
     if (S.calc) h += '<p class="meta">' + RACES.filter(function (r) { return r[0] === S.calc.calc.distanceM; }).map(function (r) { return r[1]; })[0] + ' za ' + hms(S.calc.calc.timeSec) + '<span>VDOT ' + num(S.calc.calc.vdot) + '</span></p>';
+    // Cílový čas: tempa se přepočítají podle tabulky z plánu (jen v jejím rozsahu), bez ní podle VDOT.
+    var goal = !S.calc && S.paces && S.paces.goal;
+    if (goal) {
+      var gs = S.goalSec != null ? S.goalSec : goal.sec, dist = RACES.filter(function (r) { return Math.abs(r[0] - goal.distanceM) < 200; })[0];
+      h += '<div class="goal"><span class="lab">Cílový čas' + (dist ? ' · ' + dist[1] + (dist[0] > 10000 ? ' km' : '') : '') + '</span><div class="step"><button type="button" data-do="goal" data-v="-60" aria-label="O minutu rychleji"' + (gs <= goal.minSec ? ' disabled' : '') + '>−</button><output class="n">' + hms(gs) + '</output><button type="button" data-do="goal" data-v="60" aria-label="O minutu pomaleji"' + (gs >= goal.maxSec ? ' disabled' : '') + '>+</button></div>';
+      h += '<p class="hint">' + (goal.source === 'table' ? 'Podle tabulky temp z plánu, v jejím rozsahu ' + hms(goal.minSec) + '–' + hms(goal.maxSec) + '.' : 'Tempa spočítaná z cílového času (VDOT).') + '</p></div>';
+    }
     if (!d || !d.paces || !d.paces.length) h += '<p class="blank">Tempa zatím nejsou. Spočítej je z čerstvého závodu.</p>';
     else {
-      h += '<table class="pt"><thead><tr><th></th><th>/km</th><th>/400 m</th></tr></thead><tbody>' + d.paces.map(function (p) {
+      h += '<table class="pt"><tbody>' + d.paces.map(function (p) {
         var lvl = INT_LVL[p.key] == null ? 1 : INT_LVL[p.key];
-        return '<tr><td><i class="sw e' + lvl + '"></i>' + esc(p.label.charAt(0).toUpperCase() + p.label.slice(1)) + '</td><td>' + pace(p.fromSec) + '–' + pace(p.toSec) + '</td><td>' + pace(p.fromSec * 0.4) + '–' + pace(p.toSec * 0.4) + '</td></tr>';
+        return '<tr><td><i class="sw e' + lvl + '"></i>' + esc(p.label.charAt(0).toUpperCase() + p.label.slice(1)) + '</td><td>' + pace(p.fromSec) + '–' + pace(p.toSec) + '<small> /km</small></td></tr>';
       }).join('') + '</tbody></table>';
     }
     var c = S.calcForm || (S.calcForm = { dist: 21097.5, time: '', open: false });
@@ -331,11 +401,15 @@
   }
 
   // ---------- Vykreslení ----------
+  // Šířky a poměry přes CSSOM, ne atributem style (přísná CSP).
+  function sizes(root) {
+    root.querySelectorAll('[data-g]').forEach(function (el) { el.style.flexGrow = el.getAttribute('data-g'); });
+    root.querySelectorAll('[data-wpct]').forEach(function (el) { el.style.width = el.getAttribute('data-wpct') + '%'; });
+  }
   function render() {
     view.innerHTML = S.tab === 'week' ? renderWeek() : S.tab === 'plan' ? renderPlan() : renderPaces();
-    // Šířky a poměry přes CSSOM, ne atributem style (přísná CSP).
-    view.querySelectorAll('[data-g]').forEach(function (el) { el.style.flexGrow = el.getAttribute('data-g'); });
-    view.querySelectorAll('[data-wpct]').forEach(function (el) { el.style.width = el.getAttribute('data-wpct') + '%'; });
+    sizes(view);
+    if (S.tab === 'week') prefetch();
         document.querySelectorAll('.bar [data-tab]').forEach(function (b) {
       var on = b.getAttribute('data-tab') === S.tab;
       b.classList.toggle('on', on);
@@ -383,15 +457,32 @@
       case 'km': S.form.km = Math.min(200, Math.max(10, S.form.km + +v)); render(); break;
       case 'rest': var r = S.form.rest, i = r.indexOf(+v); if (i >= 0) r.splice(i, 1); else r.push(+v); render(); break;
       case 'draft': draft(); break;
-      case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes konektor RPM do rozpracovaného importu (import_plan_weeks) a do kalendáře ho nezařazuj; schválím ho v appce RPM.'); break;
+      case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes konektor RPM do rozpracovaného importu (import_plan_weeks): když je v dokumentu verze v mílích i v km, vezmi jen kilometrovou, a týdny, kde nesedí součet, oprav podle dokumentu. Do kalendáře ho nezařazuj, zkontroluju ho v appce RPM.'); break;
+      case 'strava': toClaude('Postav mi nový běžecký plán podle mé Stravy. Postupuj podle instrukcí RPM pro nový plán: načti profil a historii, projdi Stravu za posledních 8–12 týdnů, zeptej se jen na to, co chybí, a kostru nech v rozpracovaném importu; zkontroluju ji v appce RPM.'); break;
+      case 'manual': S.manual = true; window.scrollTo(0, 0); render(); break;
+      case 'choice': S.manual = false; window.scrollTo(0, 0); render(); break;
+      case 'sweek': S.sweek = S.sweek === +v ? null : +v; render(); break;
       case 'activate':
-        var a = S.staged.activate || { mode: S.amode || 'start', date: S.adate || nextMonday() };
-        act('activate_plan', a, 'Plán je v kalendáři').then(function (d) { if (d && d.view === 'plan') { S.sub = null; S.staged = null; S.fromForm = false; S.form = null; if (S.week) S.week.staged = null; render(); } });
+        var date = stagedDate(S.staged);
+        if (!S.staged.activate && !date) { toast('Vyber datum závodu.'); break; }
+        var a = S.staged.activate || { mode: stagedMode(S.staged), date: date };
+        act('activate_plan', a, 'Plán je v kalendáři').then(function (d) { if (d && d.view === 'plan') { S.sub = null; S.staged = null; S.fromForm = false; S.form = null; S.manual = false; S.amode = S.adate = S.sweek = null; weeks = {}; if (S.week) S.week.staged = null; render(); } });
         break;
       case 'calc':
         var sec = parseTime(S.calcForm.time);
         if (!sec) { toast('Zadej čas jako 1:32:00 nebo 42:30.'); break; }
         call('calculate_paces', { distanceM: S.calcForm.dist, timeSec: sec }).then(function (d) { S.calc = d; render(); }, fail);
+        break;
+      case 'goal':
+        var go = S.paces.goal, cur = S.goalSec != null ? S.goalSec : go.sec;
+        S.goalSec = Math.min(go.maxSec, Math.max(go.minSec, cur + +v));
+        render();
+        // Klepání za sebou se uloží jednou, až prst přestane.
+        clearTimeout(S.goalTimer);
+        S.goalTimer = setTimeout(function () {
+          var want = S.goalSec;
+          call('set_goal_time', { goalSec: want }).then(function (d) { weeks = {}; if (S.goalSec === want) S.goalSec = null; take(d); render(); }, fail);
+        }, 600);
         break;
       case 'calcback': S.calc = null; render(); break;
       case 'calcopen': S.calcForm.open = true; render(); break;
@@ -408,30 +499,62 @@
   document.addEventListener('input', function (e) { if (e.target.getAttribute('data-f') === 'ctime') S.calcForm.time = e.target.value; });
   $('#claude').addEventListener('click', function () { toClaude('Podívej se přes konektor RPM na můj aktuální týden.'); });
 
-  // Týden gestem do stran: dny jdou za prstem, bez dalšího týdne kladou odpor, po puštění dojedou ven
-  // (nebo se vrátí). Další týden se načítá už během odjezdu, takže nebliká prázdno.
+  // Týden gestem do stran: dny jdou za prstem a vedle nich jede sousední týden (načtený předem),
+  // takže při listování není prázdno. Bez dalšího týdne dny kladou odpor; po puštění dojedou, nebo se vrátí.
   var EASE = 'cubic-bezier(.2, .8, .2, 1)', OUT_MS = 260, BACK_MS = 200, busy = false, g = null;
   function slide(el, x, ms, opacity) {
     el.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE + ', opacity ' + ms + 'ms ' + EASE : 'none';
     el.style.transform = x ? 'translateX(' + x + 'px)' : '';
     el.style.opacity = opacity == null ? '' : opacity;
   }
-  // Nový týden přijede z druhé strany kousek a dobarví se, takže výměna neblikne.
+  function reduced() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  // Nový týden přijede z druhé strany kousek a dobarví se (jen když nebyl načtený předem).
   function slideIn(dir) {
     var el = view.querySelector('.days');
-    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!el || reduced()) return;
     slide(el, dir * 56, 0, 0);
     void el.offsetWidth;
     slide(el, 0, 240, 1);
   }
   function hasWeek(dir) { var w = S.week; return !!(w && w.view === 'week' && (dir > 0 ? w.hasNext : w.hasPrev)); }
-  function goWeek(dir) {
+  // Kopie dnů sousedního týdne, položená vedle aktuálních.
+  function ghostFor(dir) {
+    var el = view.querySelector('.days'), d = S.week && weeks[addDays(S.week.weekStart, dir * 7)];
+    if (!el || !d) return null;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = daysHtml(d, null);
+    var gh = wrap.firstChild;
+    gh.classList.add('ghost');
+    gh.setAttribute('aria-hidden', 'true');
+    gh.style.top = el.offsetTop + 'px';
+    view.appendChild(gh);
+    sizes(gh);
+    return gh;
+  }
+  function goWeek(dir, gh) {
     var el = view.querySelector('.days');
-    if (busy || !hasWeek(dir)) { if (el) slide(el, 0, BACK_MS); return; }
+    if (busy || !hasWeek(dir)) { if (el) slide(el, 0, BACK_MS); if (gh) slide(gh, dir * (el ? el.clientWidth : 0), BACK_MS); setTimeout(function () { if (gh) gh.remove(); }, BACK_MS); return; }
     busy = true; S.open = null;
-    var data = call('show_week', { date: addDays(S.week.weekStart, dir * 7) });
+    var key = addDays(S.week.weekStart, dir * 7), cached = weeks[key];
+    var show = function (d) { take(d); render(); busy = false; };
+    if (cached) {
+      if (!el || reduced()) { if (gh) gh.remove(); show(cached); }
+      else {
+        if (!gh) { gh = ghostFor(dir); slide(gh, dir * el.clientWidth, 0); void gh.offsetWidth; }
+        slide(el, -dir * el.clientWidth, OUT_MS);
+        slide(gh, 0, OUT_MS);
+        setTimeout(function () { show(cached); }, OUT_MS);
+      }
+      // Na pozadí ověří, že se týden mezitím nezměnil jinde (Claude, druhé zařízení).
+      call('show_week', { date: key }).then(function (d) {
+        if (d.view === 'week' && S.week && S.week.weekStart === key && JSON.stringify(d.days) !== JSON.stringify(S.week.days)) { take(d); if (S.tab === 'week' && !busy) render(); }
+      }, function () { /* offline: zůstane uložená verze */ });
+      return;
+    }
+    if (gh) gh.remove();
+    var data = call('show_week', { date: key });
     var out = new Promise(function (ok) {
-      if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return ok();
+      if (!el || reduced()) return ok();
       slide(el, -dir * el.clientWidth, OUT_MS, 0); setTimeout(ok, OUT_MS);
     });
     Promise.all([data, out]).then(function (r) { take(r[0]); render(); slideIn(dir); }, fail).then(function () { busy = false; });
@@ -440,7 +563,7 @@
     g = null;
     if (busy || S.tab !== 'week' || !S.week || S.week.view !== 'week' || e.touches.length !== 1) return;
     var t = e.touches[0];
-    g = { x: t.clientX, y: t.clientY, t: e.timeStamp, axis: null, dx: 0, el: view.querySelector('.days') };
+    g = { x: t.clientX, y: t.clientY, t: e.timeStamp, axis: null, dx: 0, el: view.querySelector('.days'), ghost: null, gdir: 0 };
   }, { passive: true });
   view.addEventListener('touchmove', function (e) {
     if (!g || !g.el) return;
@@ -451,15 +574,22 @@
     }
     if (g.axis !== 'x') return;
     e.preventDefault();
-    g.dx = hasWeek(dx < 0 ? 1 : -1) ? dx : dx * 0.2;
+    var dir = dx < 0 ? 1 : -1;
+    g.dx = hasWeek(dir) ? dx : dx * 0.2;
+    if (g.gdir !== dir) { if (g.ghost) g.ghost.remove(); g.ghost = hasWeek(dir) ? ghostFor(dir) : null; g.gdir = dir; }
     slide(g.el, g.dx, 0);
+    if (g.ghost) slide(g.ghost, dir * g.el.clientWidth + g.dx, 0);
   }, { passive: false });
   function swipeEnd(e) {
     var s = g; g = null;
     if (!s || s.axis !== 'x' || !s.el) return;
-    var speed = Math.abs(s.dx) / Math.max(1, e.timeStamp - s.t);
-    if (Math.abs(s.dx) > s.el.clientWidth * 0.25 || (speed > 0.3 && Math.abs(s.dx) > 24)) goWeek(s.dx < 0 ? 1 : -1);
-    else slide(s.el, 0, BACK_MS);
+    var speed = Math.abs(s.dx) / Math.max(1, e.timeStamp - s.t), dir = s.dx < 0 ? 1 : -1;
+    var gh = s.gdir === dir ? s.ghost : null;
+    if (Math.abs(s.dx) > s.el.clientWidth * 0.25 || (speed > 0.3 && Math.abs(s.dx) > 24)) goWeek(dir, gh);
+    else {
+      slide(s.el, 0, BACK_MS);
+      if (gh) { slide(gh, dir * s.el.clientWidth, BACK_MS); setTimeout(function () { gh.remove(); }, BACK_MS); }
+    }
   }
   view.addEventListener('touchend', swipeEnd);
   view.addEventListener('touchcancel', swipeEnd);
@@ -482,6 +612,8 @@
     Promise.all([call('show_week', {}), call('show_week', { tab: 'paces' }).catch(function () { return null; })]).then(function (r) {
       if (r[1]) take(r[1]);
       take(r[0]);
+      // Přehled plánu na pozadí: první klepnutí na Plán ho ukáže hned.
+      if (r[0].view === 'week') call('show_week', { tab: 'plan' }).then(function (d) { if (d.view === 'plan' && !S.plan) { S.plan = d; if (S.tab === 'plan' && !S.sub) render(); } }, function () { /* načte se při otevření */ });
       // Poslední týden a tempa pro start bez signálu (třeba na trati).
       try { localStorage.setItem(CACHE_KEY, JSON.stringify([r[0], r[1]])); } catch (e) { /* plné úložiště */ }
       if (firstTab === 'new') { S.tab = 'plan'; S.sub = 'new'; } else if (firstTab && firstTab !== 'week') return load(firstTab);

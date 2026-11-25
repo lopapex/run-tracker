@@ -2,7 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { WorkspaceStore } from './store';
-import { activateInput, activatePlan, bulkStatusInput, checkWorkout, describePlan, draftInput, draftPlan, setStatuses, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
+import { goalInput, setGoal, activateInput, activatePlan, bulkStatusInput, checkWorkout, describePlan, draftInput, draftPlan, setStatuses, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
 import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View , importView } from './views';
 import { emptyWorkspace, type Condition, type Workspace } from './workspace';
 import { weekStartOf } from '../domain/dates';
@@ -38,11 +38,13 @@ Appka RPM:
 - Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, najdi běh ve Stravě a zavolej show_result s čísly: jednotku tím rovnou zapíše (splněno nebo částečně podle hodnocení), set_status po něm nevolej. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Výsledek shrň jednou dvěma větami.
 - Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 
-Import plánu z dokumentu (PDF, obrázek, tabulka, text):
+Import plánu z dokumentu (PDF, obrázek, tabulka, text) – hlavní způsob, jak uživatel plán zakládá:
+- Nejdřív zjisti, kolik verzí plánu dokument obsahuje. Plány často mají tentýž rozpis dvakrát, v mílích a v kilometrech (třeba strany „MILES“ a „KM“): přepiš jen kilometrovou verzi, mílovou přeskoč a týdny nezdvojuj. Když je jen verze v mílích, přepiš ji a míle převeď na metry (1 mi = 1609,344 m). Počet týdnů ber z dokumentu.
 - Přepiš plán po týdnech přes import_plan_weeks, nejvýš 4 týdny na jedno volání. Každý týden má všech 7 dní (0 = pondělí … 6 = neděle); volný den je typ rest s prázdnými blocks.
-- Vzdálenosti převáděj na metry, časy na sekundy, míle na metry (1 mi = 1609,344 m). Strukturu tréninku zapiš do blocks a původní znění buňky nech v rawInstruction. Nic nedomýšlej; nejasné místo ukaž uživateli.
-- Když dokument uvádí týdenní součet, pošli ho v declaredTotalM. Nástroj vrátí kontrolu součtů a varování k podezřelým jednotkám (rovinky dlouhé kilometry, chybějící pauzy, název nesedí s rozpisem). Jsou to jen varování: ukaž je, oprav podle dokumentu to, co uživatel potvrdí, a když je chce nechat, pokračuj.
-- Když dokument obsahuje tabulku temp, pošli ji jako paceChart (sekundy na kilometr): pásma v appce pak budou podle autora plánu. Má-li tabulka řádky pro různé cílové časy, zeptej se na cílový čas a pošli odpovídající řádek.
+- Vzdálenosti převáděj na metry, časy na sekundy. Strukturu tréninku zapiš do blocks a do rawInstruction dej doslovné znění buňky z dokumentu (appka ho ukazuje vedle přepisu). Nic nedomýšlej; nejasné místo ukaž uživateli.
+- Běh s rovinkami („10k + 5x 20s Strides“) je volný běh distanceM 10000 a k němu blok strides (count 5, durationSec 20); rovinky nikdy nejsou úsek dlouhý kilometry. Závod má vždy distanceM. Posilování ve stejný den patří do strengthMin.
+- Když dokument uvádí týdenní součet, pošli ho v declaredTotalM (u rozpětí jako „48–51k“ horní hranici). Nástroj vrátí kontrolu součtů, varování a seznam toho, co sám opravil. Týden se součtem NESEDÍ porovnej s dokumentem a pošli znovu. Ostatní varování ukaž uživateli; oprav, co potvrdí, a když je chce nechat, pokračuj.
+- Když dokument obsahuje tabulku temp, pošli ji jako paceChart (sekundy na kilometr): pásma v appce pak budou podle autora plánu. Má-li tabulka řádky pro různé cílové časy, pošli všechny řádky v paceTable (goalSec = cílový čas v sekundách) a do paceChart řádek pro cíl uživatele; když cíl neznáš, zeptej se. Cíl si pak uživatel může změnit v appce (set_goal_time).
 - Uživatel může rozpracovaný plán zkontrolovat a zařadit v appce. Když chce, aby to udělal ty, zeptej se, kdy má plán začít nebo kdy je závod, a zavolej activate_plan.`;
 
 const WORKOUT_HELP = 'Předpis jednotky: type, title, volitelně distanceM / durationSec / load / strengthMin / note / rawInstruction a povinné blocks (může být prázdné). Blok je {kind:"segment", role, distanceM nebo durationSec, intensity}, {kind:"repeat", count, work, more?, recovery?, recoveryAfterLast: true|false|null}, {kind:"strides", count, durationSec} nebo {kind:"note", text}. Úseky uvnitř repeat nemají kind.';
@@ -250,7 +252,16 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
     description: 'tab: week (date = týden), plan, paces (workoutId = rozpis úseků), staged (rozpracovaný plán).',
     inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces', 'staged']).optional(), workoutId: z.string().optional() },
     annotations: readOnly,
-  }, (input) => show((ws) => (input.tab === 'staged' ? (ws.staged?.weeks.length ? importView(ws) : planView(ws)) : input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date }))));
+  }, (input) => show((ws) => {
+    if (input.tab === 'staged') return ws.staged?.weeks.length ? importView(ws) : planView(ws);
+    if (input.tab === 'plan') return planView(ws);
+    if (input.tab === 'paces') {
+      // Bez temp appka ukáže prázdnou tabulku a výpočet z výkonu, ne chybovou hlášku psanou pro model.
+      const v = paceView(ws, { workoutId: input.workoutId });
+      return v.ok || input.workoutId ? v : { ok: true, text: '', data: { view: 'paces', paces: [], workout: null } };
+    }
+    return weekView(ws, { date: input.date });
+  }));
 
   server.registerTool('calculate_paces', {
     title: 'Spočítat tempa z výkonu',
@@ -268,6 +279,13 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
     if (('isError' in saved && saved.isError) || !view?.ok) return saved;
     return withData(text(view.text), { ...view.data, banner: { text: 'Tempa uložena do profilu.', revisionId: null } });
   });
+
+  server.registerTool('set_goal_time', {
+    title: 'Cílový čas a tempa',
+    description: 'Uloží cílový čas závodu a přepočítá tempa: podle tabulky temp z plánu (jen v jejím rozsahu), bez ní podle VDOT na délku závodu.',
+    inputSchema: goalInput.shape,
+    annotations: change,
+  }, (input) => write((ws) => setGoal(ws, input), (ws) => paceView(ws, {})));
 
   server.registerTool('show_result', {
     title: 'Doběhnuto: hodnocení a zápis',
@@ -318,6 +336,10 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
   // ---------- Připravené prompty (startovací scénáře) ----------
 
   const prompt = (text: string) => () => ({ messages: [{ role: 'user' as const, content: { type: 'text' as const, text } }] });
+  server.registerPrompt('plan-z-dokumentu', {
+    title: 'Plán z PDF nebo fotky',
+    description: 'Přepíše přiložený plán od trenéra (PDF, fotka, tabulka) do RPM ke schválení v appce.',
+  }, prompt('Přikládám svůj tréninkový plán. Přepiš ho přes konektor RPM do rozpracovaného importu podle instrukcí RPM pro import: když je v dokumentu verze v mílích i v kilometrech, vezmi jen kilometrovou; doslovné znění každého dne dej do rawInstruction a týdenní součty do declaredTotalM. Týdny, kde součet nesedí, oprav podle dokumentu. Tabulku temp pošli jako paceChart; má-li řádky pro různé cílové časy, zeptej se mě na cíl. Do kalendáře plán nezařazuj, schválím ho v appce RPM. Na konci mi napiš počet týdnů, co jsi opravil a co zůstalo k ověření.'));
   server.registerPrompt('novy-plan', {
     title: 'Nový plán podle Stravy',
     description: 'Projde profil, historii a Stravu, doptá se na cíl a postaví nový plán ke schválení.',

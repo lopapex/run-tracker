@@ -106,7 +106,15 @@ export interface PlanTemplate {
   verifiedAt: string;
   units: 'km' | 'mi';
   paceChart?: PaceChart;
+  /** Tabulka temp po cílových časech, jak ji uvádí dokument (např. 1h25 / 1h30 / 1h35); tempa se mezi řádky dopočítají. */
+  paceTable?: PaceTableRow[];
   weeks: TemplateWeek[];
+}
+
+export interface PaceTableRow {
+  /** Cílový čas závodu v sekundách. */
+  goalSec: number;
+  paces: PaceChart;
 }
 
 // ---------- Aktivace a rozpis ----------

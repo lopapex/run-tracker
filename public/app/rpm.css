@@ -200,7 +200,37 @@ button { background: none; border: 0; cursor: pointer; }
 .pt th { font: 12px var(--mono); color: var(--faint); font-weight: 400; text-align: right; padding: 12px var(--gut) 6px 0; }
 .pt td { padding: 13px var(--gut) 13px 0; border-bottom: 1px solid var(--line); font: 15px var(--mono); text-align: right; white-space: nowrap; }
 .pt td:first-child { padding-left: var(--gut); font: 15px var(--sans); text-align: left; white-space: normal; }
-.pt td:last-child { color: var(--mute); }
+.pt td small { font-size: 12px; color: var(--mute); }
+.goal { padding: 6px var(--gut) 14px; border-bottom: 1px solid var(--line); }
+.goal .lab { display: block; font-size: 13px; color: var(--mute); margin-bottom: 8px; }
+.step button:disabled { color: var(--faint); }
+
+/* Volba nového plánu */
+.choice .doc { margin-top: 12px; }
+.choice .doc.main { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.choice .hint { margin: 12px 0 4px; }
+.choice .row-link { padding-left: 0; }
+
+/* Kontrola rozpracovaného plánu: rozbalený týden */
+.mx tr.w.flag .wk { color: var(--accent); }
+.mx tr.w.open td { background: var(--fill); }
+.mx .vol .bad { color: var(--accent); font-weight: 600; }
+.mx tr.wd > td { padding: 0 var(--gut) 10px; background: var(--fill); }
+.sd { list-style: none; font-size: 13px; }
+.sd li { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.sd li:first-child { border-top: 0; }
+.sd .dw { font: 12px/1.5 var(--mono); color: var(--mute); }
+.sd .t { display: flex; justify-content: space-between; gap: 8px; }
+.sd .t .n { color: var(--mute); white-space: nowrap; }
+.sd p + p { margin-top: 2px; }
+.sd .raw, .note.raw { color: var(--mute); font-style: italic; }
+.sd .fix { color: var(--ok); }
+.sd .iss { color: var(--accent); }
+.sd li.rest p { color: var(--faint); }
+
+/* Sousední týden při listování */
+#view { position: relative; }
+.days.ghost { position: absolute; left: 0; right: 0; pointer-events: none; }
 .sw { display: inline-block; width: 3px; height: 14px; border-radius: 2px; background: var(--t); margin-right: 10px; vertical-align: -2px; }
 .row-link { display: block; width: 100%; text-align: left; padding: 16px var(--gut); font-size: 15px; color: var(--mute); }
 .row-link::after { content: " ›"; }
