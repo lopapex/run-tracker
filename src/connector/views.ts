@@ -2,7 +2,7 @@
 // a strukturovaná data pro widget. Nic se tu neukládá; data běhu ze Stravy se jen přepočítají a vrátí.
 import { z } from 'zod';
 import { addDays, diffDays, dowOf, isIsoDate, todayIso, weekStartOf } from '../domain/dates';
-import { plannedDistance, workoutDistance } from '../domain/distance';
+import { plannedDistance, workoutDistance, workoutProfile } from '../domain/distance';
 import { lintPaceChart, lintWeek } from '../domain/lint';
 import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, workoutSummary } from '../domain/format';
 import { dayWorkouts, planRange } from '../domain/schedule';
@@ -78,7 +78,7 @@ function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
     summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null,
     kmMin: km(d.minM), kmMax: km(d.maxM), kmUnknown: d.unknown > 0, moved: w.date !== w.originDate, skipReason: w.skipReason ?? null,
     feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null, conditions: (note?.conditions ?? []).map((x) => CONDITIONS[x]),
-    version: checkinVersion(w.status, note),
+    version: checkinVersion(w.status, note), profile: workoutProfile(w.workout, chart),
   };
 }
 
@@ -133,7 +133,7 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
   return {
     ok: true,
     text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''}`,
-    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null, rev: ws.revisions[ws.revisions.length - 1]?.id ?? null },
+    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, isCurrent: start === weekStartOf(c.today), staged: ws.staged?.weeks.length ? { name: ws.staged.name, weeks: ws.staged.weeks.length } : null, days, stats, nextId: next?.id ?? null, rev: ws.revisions[ws.revisions.length - 1]?.id ?? null },
   };
 }
 
@@ -149,7 +149,8 @@ export function importView(ws: Workspace): View {
     const r = plannedDistance(w.days.map((d) => d.workout), chart);
     const declared = w.declaredTotalM ?? null;
     const totals = declared == null ? 'none' : declared < r.minM - 500 || (!r.unknown && declared > r.maxM + 500) ? 'off' : r.unknown ? 'unknown' : 'ok';
-    return { index: w.index, phase: w.phase ?? null, kmMin: km(r.minM), kmMax: km(r.maxM), declaredKm: declared == null ? null : km(declared), totals, issues: lintWeek(w, chart).map((x) => ({ day: DAY[x.dow], title: x.title, text: x.text })) };
+    const cells = w.days.map((d) => (d.workout.type === 'rest' ? null : [d.workout.type, 'scheduled']));
+    return { index: w.index, phase: w.phase ?? null, kmMin: km(r.minM), kmMax: km(r.maxM), declaredKm: declared == null ? null : km(declared), totals, cells, issues: lintWeek(w, chart).map((x) => ({ day: DAY[x.dow], title: x.title, text: x.text })) };
   });
   const missing: number[] = [];
   for (let i = 1; i <= st.weeks[st.weeks.length - 1].index; i++) if (!st.weeks.some((w) => w.index === i)) missing.push(i);
@@ -158,7 +159,7 @@ export function importView(ws: Workspace): View {
   return {
     ok: true,
     text: `Zobrazena kontrola importu „${st.name}“: ${st.weeks.length} týdnů, ${count} varování.`,
-    data: { view: 'import', name: st.name, weeks, missing, hasPaces: Boolean(st.paceChart && Object.keys(st.paceChart).length), paceIssues, warnings: count },
+    data: { view: 'import', name: st.name, activate: st.activate ?? null, weeks, missing, hasPaces: Boolean(st.paceChart && Object.keys(st.paceChart).length), paceIssues, warnings: count },
   };
 }
 
@@ -172,7 +173,13 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   const weeks = [...c.activation.mapping].sort((a, b) => a.weekStart.localeCompare(b.weekStart)).map((m) => {
     const inWeek = c.all.filter((w) => w.date >= m.weekStart && w.date <= addDays(m.weekStart, 6));
     const source = m.sourceWeek != null ? template?.weeks.find((w) => w.index === m.sourceWeek) : undefined;
-    return { weekStart: m.weekStart, sourceWeek: m.sourceWeek, phase: source?.phase ?? null, isCurrent: m.weekStart === currentStart, isPast: m.weekStart < currentStart, ...weekStats(inWeek, c.chart, c.today) };
+    // Matice plánu: za každý den hlavní jednotka (typ, stav) nebo null, když je volno.
+    const cells = Array.from({ length: 7 }, (_, i) => {
+      const day = dayWorkouts(inWeek, addDays(m.weekStart, i)).filter((w) => w.workout.type !== 'rest');
+      const main = day.sort((x, y) => workoutDistance(y.workout, c.chart).maxM - workoutDistance(x.workout, c.chart).maxM)[0];
+      return main ? [main.workout.type, main.status === 'scheduled' && main.date < c.today ? 'missed' : main.status] : null;
+    });
+    return { weekStart: m.weekStart, sourceWeek: m.sourceWeek, phase: source?.phase ?? null, isCurrent: m.weekStart === currentStart, isPast: m.weekStart < currentStart, ...weekStats(inWeek, c.chart, c.today), cells };
   });
   const range = planRange(c.activation);
   const race = ws.profile.raceDate ?? null;

@@ -6,12 +6,6 @@
 [build.environment]
   NODE_VERSION = "24"
 
-# Aplikace Trénink (PWA): karta Run Trackeru je na /app/card.html, tentýž soubor jako widget pro chat.
-[[redirects]]
-  from = "/app/card.html"
-  to = "/widget.html"
-  status = 200
-
 # Hlavičky jsou po cestách, žádná se nepřekrývá: Netlify by stejnou hlavičku z víc pravidel spojil do jedné.
 [[headers]]
   for = "/*"
@@ -32,26 +26,20 @@
     X-Frame-Options = "DENY"
     Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
-# Obal aplikace: volá konektor na stejném webu a v rámu ukazuje kartu.
+# Aplikace RPM: volá konektor na stejném webu, nic nevkládá do rámu.
 [[headers]]
   for = "/app/"
   [headers.values]
     X-Frame-Options = "DENY"
-    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 [[headers]]
   for = "/app/index.html"
   [headers.values]
     X-Frame-Options = "DENY"
-    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
-# Karta: jen vlastní vložený kód, žádná síť; v rámu smí být jen na tomhle webu.
-[[headers]]
-  for = "/app/card.html"
-  [headers.values]
-    X-Frame-Options = "SAMEORIGIN"
-    Content-Security-Policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
-
+# Karta v chatu: jen vlastní vložený kód, žádná síť.
 [[headers]]
   for = "/widget.html"
   [headers.values]

@@ -742,6 +742,9 @@ describe('konektor Run Tracker', () => {
     expect(draft.text).toContain('(odpočinkový)');
     expect(draft.text).toContain('T10 ');
     expect(draft.text).toContain('mode "race" a date 2027-01-31');
+    // Appka ukáže náhled kostry: bez falešných varování, s maticí a s tím, jak plán zařadit.
+    expect(draft.data).toMatchObject({ view: 'import', warnings: 0, activate: { mode: 'race', date: '2027-01-31' } });
+    expect((draft.data.weeks as Array<{ cells: unknown[] }>)[0].cells).toHaveLength(7);
     const activated = await call('activate_plan', { mode: 'race', date: '2027-01-31' });
     expect(activated.data).toMatchObject({ view: 'plan', planName: 'Půlmaraton jaro', first: '2026-11-23', last: '2027-01-31' });
     const weeks = activated.data.weeks as Array<{ plannedKmMax: number }>;

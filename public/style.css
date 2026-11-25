@@ -197,9 +197,7 @@ footer {
 
 .lead.small { font-size: 1rem; }
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
-.shots figure { margin: 0; }
+@media (max-width: 640px) { .shots { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 72%; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.5rem; } .shots img { scroll-snap-align: start; } }
 .shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 14px; }
-.shots figcaption { margin-top: 0.5rem; color: var(--muted); font-size: 0.95rem; }
-.shots figcaption b { color: var(--text); }
 section + section { margin-top: 2.25rem; }
 footer a { display: inline-flex; align-items: center; min-height: 44px; }

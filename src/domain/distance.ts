@@ -1,4 +1,4 @@
-import type { PaceChart, Segment, WorkoutSpec } from './types';
+import type { IntensityRef, PaceChart, Segment, WorkoutSpec } from './types';
 
 export interface DistanceRange { minM: number; maxM: number; estimated: boolean; unknown: number }
 const zero = (): DistanceRange => ({ minM: 0, maxM: 0, estimated: false, unknown: 0 });
@@ -37,4 +37,39 @@ export function workoutDistance(w: WorkoutSpec, chart?: PaceChart): DistanceRang
 
 export function plannedDistance(workouts: WorkoutSpec[], chart?: PaceChart): DistanceRange {
   return workouts.reduce((sum, w) => add(sum, workoutDistance(w, chart)), zero());
+}
+
+/** Profil jednotky pro vykreslení: úseky po sobě jako [intenzita, sekundy]. Délka z času, nebo ze vzdálenosti
+ *  a středu pásma (bez pásma 5:30/km). Sousední úseky stejné intenzity se slijí; nejvýš 48 úseků. */
+export type ProfilePart = [IntensityRef, number];
+export function workoutProfile(w: WorkoutSpec, chart?: PaceChart): ProfilePart[] {
+  if (['rest', 'strength', 'cross'].includes(w.type)) return [];
+  const secOf = (s: Segment): number => {
+    if (s.durationSec != null) return s.durationSec;
+    const p = chart?.[s.intensity as keyof PaceChart];
+    const pace = p && p.fromSec > 0 && p.toSec > 0 ? (p.fromSec + p.toSec) / 2 : 330;
+    return s.distanceM != null ? (s.distanceM / 1000) * pace : 0;
+  };
+  const out: ProfilePart[] = [];
+  const push = (i: IntensityRef, sec: number) => {
+    if (sec <= 0) return;
+    const last = out[out.length - 1];
+    if (last && last[0] === i) last[1] += sec; else out.push([i, sec]);
+  };
+  const seg = (s: Segment) => push(s.intensity, secOf(s));
+  if (!w.blocks.some((b) => b.kind !== 'note')) {
+    const i: IntensityRef = w.type === 'easy' || w.type === 'long' ? 'easy' : w.type === 'tempo' ? 'hm_pace' : 'free';
+    seg({ role: 'steady', intensity: i, distanceM: w.distanceM, durationSec: w.distanceM == null ? w.durationSec : undefined });
+  }
+  for (const b of w.blocks) {
+    if (b.kind === 'segment') seg(b);
+    else if (b.kind === 'strides') for (let n = 0; n < b.count; n++) { push('strides', b.durationSec); push('walk', 60); }
+    else if (b.kind === 'repeat') {
+      for (let n = 0; n < b.count; n++) {
+        [b.work, ...(b.more ?? [])].forEach(seg);
+        if (b.recovery && (n < b.count - 1 || b.recoveryAfterLast)) seg(b.recovery);
+      }
+    }
+  }
+  return out.slice(0, 48).map(([i, s]) => [i, Math.round(s)]);
 }

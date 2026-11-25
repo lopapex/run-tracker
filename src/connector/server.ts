@@ -315,11 +315,11 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
 
   server.registerTool('show_week', {
     title: 'Běžecký plán',
-    description: 'Jediný nástroj pro zobrazení plánu: karta se záložkami. tab: week (výchozí; date vybere týden), plan (objem, fáze, forma, závod), paces (pásma; s workoutId rozpis úseků).',
-    inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces']).optional().describe('Úvodní záložka karty; bez ní week.'), workoutId: z.string().optional().describe('Jen pro tab paces: rozpis úseků této jednotky.'), fromCard, watch: fromCard },
+    description: 'Jediný nástroj pro zobrazení plánu: karta se záložkami. tab: week (výchozí; date = týden), plan (objem, fáze, forma, závod), paces (pásma; s workoutId rozpis úseků).',
+    inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces', 'staged']).optional().describe('Úvodní záložka karty; bez ní week.'), workoutId: z.string().optional().describe('Jen pro tab paces: rozpis úseků této jednotky.'), fromCard, watch: fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, (input) => show((ws) => (input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date })), input.fromCard, input.watch));
+  }, (input) => show((ws) => (input.tab === 'staged' ? (ws.staged?.weeks.length ? importView(ws) : planView(ws)) : input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date })), input.fromCard, input.watch));
 
   server.registerTool('show_plan', {
     title: 'Záložka Plán',

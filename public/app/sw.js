@@ -1,6 +1,6 @@
-// Offline start aplikace: obal a karta ze sítě, bez sítě z mezipaměti. Data plánu (POST na konektor) se necachují.
-const CACHE = 'rt-app-1';
-const SHELL = ['./', 'shell.js', 'shell.css', 'card.html', 'manifest.webmanifest', '/brand/run-tracker-v2-192.png'];
+// Offline start aplikace: stránka ze sítě, bez sítě z mezipaměti. Data plánu (POST na konektor) se necachují.
+const CACHE = 'rpm-1';
+const SHELL = ['./', 'rpm.js', 'rpm.css', 'manifest.webmanifest', '/brand/run-tracker-v2-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

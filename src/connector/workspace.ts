@@ -34,6 +34,8 @@ export interface StagedImport {
   paceChart?: PaceChart;
   weeks: TemplateWeek[];
   updatedAt: string;
+  /** Jak plán zařadit, když ho postavil generátor (závod, nebo začátek); appka to nabídne jedním klepnutím. */
+  activate?: { mode: 'start' | 'race'; date: string };
 }
 
 export interface Workspace {

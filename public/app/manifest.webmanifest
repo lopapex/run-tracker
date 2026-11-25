@@ -1,15 +1,15 @@
 {
-  "name": "Run Tracker",
-  "short_name": "Run Tracker",
-  "description": "Tréninkový plán, splnění a tempa na jedné obrazovce.",
+  "name": "RPM – Run Plan Modulator",
+  "short_name": "RPM",
+  "description": "Co dnes běžet a jak rychle, celý plán a tempa.",
   "lang": "cs",
   "id": "/app/",
   "start_url": "/app/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0f1a14",
-  "theme_color": "#0f1a14",
+  "background_color": "#f3f2ed",
+  "theme_color": "#f3f2ed",
   "icons": [
     {
       "src": "/brand/run-tracker-v2-192.png",

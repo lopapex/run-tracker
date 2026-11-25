@@ -63,9 +63,21 @@ Vzor je měřicí přístroj nebo sequencer, ne fitness dashboard. Jedna plocha,
    - Vlevo objem týdne, nahoře fáze.
    - Klepnutí na buňku otevře týden.
    - Celý plán je tak na jedné obrazovce bez grafu, tabulky a šipek. Matice je i to „modulační“ v názvu.
-3. **Tempa**: místo záložky panel z dnešní jednotky nebo z `⋯`.
-   - Pásma jako stupnice, převody na 400 m na jeden řádek.
-4. **Claude**: jedno tlačítko v záhlaví, které otevře nový chat. Žádné čipy s větami.
+3. **Tempa**: záložka (ne tlačítko u běhu). Tabulka pásem na km a na 400 m; přepočet z čerstvého závodu je schovaný pod jedním řádkem.
+4. **Claude**: jedno tlačítko ve spodní liště vedle záložek, otevře nový chat. Žádné čipy s větami.
+
+Nasazeno 25. 11.: `public/app/` (index.html, rpm.css, rpm.js), obyčejná stránka bez rámu. Záhlaví má jeden řádek a pod ním jednu řádku čísel; mezi týdny se swipuje.
+
+### Nový plán a nahrání plánu (v appce)
+
+- **Nový plán** zvládne appka sama, bez Clauda: generátor kostry (`draft_plan`) je deterministický.
+  - Formulář na jednu obrazovku: cíl (udržovat / zlepšit / závod), závod (vzdálenost, datum), dnešní týdenní objem, běhů týdně, den dlouhého běhu, volné dny a volitelně čerstvý závodní čas pro tempa (`calculate_paces`).
+  - → náhled jako matice s objemem po týdnech → **Zařadit do kalendáře** (`activate_plan`).
+  - Starý plán se archivuje, jako dnes.
+- **Nahrát plán z dokumentu** (PDF, fotka, tabulka) potřebuje čtení dokumentu, a to umí jen Claude. Appka otevře nový chat s připravenou větou a uživatel tam přiloží soubor; Claude plán přepíše přes konektor.
+  - Appka pak sama ukáže **rozpracovaný plán** (náhled, varování, Zařadit do kalendáře), takže schválení proběhne v appce.
+  - K tomu musí data týdne nést i stručný přehled rozpracovaného importu.
+- Vstup do obou: v záhlaví appky `+ Plán`. Když plán není, je to celá úvodní obrazovka.
 
 ### Vizuální systém
 
@@ -102,9 +114,9 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
 ## 6. Postup
 
 1. **Rozhodnutí** (sekce 7).
-2. **Statický prototyp** nového vzhledu s ukázkovými daty: Týden, Plán (matice) a dnešní trénink po Hotovo, na 390 px ve světlém i tmavém režimu. Schválíš, nebo vrátíš.
+2. ~~**Statický prototyp**~~ **Hotovo 25. 11.** nového vzhledu s ukázkovými daty: Týden, Plán (matice) a dnešní trénink po Hotovo, na 390 px ve světlém i tmavém režimu. Schválíš, nebo vrátíš.
 3. **Server:** zeštíhlit podle sekce 5 a upravit testy.
-4. **Appka:** přepsat na prototyp a volat API přímo, bez rámu a postMessage. Přidat profil jednotky a matici.
+4. ~~**Appka:**~~ **Hotovo 25. 11.** (shell.js a karta v rámu z appky pryč) přepsat na prototyp a volat API přímo, bez rámu a postMessage. Přidat profil jednotky a matici.
 5. **Mazání:** karta v chatu, stránka v claude.ai, ChatGPT.
 6. **Název a instalace:**
    - manifest, ikona, úvodní stránka (appka první, Claude jako mozek), README;
@@ -115,7 +127,7 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
 ## 7. Rozhodnutí pro tebe
 
 1. ~~Karta v chatu pryč úplně?~~ **Rozhodnuto 25. 11.:** konektor zůstává, grafické karty v chatu ne. Claude odpovídá textem a odkazem do appky.
-2. **Název:** RPM / Run Plan Modulator / Modulator / jiný.
+2. ~~Název?~~ **Rozhodnuto 25. 11.:** RPM, Run Plan Modulator.
 3. **Stránka v claude.ai** (připnutá) pryč? Doporučuju ano, je to třetí kopie téže appky.
-4. **ChatGPT** pryč? Doporučuju ano, pokud ho nepoužíváš.
+4. ~~ChatGPT pryč?~~ **Rozhodnuto 25. 11.:** ano. Z úvodní stránky a README je pryč; metadata `openai/*` na serveru zmizí se zeštíhlením.
 5. **Hodnocení běhu:** stačí v chatu textem, s uloženým jen stavem a pocitem? Nebo má appka ukazovat i skóre (uložené jedno číslo)?

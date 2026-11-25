@@ -24,7 +24,8 @@ export function lintWorkout(w: WorkoutSpec, chart?: PaceChart): string[] {
   }
   if (/rovink|stride/i.test(w.title) && !hasStrides(w)) out.push('Název zmiňuje rovinky, v rozpisu nejsou.');
   if ((w.type === 'speed' || w.type === 'tempo') && w.blocks.length && !segmentsOf(w.blocks).some((s) => FAST.has(s.intensity))) out.push('Rychlá jednotka nemá žádný úsek v rychlejším tempu.');
-  const named = /(\d+(?:[.,]\d+)?)\s*km\b/i.exec(w.title);
+  // „5× 1 km“ je délka úseku, ne celé jednotky.
+  const named = /(?<![×x*]\s?)\b(\d+(?:[.,]\d+)?)\s*km\b/i.exec(w.title);
   const range = workoutDistance(w, chart);
   if (named && !range.unknown && range.maxM > 0) {
     const titled = parseFloat(named[1].replace(',', '.')) * 1000;

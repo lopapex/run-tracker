@@ -3,49 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Run Tracker</title>
-<meta name="description" content="Tréninkový plán, splnění a tempa na jedné obrazovce.">
-<meta name="theme-color" content="#f3f3ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b0f0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f2ed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111213" media="(prefers-color-scheme: dark)">
+<title>RPM</title>
+<meta name="description" content="Co dnes běžet a jak rychle, celý plán a tempa.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Run Tracker">
+<meta name="apple-mobile-web-app-title" content="RPM">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="rpm.css">
 </head>
 <body>
-<div id="probe" aria-hidden="true"></div>
-<div id="toast" role="status" hidden></div>
-<iframe id="card" title="Run Tracker" hidden></iframe>
-
-<main id="setup" hidden>
-  <div class="setup">
-    <img src="/brand/run-tracker-v2-192.png" alt="" width="64" height="64">
-    <h1>Run Tracker</h1>
-    <p>Vlož adresu svého konektoru. Je to tatáž adresa, kterou máš v Claude v nastavení konektorů.</p>
-    <form id="setup-form">
-      <label class="lbl" for="setup-input">Adresa konektoru</label>
-      <input id="setup-input" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://run-connector.netlify.app/mcp/…" required>
-      <button type="submit" class="go">Otevřít trénink</button>
-      <div id="setup-err" role="alert"></div>
-    </form>
-    <p><a href="/">Ještě nemám adresu</a></p>
+<main id="view" aria-live="polite"></main>
+<nav class="bar" aria-label="Zobrazení">
+  <div class="seg" role="tablist">
+    <button type="button" role="tab" data-tab="week">Týden</button>
+    <button type="button" role="tab" data-tab="plan">Plán</button>
+    <button type="button" role="tab" data-tab="paces">Tempa</button>
   </div>
-</main>
-
-<div id="sheet" hidden>
-  <button type="button" id="sheet-back" aria-label="Zavřít"></button>
-  <section class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-q">
-    <span class="grab" aria-hidden="true"></span>
-    <header><div><div class="k">Trenér</div><p id="sheet-q"></p></div><button type="button" id="sheet-close" aria-label="Zavřít">×</button></header>
-    <p id="sheet-text" aria-live="polite"></p>
-    <form id="ask"><input id="ask-input" type="text" enterkeyhint="send" placeholder="Zeptej se na trénink…" aria-label="Otázka pro trenéra"><button type="submit" class="go">Zeptat se</button></form>
-  </section>
-</div>
-
-<script src="shell.js"></script>
+  <button type="button" class="tb ext" id="claude" aria-label="Zeptat se Clauda">Claude</button>
+</nav>
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="rpm.js"></script>
 </body>
 </html>

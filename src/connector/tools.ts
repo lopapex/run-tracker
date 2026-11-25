@@ -255,7 +255,7 @@ export function stageWeeks(ws: Workspace, input: z.infer<typeof stageInput>, now
   }
   const weeks = [...byIndex.values()].sort((a, b) => a.index - b.index);
   const paceChart = input.paceChart ?? (input.restart ? undefined : ws.staged?.paceChart);
-  ws.staged = { name: input.name, units: input.units, paceChart, weeks, updatedAt: now };
+  ws.staged = { name: input.name, units: input.units, paceChart, weeks, updatedAt: now, activate: input.restart ? undefined : ws.staged?.activate };
   const chart = { ...ws.profile.paceChart, ...paceChart };
   const missing: number[] = [];
   for (let i = 1; i <= weeks[weeks.length - 1].index; i++) if (!byIndex.has(i)) missing.push(i);
@@ -444,7 +444,7 @@ export function draftPlan(ws: Workspace, input: z.infer<typeof draftInput>, now:
     intent: input.intent, weeks, startDate, weeklyKm: input.weeklyKm, runsPerWeek: input.runsPerWeek,
     restDows: input.restDows as Dow[], longRunDow: input.longRunDow as Dow, raceDate: input.raceDate, raceDistanceM: input.raceDistanceM, assumptions: [],
   });
-  ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now };
+  ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now, activate: input.raceDate ? { mode: 'race', date: input.raceDate } : { mode: 'start', date: startDate } };
   // Kostra z generátoru se ukáže ve stejné kartě jako import, i s případnými varováními.
   const chart = resolvePaceChart(ws.profile);
   const volumes = generated.map((w) => `T${w.index} ${formatDistanceRange(plannedDistance(w.days.map((d) => d.workout), chart))} (${w.phase})`);
