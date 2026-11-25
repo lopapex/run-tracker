@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { WorkspaceStore } from './store';
 import { activateInput, activatePlan, bulkStatusInput, checkWorkout, describePlan, draftInput, draftPlan, setStatuses, planRangeInput, profileInput, scheduleCommand, setProfile, setStatus, stageInput, stageWeeks, statusInput, undoChange, type Outcome } from './tools';
 import { calcInput, calcView, garminExport, garminInput, paceView, paceViewInput, planView, resultView, resultViewInput, weekView, weekViewInput, type View , importView } from './views';
-import { emptyWorkspace, type Workspace } from './workspace';
+import { emptyWorkspace, type Condition, type Workspace } from './workspace';
 import { weekStartOf } from '../domain/dates';
 
 /** Jeden widget pro všechny pohledy; který se vykreslí, určuje pole `view` ve výsledku nástroje.
@@ -22,7 +22,7 @@ const INSTRUCTIONS = `Run Tracker drží běžecký plán uživatele: ověřený
 Jak pracovat:
 - Než budeš radit nebo cokoli měnit, načti aktuální stav přes get_plan. Id jednotek ber jen z jeho výstupu.
 - Rozpis měň jen tehdy, když o to uživatel stojí. Před změnou řekni, co uděláš; po ní vždy napiš krátké shrnutí, i po sérii volání. Každou změnu jde vrátit přes undo_change.
-- Stejný stav více jednotkám (třeba zpětně celý týden podle Stravy) zapiš jedním voláním set_statuses, ne po jedné.
+- Stejný stav více jednotkám (třeba zpětně celý týden podle Stravy) zapiš jedním voláním set_statuses, ne po jedné. get_plan vypisuje nezapsané proběhlé jednotky: když je Strava připojená, ověř je v ní a doplň je.
 - Co v datech není, nevíš: řekni to a zeptej se. Čísla neodhaduj: tempa a předpovědi počítá calculate_paces, vzdálenosti a splnění nástroje Run Trackeru, skutečné běhy čti ze Stravy. Když číslo nemáš z nástroje, řekni, že je to tvůj odhad.
 - Skutečné běhy čti přes oficiální konektor Strava, pokud ho uživatel má připojený. Když připojený není (v ChatGPT oficiální Strava není), čísla běhu nevymýšlej: zeptej se na vzdálenost a čas, případně kola, nebo ať nahraje export GPX, TCX či FIT ze Stravy nebo hodinek, a spočítej je z něj. Run Tracker data aktivit neukládá: do set_status patří jen stav jednotky a krátký zápis vlastními slovy uživatele. Jediná výjimka je show_result, které čísla běhu jen vykreslí a zahodí.
 - Okolnosti běhu: když uživatel řekne, proč běh dopadl jinak (zima, vítr, horko, kopce, špatný spánek, alkohol den předem, málo tekutin, únava, nemoc, stres, bolavé nohy), zapiš je jako conditions přes set_status a ber je v úvahu při hodnocení. Pomalejší tempo za takových podmínek není nesplnění. Když okolnosti ovlivní i další dny (nemoc, velká únava), navrhni úpravu rozpisu a počkej na souhlas.
@@ -41,7 +41,7 @@ Nový plán (žádný není, předchozí skončil, nebo o něj uživatel požád
 6. Ukaž souhrn: fáze, objem po týdnech a klíčové tréninky. Po souhlasu zavolej activate_plan.
 
 Vizualizace:
-- Plán ukazuje jediný nástroj show_week: karta se záložkami Týden, Plán a Tempa. „Co mám dnes“, „ukaž plán“ nebo týden = výchozí záložka; celkový postup a objem = tab plan; tempa, převody a rozpis úseků = tab paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, použij show_result. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
+- Plán ukazuje jediný nástroj show_week: karta se záložkami Týden, Plán a Tempa. „Co mám dnes“, „ukaž plán“ nebo týden = výchozí záložka; celkový postup a objem = tab plan; tempa, převody a rozpis úseků = tab paces. Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, najdi běh ve Stravě a zavolej show_result s čísly: jednotku tím rovnou zapíše (splněno nebo částečně podle hodnocení), set_status po něm nevolej. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 - Na jednu otázku stačí jedna karta: show_week zavolej jednou, mezi záložkami si uživatel přepne sám.
 - Nástroje, které mění rozpis, samy vykreslí aktualizovaný týden. Po nich už žádný show_* nevolej.
 - Karta je odpověď. Uživatel v ní vidí všechna čísla a má v ní tlačítka pro další kroky. Fakta ukazuje karta; za ni napiš nejvýš jednu krátkou větu s konkrétní radou na nejbližší dny, nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani věci, které karta umí tlačítkem. Výkon slovy nepopisuj a nechval. Nepřepisuj z karty čísla, tempa, úseky, data ani rozpis, nedělej nadpisy ani odrážky a nenabízej to, co karta umí tlačítkem.
@@ -55,6 +55,7 @@ Import plánu z dokumentu (PDF, obrázek, tabulka, text):
 
 const WORKOUT_HELP = 'Předpis jednotky: type, title, volitelně distanceM / durationSec / load / strengthMin / note / rawInstruction a povinné blocks (může být prázdné). Blok je {kind:"segment", role, distanceM nebo durationSec, intensity}, {kind:"repeat", count, work, more?, recovery?, recoveryAfterLast: true|false|null}, {kind:"strides", count, durationSec} nebo {kind:"note", text}. Úseky uvnitř repeat nemají kind.';
 
+const RULE = 'ODPOVĚĎ: nejvýš jedna krátká věta s konkrétní radou na nejbližší dny (co a jak udělat), nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani nic, co karta umí tlačítkem; neopakuj čísla z karty a výkon slovy nehodnoť.';
 const text = (value: string) => [{ type: 'text' as const, text: value }];
 const reply = (outcome: Outcome) => ({ content: text(outcome.text), isError: !outcome.ok });
 
@@ -90,25 +91,34 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
 
   /** Načte, upraví a podmíněně uloží; při souběžném zápisu zkusí znovu nad čerstvými daty.
    *  S `after` vrátí i data pro widget, aby uživatel změnu rovnou viděl. */
-  const write = async (fn: (ws: Workspace) => Outcome, after?: (ws: Workspace) => View) => {
+  const write = async (fn: (ws: Workspace) => Outcome, after?: (ws: Workspace) => View, opts: { viewText?: boolean; always?: boolean } = {}) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       const current = await store.load(id);
       const ws = current?.ws ?? emptyWorkspace();
       const lastBefore = ws.revisions[ws.revisions.length - 1]?.id;
       const outcome = fn(ws);
-      if (!outcome.ok || !outcome.changed) return reply(outcome);
+      if (!outcome.ok) return reply(outcome);
+      if (!outcome.changed) {
+        // show_result vykreslí kartu, i když už je jednotka zapsaná.
+        const view = opts.always ? after?.(ws) : undefined;
+        return view?.ok ? { content: text(`${RULE}\n${view.text}`), structuredContent: { ...view.data, at: nowIso() } } : reply(outcome);
+      }
       if (JSON.stringify(ws).length > MAX_WORKSPACE_BYTES) return reply({ ok: false, text: 'Plán a jeho historie jsou příliš velké na uložení. Změna se neprovedla.' });
-      // Změna vykreslí kartu sama; show_* hned po ní by přidal duplikát.
-      if (after) ws.shownAt = nowIso();
-      if (!(await store.save(id, ws, current?.etag))) continue;
-      const view = after?.(ws);
-      if (!view?.ok) return reply(outcome);
       // Řádek s id revize je pro model; uživateli stačí, co se stalo, a tlačítko na vrácení právě této změny.
       // Vrácení samo už vrátit nejde: tlačítko by jinak vrátilo jinou, starší změnu.
       const banner = outcome.banner ?? outcome.text.split('\n').filter((line) => !line.startsWith('Změna ') && line !== 'Zápis k jednotce uložen.').join(' ');
       const last = ws.revisions[ws.revisions.length - 1];
       const undoable = last && last.id !== lastBefore && last.operation !== 'REVERT' ? last.id.slice(0, 8) : null;
-      return { content: text(`ODPOVĚĎ: nejvýš jedna krátká věta s konkrétní radou na nejbližší dny (co a jak udělat), nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani nic, co karta umí tlačítkem; neopakuj čísla z karty a výkon slovy nehodnoť.\n${outcome.text}`), structuredContent: { ...view.data, banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
+      // Uživatel poslal zprávu z karty a ta čeká na změnu: ukáže ji sama, druhá karta by byla duplikát.
+      const watching = Boolean(after && !opts.viewText && ws.watchAt && Date.now() - Date.parse(ws.watchAt) < WATCH_MS);
+      if (watching) { ws.pendingBanner = { text: banner || 'Uloženo.', revisionId: undoable, at: nowIso() }; delete ws.watchAt; }
+      // Změna vykreslí kartu sama; show_* hned po ní by přidal duplikát.
+      else if (after) ws.shownAt = nowIso();
+      if (!(await store.save(id, ws, current?.etag))) continue;
+      if (watching) return { content: text(`${RULE}\nKarta, ze které uživatel psal, změnu ukazuje sama; show_* nevolej.\n${outcome.text}`), structuredContent: { view: 'none' } };
+      const view = after?.(ws);
+      if (!view?.ok) return reply(outcome);
+      return { content: text(`${RULE}\n${outcome.text}${opts.viewText ? `\n${view.text}` : ''}`), structuredContent: { ...view.data, at: nowIso(), banner: { text: banner || 'Uloženo.', revisionId: undoable } } };
     }
     return reply({ ok: false, text: 'Plán se právě měnil z jiného místa a změnu se nepodařilo uložit. Zkus to znovu.' });
   };
@@ -118,21 +128,32 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   // Model občas zavolá dvě přehledové karty za sebou (plán i týden). Druhá do 15 s se nevykreslí:
   // karta má záložky, takže by jen přidala duplikát. Volání z karty samotné (záložky) nesou fromCard.
   const SHOWN_WINDOW_MS = 15_000;
-  const show = async (fn: (ws: Workspace) => View, fromCard?: boolean) => {
+  // Karta se ptá každých 5 s; hlídání bez dotazu vyprší, aby zavřená karta nespolkla kartu jiné odpovědi.
+  const WATCH_MS = 20_000;
+  const show = async (fn: (ws: Workspace) => View, fromCard?: boolean, watch?: boolean) => {
     const current = await store.load(id);
     const ws = current?.ws ?? emptyWorkspace();
     const view = fn(ws);
     if (!view.ok) return { content: text(view.text), isError: true };
+    // Karta čeká na změnu od modelu: obnoví hlídání a vyzvedne si oznámení o změně, když už přišla.
+    if (watch && fromCard && current) {
+      const pending = ws.pendingBanner;
+      delete ws.pendingBanner;
+      ws.watchAt = nowIso();
+      await store.save(id, ws, current.etag).catch(() => false);
+      const banner = pending && Date.now() - Date.parse(pending.at) < 10 * 60_000 ? { text: pending.text, revisionId: pending.revisionId } : undefined;
+      return { content: text(view.text), structuredContent: { ...view.data, at: nowIso(), ...(banner ? { banner } : {}) } };
+    }
     const tabbed = TABBED.has(String(view.data.view));
     if (tabbed && !fromCard && current) {
       if (ws.shownAt && Date.now() - Date.parse(ws.shownAt) < SHOWN_WINDOW_MS) {
-        return { content: text('Přehledová karta je v této odpovědi už zobrazená výše a má záložky Týden, Plán a Tempa. Tahle se nevykreslí. ' + 'ODPOVĚĎ: nejvýš jedna krátká věta s konkrétní radou na nejbližší dny (co a jak udělat), nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani nic, co karta umí tlačítkem; neopakuj čísla z karty a výkon slovy nehodnoť.'), structuredContent: { view: 'none' } };
+        return { content: text('Přehledová karta je v této odpovědi už zobrazená výše a má záložky Týden, Plán a Tempa. Tahle se nevykreslí. ' + RULE), structuredContent: { view: 'none' } };
       }
       ws.shownAt = new Date().toISOString();
       await store.save(id, ws, current.etag).catch(() => false);
     }
     const hint = tabbed ? 'Karta má záložky Týden, Plán a Tempa; další zobrazovací nástroj nevolej. ' : '';
-    return { content: text('ODPOVĚĎ: nejvýš jedna krátká věta s konkrétní radou na nejbližší dny (co a jak udělat), nebo nic. Otázku polož jen tehdy, když odpověď změní plán (bolest, nemoc, nemůže běžet). Nenabízej rozpis, přehled ani nic, co karta umí tlačítkem; neopakuj čísla z karty a výkon slovy nehodnoť.\n' + hint + view.text), structuredContent: view.data };
+    return { content: text(RULE + '\n' + hint + view.text), structuredContent: { ...view.data, at: nowIso() } };
   };
 
   const readOnly = { readOnlyHint: true, openWorldHint: false };
@@ -295,10 +316,10 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
   server.registerTool('show_week', {
     title: 'Běžecký plán',
     description: 'Jediný nástroj pro zobrazení plánu: karta se záložkami. tab: week (výchozí; date vybere týden), plan (objem, fáze, forma, závod), paces (pásma; s workoutId rozpis úseků).',
-    inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces']).optional().describe('Úvodní záložka karty; bez ní week.'), workoutId: z.string().optional().describe('Jen pro tab paces: rozpis úseků této jednotky.'), fromCard },
+    inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces']).optional().describe('Úvodní záložka karty; bez ní week.'), workoutId: z.string().optional().describe('Jen pro tab paces: rozpis úseků této jednotky.'), fromCard, watch: fromCard },
     annotations: readOnly,
     _meta: ui,
-  }, (input) => show((ws) => (input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date })), input.fromCard));
+  }, (input) => show((ws) => (input.tab === 'plan' ? planView(ws) : input.tab === 'paces' ? paceView(ws, { workoutId: input.workoutId }) : weekView(ws, { date: input.date })), input.fromCard, input.watch));
 
   server.registerTool('show_plan', {
     title: 'Záložka Plán',
@@ -336,11 +357,22 @@ export function buildServer(store: WorkspaceStore, id: string, loadView: ViewLoa
 
   server.registerTool('show_result', {
     title: 'Doběhnuto: hodnocení a zápis',
-    description: 'Karta doběhnuté jednotky: zápis stavu, pocitu a okolností; s čísly běhu (ze Stravy nebo od uživatele, neukládají se) i hodnocení proti plánu. Okolnosti, které uživatel zmínil, pošli v conditions.',
+    description: 'Karta doběhnuté jednotky s hodnocením proti plánu. S čísly běhu (neukládají se) jednotku rovnou vratně zapíše jako splněnou nebo částečně. Zmíněné okolnosti pošli v conditions.',
     inputSchema: resultViewInput.shape,
-    annotations: readOnly,
+    annotations: change,
     _meta: ui,
-  }, (input) => show((ws) => resultView(ws, input)));
+  }, async (input) => {
+    if (!input.run || input.fromCard) return show((ws) => resultView(ws, input));
+    const pre = resultView(await load(), input);
+    if (!pre.ok) return { content: text(pre.text), isError: true };
+    const status = (pre.data.score as { suggestedStatus: 'completed' | 'partial' } | null)?.suggestedStatus ?? 'completed';
+    const vdot = (pre.data.estimate as { vdot: number } | null)?.vdot;
+    const conditions = input.conditions?.length ? (pre.data.checkin as { conditions: Condition[] }).conditions : undefined;
+    return write((ws) => {
+      const outcome = setStatus(ws, { workoutId: input.workoutId, status, ...(conditions ? { conditions } : {}), ...(vdot != null ? { estimateVdot: vdot } : {}) }, nowIso());
+      return outcome.ok && outcome.changed ? { ...outcome, banner: `Zapsáno jako ${status === 'partial' ? 'splněno částečně' : 'splněno'}.` } : outcome;
+    }, (ws) => resultView(ws, input), { viewText: true, always: true });
+  });
 
   server.registerTool('export_garmin', {
     title: 'Soubor do hodinek Garmin',

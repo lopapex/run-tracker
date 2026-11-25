@@ -9,7 +9,7 @@ import { createActivation, newId, planRange } from '../domain/schedule';
 import { defaultStart, generateWeeks, weeksUntil } from '../domain/generator';
 import { lintPaceChart, lintWeek } from '../domain/lint';
 import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
-import { CONDITIONS, fatigueOf, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
+import { checkinVersion, CONDITIONS, fatigueOf, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
 /** `banner` je krátké shrnutí pro widget, když je text pro model delší. */
 export type Outcome = { ok: true; text: string; changed: boolean; banner?: string } | { ok: false; text: string };
@@ -87,7 +87,10 @@ export const statusInput = z.object({
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti běhu, které uživatel zmínil: cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore. Prázdné pole okolnosti smaže.'),
   note: z.string().max(300).optional(),
   estimateVdot: z.number().min(20).max(90).optional().describe('Jen hodnota estimate.vdot z karty show_result; jinak neposílej.'),
+  seen: z.string().max(80).optional().describe('Jen pro kartu; nevyplňuj.'),
 });
+
+export const STALE_CHECKIN = 'Zápis k jednotce se mezitím změnil jinde. Nic se nepřepsalo; karta ukazuje aktuální stav.';
 
 // ---------- Pomocné ----------
 
@@ -191,6 +194,9 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
   if (addDays(from, 180) < to) return fail('Rozsah je delší než 180 dní. Zeptej se na kratší období.');
 
   const all = snapshotOf(ws, activation).workouts;
+  // Proběhlé dny bez zápisu za poslední dva týdny: model je ověří ve Stravě a doplní, uživatel nemusí nic hlásit.
+  const unrecorded = all.filter((w) => w.status === 'scheduled' && w.date < today && w.date >= addDays(today, -14) && !['rest', 'strength', 'cross'].includes(w.workout.type)).sort((a, b) => a.date.localeCompare(b.date));
+  if (unrecorded.length) lines.push(`Nezapsané proběhlé jednotky: ${unrecorded.map((w) => `${formatDay(w.date, { weekday: true })} ${w.workout.title} (${shortId(w.id)})`).join('; ')}. Ověř je ve Stravě a zapiš jedním set_statuses; co ve Stravě není, nech být a zeptej se.`);
   for (let start = weekStartOf(from); start <= to; start = addDays(start, 7)) {
     const mapping = activation.mapping.find((m) => m.weekStart === start);
     const source = mapping?.sourceWeek != null ? template?.weeks.find((w) => w.index === mapping.sourceWeek) : undefined;
@@ -323,6 +329,7 @@ export function setStatus(ws: Workspace, input: z.infer<typeof statusInput>, now
   const workout = ws.workouts.find((w) => w.id === wanted && w.activationId === activation.id);
   if (!workout) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
   const previous = noteOf(ws, workout.id);
+  if (input.seen != null && input.seen !== checkinVersion(workout.status, previous)) return fail(STALE_CHECKIN);
   const next: WorkoutNote = { ...previous, workoutId: workout.id, date: workout.date, at: now, ...(input.feel != null ? { feel: input.feel as 1 | 2 | 3 | 4 | 5 } : {}), ...(input.pain != null ? { pain: input.pain } : {}), ...(input.note != null ? { note: input.note } : {}), ...(input.conditions != null ? { conditions: [...new Set(input.conditions)] } : {}), ...(input.estimateVdot != null ? { vdot: Math.round(input.estimateVdot * 10) / 10 } : {}) };
   const noteChanged = !sameNote(previous, next);
   const statusChanged = workout.status !== input.status;

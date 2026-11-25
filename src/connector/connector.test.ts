@@ -2,7 +2,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleFile, handleMcp } from './http';
 import { MemoryStore, workspaceId } from './store';
 import type { WorkoutSpec } from '../domain/types';
@@ -50,6 +50,10 @@ const idOf = (plan: string, date: string, title: string) => {
 };
 
 describe('konektor Run Tracker', () => {
+  // Testy počítají s „dnes“ uprostřed testovacího týdne; skutečné datum by je časem rozbilo.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-18T10:00:00Z')); });
+  afterEach(() => { vi.useRealTimers(); });
+
   it('odmítne neplatnou adresu a jiné metody než POST', async () => {
     const store = new MemoryStore();
     expect((await handleMcp(new Request('https://example.test/mcp/x', { method: 'POST' }), 'kratky', store)).status).toBe(404);
@@ -277,7 +281,7 @@ describe('konektor Run Tracker', () => {
       expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toMatch(/^ui:\/\/run-tracker\/view-[0-9a-f]{10}\.html$/);
       // alias pro ChatGPT
       expect((tool._meta as Record<string, unknown>)['openai/outputTemplate']).toBe((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri);
-      expect(tool.annotations?.readOnlyHint).toBe(name !== 'export_garmin');
+      expect(tool.annotations?.readOnlyHint).toBe(name !== 'export_garmin' && name !== 'show_result');
     }
     // záložky Plán a Tempa vidí jen karta, model ne
     expect(tools.filter((t) => ((t._meta as { ui?: { visibility?: string[] } })?.ui?.visibility ?? []).includes('app') && !((t._meta as { ui: { visibility: string[] } }).ui.visibility.includes('model'))).map((t) => t.name).sort()).toEqual(['show_paces', 'show_plan']);
@@ -317,15 +321,13 @@ describe('konektor Run Tracker', () => {
     expect(paceData.workout.rows.find((r: { label: string }) => r.label === 'Pauza')).toMatchObject({ reps: 5 });
   });
 
-  it('porovná běh s plánem a nic z něj neuloží', async () => {
+  it('porovná běh s plánem, zapíše jen stav a čísla běhu neuloží', async () => {
     const store = new MemoryStore();
     const { call } = await connect(store);
     await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)], paceChart: { easy: { fromSec: 304, toSec: 336 } } });
     await call('activate_plan', { mode: 'start', date: '2026-11-16' });
     const monday = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run');
-    const before = JSON.stringify((await store.load(await workspaceId(KEY_A)))!.ws);
-
-    const laps = Array.from({ length: 10 }, (_, i) => ({ distanceM: 1000, durationSec: i < 8 ? 320 : 290, avgHr: 140 + i }));
+    const laps = Array.from({ length: 10 }, (_, i) => ({ distanceM: 1000, durationSec: i < 8 ? 320 : 290 }));
     const result = await call('show_result', { workoutId: monday, run: { name: 'Ranní běh', distanceM: 10020, movingSec: 3140, avgHr: 146, laps } });
     expect(result.isError).toBe(false);
     expect(result.data.view).toBe('result');
@@ -334,11 +336,20 @@ describe('konektor Run Tracker', () => {
     expect(result.data.target).toMatchObject({ key: 'easy', fastSec: 304, slowSec: 336 });
     expect(result.data.verdict).toMatchObject({ distance: 'ok', pace: 'in', lapsInTarget: 8 });
     expect(result.text).toContain('Run Tracker je neuložil');
+    // stav se zapsal podle hodnocení a jde vrátit
+    expect(result.data.checkin.status).toBe('completed');
+    expect(result.data.banner).toMatchObject({ text: 'Zapsáno jako splněno.' });
+    expect(result.data.banner.revisionId).toBeTruthy();
 
     const short = await call('show_result', { workoutId: monday, run: { distanceM: 6000, movingSec: 1700 } });
     expect(short.data.verdict).toMatchObject({ distance: 'short', pace: 'faster' });
-    expect(JSON.stringify((await store.load(await workspaceId(KEY_A)))!.ws)).toBe(before);
-    expect(before).not.toContain('Ranní běh');
+    expect(short.data.checkin.status).toBe('partial');
+    // stejné volání znovu: karta se vykreslí, nic dalšího se nezapíše
+    const again = await call('show_result', { workoutId: monday, run: { distanceM: 6000, movingSec: 1700 } });
+    expect(again.data.view).toBe('result');
+    expect(again.data.banner).toBeUndefined();
+    const saved = JSON.stringify((await store.load(await workspaceId(KEY_A)))!.ws);
+    for (const number of ['Ranní běh', '10020', '3140', '1700', 'movingSec', 'laps']) expect(saved).not.toContain(number);
   });
 
   it('okolnosti běhu se zapíšou, vrátí přes undo a zmírní hodnocení pomalejšího tempa', async () => {
@@ -355,9 +366,9 @@ describe('konektor Run Tracker', () => {
     expect(windy.score.total).toBe(95);
     expect(windy.score.parts[1].text).toContain('okolnosti to vysvětlují');
 
-    // zápis bez čísel běhu: jen formulář
+    // zápis bez čísel běhu: jen formulář s tím, co už je zapsané
     const form = (await call('show_result', { workoutId: monday })).data;
-    expect(form).toMatchObject({ view: 'result', run: null, score: null, checkin: { status: 'scheduled', conditions: [] } });
+    expect(form).toMatchObject({ view: 'result', run: null, score: null, checkin: { status: 'completed', conditions: ['cold', 'wind'] } });
 
     const saved = await call('set_status', { workoutId: monday, status: 'completed', feel: 2, conditions: ['cold', 'wind', 'alcohol'] });
     expect(saved.data.days[0].workouts[0]).toMatchObject({ status: 'completed', conditions: ['zima', 'vítr', 'alkohol den předem'] });
@@ -365,7 +376,9 @@ describe('konektor Run Tracker', () => {
     expect((await call('show_result', { workoutId: monday, run: slow })).data.score.total).toBe(95);
     expect((await call('set_status', { workoutId: monday, status: 'completed', conditions: ['bez'] })).isError).toBe(true);
     await call('undo_change');
-    expect((await call('get_plan', range)).text).not.toContain('okolnosti');
+    const undone = (await call('get_plan', range)).text;
+    expect(undone).toContain('okolnosti: zima, vítr');
+    expect(undone).not.toContain('alkohol');
   });
 
   it('připraví trénink pro Garmin a vydá ho na dočasném odkazu', async () => {
@@ -629,7 +642,7 @@ describe('konektor Run Tracker', () => {
     expect((await call('get_plan')).text).toContain('Únava:');
   });
 
-  it('odhad formy z úseků se uloží se zápisem a ukáže v plánu', async () => {
+  it('odhad formy z úseků se uloží s hodnocením a ukáže v plánu', async () => {
     const { call } = await connect(new MemoryStore());
     const intervals: WorkoutSpec = { type: 'speed', title: 'Speed', blocks: [
       { kind: 'repeat', count: 4, work: { role: 'work', distanceM: 1600, intensity: '10k_pace' }, recovery: { role: 'recovery', durationSec: 120, intensity: 'walk' }, recoveryAfterLast: false },
@@ -646,8 +659,6 @@ describe('konektor Run Tracker', () => {
     expect(result.text).toContain('Odhad formy: VDOT');
     // za větru se odhad nedělá: pomalejší úseky by formu podhodnotily
     expect((await call('show_result', { workoutId: id, run: { distanceM: 9000, movingSec: 2900, reps }, conditions: ['wind'] })).data.estimate).toBeNull();
-    expect((await call('show_plan')).data.fitness).toBeNull();
-    await call('set_status', { workoutId: id, status: 'completed', estimateVdot: result.data.estimate.vdot });
     const fitness = (await call('show_plan')).data.fitness;
     expect(fitness).toMatchObject({ vdot: result.data.estimate.vdot, distanceM: 10000, targetSec: 2310 });
     expect(fitness.predictedSec).toBeGreaterThan(2300);
@@ -669,6 +680,47 @@ describe('konektor Run Tracker', () => {
     expect(second.text).toContain('už zobrazená výše');
     expect((await call('show_week', { fromCard: true })).data.view).toBe('week');
     expect((await call('show_result', { workoutId: idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run') })).data.view).toBe('result');
+  });
+
+  it('starší karta nepřepíše novější zápis', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const monday = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run');
+    const old = (await call('show_result', { workoutId: monday })).data.checkin.version;
+    const first = await call('set_status', { workoutId: monday, status: 'completed', feel: 2, pain: 'mild', seen: old });
+    expect(first.isError).toBe(false);
+    // druhá karta s původní verzí: nic se nepřepíše
+    const stale = await call('set_status', { workoutId: monday, status: 'completed', feel: 3, pain: 'none', seen: old });
+    expect(stale.isError).toBe(true);
+    expect(stale.text).toContain('mezitím změnil');
+    expect((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text).toContain('pocit 2/5, bolest mírná');
+    // s aktuální verzí jde jen pocit, zbytek zápisu zůstane
+    const fresh = (await call('show_week', { date: '2026-11-16' })).data.days[0].workouts[0].version;
+    expect((await call('set_status', { workoutId: monday, status: 'completed', feel: 3, seen: fresh })).isError).toBe(false);
+    expect((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text).toContain('pocit 3/5, bolest mírná');
+  });
+
+  it('karta, která čeká na změnu od modelu, ji ukáže sama a druhá karta nevznikne', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    const plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text;
+    expect(plan).toContain('Nezapsané proběhlé jednotky: pondělí 16. 11. Easy Run (');
+    const card = await call('show_week', { watch: true });
+    expect(card.data).toMatchObject({ view: 'week', rev: null });
+    expect(card.data.at).toBeTruthy();
+    const model = await call('set_statuses', { workoutIds: [idOf(plan, '2026-11-16', 'Easy Run'), idOf(plan, '2026-11-17', 'Speed Session')], status: 'completed' });
+    expect(model.data).toEqual({ view: 'none' });
+    expect(model.text).toContain('ukazuje sama');
+    const poll = await call('show_week', { watch: true });
+    expect(poll.data.stats.unitsDone).toBe(2);
+    expect(poll.data.rev).not.toBe(card.data.rev);
+    expect(poll.data.banner).toMatchObject({ text: expect.stringContaining('Splněno: 2 jednotky'), revisionId: expect.any(String) });
+    // oznámení se ukáže jen jednou a bez hlídání model kartu vykreslí normálně
+    expect((await call('show_week', { watch: true })).data.banner).toBeUndefined();
+    vi.setSystemTime(new Date('2026-11-18T10:01:00Z'));
+    expect((await call('undo_change')).data.view).toBe('week');
   });
 
   it('poznámky trenéra se ukládají do profilu a get_plan je vrací', async () => {

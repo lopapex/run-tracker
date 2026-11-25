@@ -103,6 +103,15 @@ button.row[aria-expanded="true"] { background: var(--wash); }
 .more button svg { flex: none; width: 22px; height: 22px; color: var(--s1); }
 .more button svg.i-strava { color: #fc4c02; }
 .more button:hover { background: var(--s1-soft); }
+.quick { padding: 0 6px 10px 66px; }
+.quick button { min-height: 40px; padding: 0 16px; border: 1px solid var(--s1); border-radius: 8px; background: var(--s1); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.feel { flex-basis: 100%; }
+.feel .k { margin: 0 0 6px; color: var(--ink2); font-size: 12px; font-weight: 600; }
+.feel .pick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.feel .pick button { padding: 0; }
+.feel .hint { grid-column: 1 / -1; color: var(--ink2); font-size: 12px; }
+.back { margin: 0 0 8px; }
+.back button { min-height: 36px; padding: 0 10px 0 0; border: 0; background: none; color: var(--s1); font-size: 13px; font-weight: 600; cursor: pointer; }
 .daypick { flex-basis: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 2px 0 2px; }
 .daypick button { position: relative; min-height: 44px; padding: 2px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; line-height: 1.15; cursor: pointer; }
 .daypick button b { display: block; font-size: 13px; }
@@ -218,6 +227,11 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   var sayText = '';       // zpráva, kterou hostitel neodeslal a uživatel ji musí napsat sám
   var busy = false;
   var widgetChange = null; // popis změny z widgetu pro model
+  var keepOpen = null;    // jednotka, která po akci zůstane rozbalená (pocit po Doběhnuto)
+  var backDate = null;    // hodnocení otevřené z týdne: kam vede „← Týden“
+  var watchTimer = null;  // karta čeká na změnu, kterou dělá model
+  var STALE_MS = 5 * 60 * 1000;
+  var TAB_TOOL = { week: 'show_week', finished: 'show_week', empty: 'show_week', plan: 'show_plan', paces: 'show_paces' };
 
   // ---------- Protokol MCP Apps: JSON-RPC přes postMessage s hostitelem ----------
   var host = window.parent !== window ? window.parent : null;
@@ -277,11 +291,18 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     app.classList.add('busy');
     request('tools/call', { name: name, arguments: args || {} }, 20000)
       .then(function (r) {
+        // Změnu si vyzvedla jiná čekající karta: tahle se jen obnoví.
+        if (r && r.structuredContent && r.structuredContent.view === 'none') { widgetChange = null; refresh(true); return; }
         if (r && r.structuredContent && r.structuredContent.view) { showResult(r); return; }
-        if (r && r.isError) { widgetChange = null; errorText = textOf(r) || 'Akce se nepovedla.'; render(); return; }
+        if (r && r.isError) {
+          widgetChange = null; keepOpen = null; errorText = textOf(r) || 'Akce se nepovedla.';
+          // Zápis se mezitím změnil jinde: karta si načte aktuální stav, nic se nepřepsalo.
+          if (/mezitím změnil/.test(errorText)) refresh(false); else render();
+          return;
+        }
         throw new Error('no data');
       })
-      .catch(function () { widgetChange = null; say(fallback); })
+      .catch(function () { widgetChange = null; keepOpen = null; say(fallback); })
       .then(function () { busy = false; app.classList.remove('busy'); });
   }
 
@@ -299,16 +320,68 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     widgetChange = null;
     moveId = null;
     if (d && d.view) {
-      // Týden se ukáže sbalený; nejbližší jednotka je jen zvýrazněná.
-      if (d.view === 'week') openId = null;
+      // Týden se ukáže sbalený; nejbližší jednotka je jen zvýrazněná. Po Doběhnuto zůstane otevřená kvůli pocitu.
+      if (d.view === 'week') { openId = keepOpen; }
+      keepOpen = null;
+      // Hodnocení otevřené klepnutím z týdne má cestu zpět; karta od modelu ne.
+      if (d.view === 'result' && !fromHost && data && data.view === 'week') backDate = data.weekStart;
+      else if (d.view !== 'result') backDate = null;
       if (d.view !== 'result') form = null;
       data = d;
+      if (fromHost && isStale(d)) refresh(false);
     } else {
       data = null;
       plain = textOf(result) || 'Není co zobrazit.';
     }
     render();
   }
+
+  // Karta znovu otevřená po čase (nebo z jiného dne) ukazuje starý stav: potichu si načte aktuální.
+  function localToday() { var t = new Date(); return t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2); }
+  function isStale(d) {
+    if (!d || !TAB_TOOL[d.view]) return false;
+    return !d.at || Date.now() - Date.parse(d.at) > STALE_MS || (d.today && d.today !== localToday());
+  }
+  function viewArgs(d, extra) {
+    var a = Object.assign({ fromCard: true }, extra || {});
+    if (d && d.view === 'week' && !d.isCurrent) a.date = d.weekStart;
+    if (d && d.view === 'paces' && d.workout && d.workout.id) a.workoutId = d.workout.id;
+    return a;
+  }
+  function refresh(withBanner) {
+    if (!data) return;
+    if (data.view === 'result') {
+      // U hodnocení se obnoví jen zápis; čísla běhu karta drží sama.
+      var keep = data;
+      request('tools/call', { name: 'show_result', arguments: { workoutId: keep.workout.id, fromCard: true } }, 15000).then(function (r) {
+        var d = r && r.structuredContent;
+        if (!d || !d.checkin || data !== keep) return;
+        data = Object.assign({}, keep, { checkin: d.checkin, workout: Object.assign({}, keep.workout, { status: d.checkin.status }) });
+        form = null; render();
+      }).catch(noop);
+      return;
+    }
+    var tool = TAB_TOOL[data.view];
+    if (!tool) return;
+    request('tools/call', { name: tool, arguments: viewArgs(data, withBanner ? { watch: true } : null) }, 15000).then(function (r) {
+      if (r && r.structuredContent && r.structuredContent.view) showResult(r);
+    }).catch(noop);
+  }
+  // Uživatel poslal z karty zprávu a změnu udělá model: karta se ptá, dokud ji nedostane (nejvýš 3 minuty).
+  function watchChanges() {
+    stopWatch();
+    if (!data || data.view !== 'week') return;
+    var startRev = data.rev, tries = 0, args = viewArgs(data, { watch: true });
+    (function tick() {
+      request('tools/call', { name: 'show_week', arguments: args }, 15000).then(function (r) {
+        var d = r && r.structuredContent;
+        if (watchTimer !== null && d && d.view === 'week' && (d.banner || d.rev !== startRev)) { stopWatch(); showResult(r); }
+      }).catch(noop);
+      watchTimer = ++tries < 36 ? setTimeout(tick, 5000) : null;
+    })();
+  }
+  function stopWatch() { if (watchTimer) clearTimeout(watchTimer); watchTimer = null; }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && isStale(data)) refresh(false); });
 
   // ---------- Formátování ----------
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -367,7 +440,11 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     var el = e.target.closest ? e.target : null;
     if (!el) return;
     var b = el.closest('[data-say]');
-    if (b) { say(b.getAttribute('data-say')); return; }
+    if (b) { say(b.getAttribute('data-say')); if (b.hasAttribute('data-watch')) watchChanges(); return; }
+    var fe = el.closest('[data-feel]');
+    if (fe) { saveFeel(fe); return; }
+    var dn = el.closest('[data-done]');
+    if (dn) { markDone(dn); return; }
     var o = el.closest('[data-open]');
     if (o) { if (!o.disabled) trigger(o); return; }
     var link = el.closest('[data-link]');
@@ -395,7 +472,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   });
 
   // ---------- Společné části ----------
-  var CARD_VIEWS = { show_week: 1, show_plan: 1, show_paces: 1 };
+  var CARD_VIEWS = { show_week: 1, show_plan: 1, show_paces: 1, show_result: 1 };
   function opener(label, name, args, fallback, extra) {
     if (CARD_VIEWS[name]) args = Object.assign({}, args, { fromCard: true });
     return '<button type="button" data-open="' + name + '" data-args="' + esc(JSON.stringify(args || {})) + '" data-fallback="' + esc(fallback) + '"' + (extra || '') + '>' + label + '</button>';
@@ -500,11 +577,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
       : 'Chci zhodnotit běh z ' + dm(w.date) + ' proti jednotce ' + name + '. Zeptej se mě na vzdálenost a čas, nebo ti nahraju export GPX.');
     if (w.lines.length) h += '<ul>' + w.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
     if (w.status === 'scheduled') {
-      // Doběhnuto až v den tréninku. Se Stravou rovnou hodnotí běh (procenta + zápis), bez ní otevře jen zápis.
+      // Doběhnuto až v den tréninku: zapíše se hned v kartě, hodnocení podle Stravy je volitelné potom.
       // Zkrácení, tempa a hodinky jen dokud je trénink před tebou.
-      if (!future) main.push(strava
-        ? '<button type="button" class="main" data-say="' + esc('Doběhl jsem jednotku ' + name + '. Najdi běh ve Stravě, zhodnoť ho proti plánu a ukaž mi hodnocení se zápisem.') + '">Doběhnuto</button>'
-        : opener('Doběhnuto', 'show_result', { workoutId: w.id }, 'Doběhl jsem jednotku ' + name + '. Zapiš ji a zeptej se mě na pocit.', ' class="main"'));
+      if (!future) main.push(doneButton(w, name, ' class="main"'));
       main.push('<button type="button" data-move="' + w.id + '" aria-expanded="' + (moveId === w.id) + '">Přesunout</button>');
       main.push(opener('Vynechat', 'skip_workout', { workoutId: w.id, reason: 'vynecháno ve widgetu' }, 'Vynech jednotku ' + name + '.'));
       if (!past) links.push(link(icon('short') + 'Zkrátit', 'Jednotku ' + name + ' potřebuju zkrátit. Navrhni úpravu.'));
@@ -515,13 +590,33 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     } else if (w.status === 'skipped') {
       main.push(opener('Obnovit', 'restore_workout', { workoutId: w.id, reason: 'obnoveno ve widgetu' }, 'Obnov jednotku ' + name + '.'));
     } else {
-      main.push(opener('Upravit zápis', 'show_result', { workoutId: w.id }, 'Chci upravit zápis k jednotce ' + name + '.'));
-      links.push(review);
-      links.push(link(icon('undo') + 'Zrušit zápis', 'Vrať jednotku ' + name + ' na stav v plánu.'));
+      // Zapsaná jednotka: pocit jedním klepnutím, bolest a okolnosti ve formuláři, hodnocení podle Stravy.
+      h += feelRow(w);
+      links.push(opener(icon('note') + 'Bolest, okolnosti', 'show_result', { workoutId: w.id }, 'Chci doplnit zápis k jednotce ' + name + '.'));
+      if (w.type !== 'strength' && w.type !== 'cross') links.push(review);
+      links.push(opener(icon('undo') + 'Zrušit zápis', 'set_status', { workoutId: w.id, status: 'scheduled', seen: w.version }, 'Vrať jednotku ' + name + ' na stav v plánu.'));
     }
-    h += '<div class="main3">' + main.join('') + '</div>';
+    if (main.length) h += '<div class="main3">' + main.join('') + '</div>';
     if (moveId === w.id) h += dayPicker(w);
     return h + (links.length ? '<div class="more' + (links.length < 3 ? ' wide' : '') + '">' + links.join('') + '</div>' : '') + '</div>';
+  }
+  function doneButton(w, name, extra) {
+    var label = w.type === 'strength' || w.type === 'cross' ? 'Hotovo' : 'Doběhnuto';
+    return '<button type="button" data-done="' + esc(w.id) + '" data-version="' + esc(w.version) + '" data-name="' + esc(name) + '"' + (extra || '') + '>' + label + '</button>';
+  }
+  function feelRow(w) {
+    return '<div class="feel"><div class="k">Pocit</div><div class="pick" role="group" aria-label="Pocit">' + [1, 2, 3, 4, 5].map(function (n) {
+      return '<button type="button" data-feel="' + esc(w.id) + '" data-val="' + n + '" data-version="' + esc(w.version) + '" data-status="' + w.status + '" title="' + FEEL[n] + '" aria-pressed="' + (w.feel === n) + '">' + n + '</button>';
+    }).join('') + '<span class="hint">' + (w.feel ? FEEL[w.feel] : '1 těžké · 5 výborné') + '</span></div></div>';
+  }
+  function markDone(el) {
+    keepOpen = el.getAttribute('data-done');
+    open('set_status', { workoutId: keepOpen, status: 'completed', seen: el.getAttribute('data-version') }, 'Doběhl jsem jednotku ' + el.getAttribute('data-name') + '. Zapiš ji jako splněnou.');
+  }
+  function saveFeel(el) {
+    var id = el.getAttribute('data-feel'), n = Number(el.getAttribute('data-val'));
+    keepOpen = id;
+    open('set_status', { workoutId: id, status: el.getAttribute('data-status'), feel: n, seen: el.getAttribute('data-version') }, 'Zapiš mi pocit ' + n + ' z 5 k poslednímu běhu.', 'zapsal pocit ' + n + ' z 5 (' + FEEL[n] + ').');
   }
   // Drobné ikony vedlejších akcí, kreslené barvou textu.
   var ICONS = {
@@ -529,7 +624,8 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     strava: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     pace: '<circle cx="12" cy="14" r="7"/><path d="M12 14V10.5M10 3h4M12 3v4M18.5 7.5l1.5-1.5"/>',
     watch: '<circle cx="12" cy="12" r="6"/><path d="M12 9.5V12l1.5 1.5M9 6.6L9.6 2h4.8l.6 4.6M9 17.4L9.6 22h4.8l.6-4.6"/>',
-    undo: '<path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 010 10h-2"/>'
+    undo: '<path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 010 10h-2"/>',
+    note: '<path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h4"/>'
   };
   function icon(k) { return '<svg class="i-' + k + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[k] + '</svg>'; }
   function renderWeek(d) {
@@ -548,7 +644,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     if (s.longRunKm != null) h += '<div class="tile"><div class="k">Dlouhý běh</div><div class="v">' + num(s.longRunKm) + ' <small>km</small></div></div>';
     h += '</div>';
     if (d.fatigue) h += '<div class="note warn" style="margin:10px 0 0"><span>' + esc(d.fatigue.text) + '</span><button type="button" data-say="' + esc(d.fatigue.kind === 'pain' ? 'Poslední běhy mě bolí. Co s tím a jak upravit zbytek týdne?' : 'Poslední běhy byly těžké. Navrhni lehčí zbytek týdne.') + '">Ubrat</button></div>';
-    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span><button type="button" data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>';
+    if (s.unrecorded) h += '<div class="note warn" style="margin:10px 0 0"><span>' + s.unrecorded + ' ' + plural(s.unrecorded, 'proběhlý trénink není zapsaný', 'proběhlé tréninky nejsou zapsané', 'proběhlých tréninků není zapsaných') + '.</span><button type="button"' + (strava ? ' data-watch="1"' : '') + ' data-say="' + esc(strava ? 'Doplň splnění tohoto týdne podle Stravy jedním zápisem.' : 'Pomoz mi doplnit splnění tohoto týdne. Zeptej se mě, co jsem odběhl.') + '">Doplnit</button></div>';
     h += '<ul class="days">';
     d.days.forEach(function (day) {
       day.workouts.forEach(function (w) {
@@ -561,7 +657,10 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
         h += '<button type="button" class="row" data-row="' + w.id + '" aria-expanded="' + opened + '">' + whenCell;
         h += '<span class="what"><span class="t">' + esc(w.title) + '</span>' + (sub ? '<span class="s">' + esc(sub) + '</span>' : '') + '</span>' + (isNext ? '<span class="chip next"><span aria-hidden="true">→</span>Na řadě</span>' : chip(w.status, day.isPast));
         if (w.kmMax > 0) h += '<span class="bar ' + (w.status === 'completed' || w.status === 'partial' ? 'done' : w.status === 'skipped' ? 'skip' : '') + '" style="width:' + Math.max(4, Math.round(w.kmMax / max * 70)) + '%"></span>';
-        h += '</button>' + (opened ? actions(w) : '') + '</li>';
+        h += '</button>';
+        // Dnešní nezapsaný trénink má Doběhnuto rovnou pod řádkem, bez rozbalování.
+        if (!opened && day.isToday && w.status === 'scheduled') h += '<div class="quick">' + doneButton(w, w.title + ' (' + when(w) + ')', ' class="main"') + '</div>';
+        h += (opened ? actions(w) : '') + '</li>';
       });
     });
     h += '</ul>';
@@ -700,7 +799,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   function renderResult(d, width) {
     var r = d.run, w = d.workout, t = d.target, sc = d.score, c = d.checkin, v = d.verdict || {};
     if (!form || form.id !== w.id) form = { id: w.id, status: c.status === 'scheduled' || c.status === 'skipped' ? (sc ? sc.suggestedStatus : 'completed') : c.status, feel: c.feel, pain: c.pain || 'none', conditions: c.conditions.slice() };
-    var h = head(null, d) + '<div class="eyebrow">Doběhnuto · ' + DOW[w.dow] + ' ' + dm(w.date) + '</div><h2>' + esc(w.title) + '</h2>';
+    var h = head(null, d) + (backDate ? '<div class="back">' + opener('← Týden', 'show_week', { date: backDate }, 'Ukaž mi týden.') + '</div>' : '') + '<div class="eyebrow">Doběhnuto · ' + DOW[w.dow] + ' ' + dm(w.date) + '</div><h2>' + esc(w.title) + '</h2>';
     h += '<div class="sub">Plán: ' + esc(w.summary) + '</div>';
     if (r) {
       if (sc) {
@@ -747,9 +846,15 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     return h + hints([['Co dál?', 'Co z toho plyne pro další dny?']]);
   }
   function saveCheckin(d) {
-    var w = d.workout, args = { workoutId: w.id, status: form.status, conditions: form.conditions.slice(), pain: form.pain };
-    if (form.feel) args.feel = form.feel;
+    // Posílá se jen to, co uživatel v kartě změnil, s verzí zápisu, kterou karta viděla:
+    // starší karta téhož běhu tak nepřepíše novější zápis.
+    var w = d.workout, c = d.checkin, args = { workoutId: w.id, status: form.status, seen: c.version };
+    var same = function (a, b) { return a.slice().sort().join() === b.slice().sort().join(); };
+    if (!same(form.conditions, c.saved || [])) args.conditions = form.conditions.slice();
+    if (form.pain !== (c.pain || 'none')) args.pain = form.pain;
+    if (form.feel && form.feel !== c.feel) args.feel = form.feel;
     if (d.estimate) args.estimateVdot = d.estimate.vdot;
+    if (form.status === c.status && !args.conditions && !args.pain && !args.feel) { form.showLog = false; render(); return; }
     var parts = [form.status === 'partial' ? 'splněno částečně' : 'splněno'];
     if (form.feel) parts.push('pocit ' + form.feel + ' z 5 (' + FEEL[form.feel] + ')');
     if (form.pain && form.pain !== 'none') parts.push('bolest ' + (form.pain === 'mild' ? 'mírná' : 'výrazná'));
@@ -773,7 +878,7 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
     tips = []; hideTip();
     var width = app.clientWidth - 28;
     lastWidth = app.clientWidth;
-    if (!data) app.innerHTML = head('', null) + '<p class="empty">' + esc(plain) + '</p>';
+    if (!data) app.innerHTML = head(retry ? null : '', null) + '<p class="empty">' + esc(plain) + '</p>' + (retry ? '<div class="acts">' + opener('Načíst aktuální týden', 'show_week', {}, 'Ukaž mi tento týden.', ' class="main"') + '</div>' : '');
     else if (data.view === 'none') { app.innerHTML = ''; app.style.display = 'none'; notify('ui/notifications/request-teardown', {}); }
     else app.innerHTML = data.view === 'week' ? renderWeek(data) : data.view === 'plan' ? renderPlan(data, width) : data.view === 'paces' ? renderPaces(data) : data.view === 'result' ? renderResult(data, width) : data.view === 'garmin' ? renderGarmin(data) : data.view === 'finished' ? renderFinished(data) : data.view === 'import' ? renderImport(data) : data.view === 'empty' ? renderEmpty(data) : '<p class="empty">Neznámé zobrazení.</p>';
     // Ve skrytém rámu se překreslovací zpětná volání nespouštějí; hostitel, který kartu ukáže až podle výšky, by ji jinak nedostal.
@@ -807,6 +912,9 @@ td .ok { color: var(--good-ink); font-size: 15px; font-weight: 700; }
   }
   app.addEventListener('toggle', function (e) { if (form && e.target.hasAttribute && e.target.hasAttribute('data-cond')) form.showCond = e.target.open; if (form && e.target.hasAttribute && e.target.hasAttribute('data-log')) form.showLog = e.target.open; reportSize(); }, true);
 
+  // Hostitel data nepošle (karta znovu načtená po čase): po 8 s nabídne načíst aktuální stav místo nekonečného čekání.
+  var retry = false;
+  setTimeout(function () { if (!data && !plain) { retry = true; plain = 'Karta se nenačetla.'; render(); } }, 8000);
   if (!host) { app.innerHTML = '<p class="empty">Tenhle widget se zobrazuje v konverzaci s Claude nebo ChatGPT, když je připojený konektor Run Tracker.</p>'; return; }
   if (oai) {
     applyTheme(oai.theme);

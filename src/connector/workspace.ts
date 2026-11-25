@@ -48,9 +48,17 @@ export interface Workspace {
   staged?: StagedImport;
   /** Kdy model naposledy vykreslil přehledovou kartu; druhá hned po ní se nevykreslí. */
   shownAt?: string;
+  /** Karta čeká na změnu od modelu (uživatel z ní poslal zprávu); model ji pak nevykresluje znovu. */
+  watchAt?: string;
+  /** Změna, kterou model udělal pro čekající kartu: karta si ji vyzvedne a ukáže s tlačítkem Vrátit. */
+  pendingBanner?: { text: string; revisionId: string | null; at: string };
 }
 
 export const MAX_REVISIONS = 200;
+
+/** Verze zápisu, kterou karta viděla: stav a čas posledního zápisu. Karta ji posílá s uložením,
+ *  aby starší karta téhož běhu nepřepsala novější zápis. */
+export const checkinVersion = (status: string, note?: { at: string } | null) => `${status}|${note?.at ?? ''}`;
 
 /** Signál únavy z posledních zápisů: dva ze tří posledních běhů těžké nebo s bolestí, nebo výrazná bolest v posledním týdnu.
  *  Je to podnět k rozhovoru, ne diagnóza; rozpis se sám nemění. */

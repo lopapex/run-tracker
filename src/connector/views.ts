@@ -10,7 +10,7 @@ import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, 
 import { planSummaries, resolveId } from './tools';
 import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
 import { predictTime, trainingPaces, vdotFromRace } from '../domain/vdot';
-import { CONDITIONS, fatigueOf, type Condition, type Workspace } from './workspace';
+import { checkinVersion, CONDITIONS, fatigueOf, type Condition, type Workspace } from './workspace';
 
 export type View = { ok: true; text: string; data: Record<string, unknown> } | { ok: false; text: string };
 const fail = (text: string): View => ({ ok: false, text });
@@ -26,16 +26,16 @@ export const calcInput = z.object({
 export const garminInput = z.object({ workoutId: z.string().min(1).describe('Id běžecké jednotky z get_plan.') });
 export const resultViewInput = z.object({
   workoutId: z.string().min(1).describe('Id naplánované jednotky z get_plan, se kterou se běh porovná.'),
+  fromCard: z.boolean().optional().describe('Jen pro kartu samotnou; nevyplňuj.'),
   run: z.object({
-    name: z.string().max(80).optional(),
     date: isoDate.optional(),
     distanceM: z.number().positive().max(300_000),
     movingSec: z.number().positive().max(48 * 3600),
     avgHr: z.number().min(30).max(250).optional(),
     elevGainM: z.number().min(0).max(20_000).optional(),
-    laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(80).optional(),
+    laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600) })).max(80).optional().describe('Bez tepu, nejvýš 30.'),
     reps: z.array(z.object({ distanceM: z.number().positive().max(50_000), durationSec: z.number().positive().max(4 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(40).optional().describe('Jen rychlé pracovní úseky intervalů, spočítané z kol (bez rozklusu a pauz).'),
-  }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich widget nabídne jen zápis splnění.'),
+  }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich karta nabídne jen zápis.'),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti, které uživatel zmínil (cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore); zohlední se v hodnocení.'),
 });
 
@@ -78,6 +78,7 @@ function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
     summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null,
     kmMin: km(d.minM), kmMax: km(d.maxM), kmUnknown: d.unknown > 0, moved: w.date !== w.originDate, skipReason: w.skipReason ?? null,
     feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null, conditions: (note?.conditions ?? []).map((x) => CONDITIONS[x]),
+    version: checkinVersion(w.status, note),
   };
 }
 
@@ -132,7 +133,7 @@ export function weekView(ws: Workspace, input: z.infer<typeof weekViewInput>, no
   return {
     ok: true,
     text: `Zobrazen týden od ${start} (${label}): splněno ${stats.unitsDone} z ${stats.units} běhů, tj. ${String(stats.doneKm).replace('.', ',')} z ${String(stats.plannedKmMin).replace('.', ',')}${stats.plannedKmMax !== stats.plannedKmMin ? `–${String(stats.plannedKmMax).replace('.', ',')}` : ''} km podle plánu (ne naměřeno).${next ? ` Nejbližší jednotka: ${next.title} ${next.date}.` : ''}${stats.unrecorded ? ` Nezapsáno: ${stats.unrecorded} proběhlých běhů; nabídni doplnění (podle Stravy, pokud je připojená) jedním voláním set_statuses.` : ''}${fatigue ? ` Únava: ${fatigue.text} Zeptej se, jak se cítí, a nabídni lehčí zbytek týdne; rozpis měň jen se souhlasem${fatigue.kind === 'pain' ? ', při bolesti doporuč ubrat a nechat se vyšetřit' : ''}.` : ''}`,
-    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null },
+    data: { view: 'week', planName: c.planName, today: c.today, weekStart: start, label, daysToRace: ws.profile.raceDate && ws.profile.raceDate >= c.today ? diffDays(ws.profile.raceDate, c.today) : null, fatigue, hasPrev: c.activation.mapping.some((m) => m.weekStart < start), hasNext: c.activation.mapping.some((m) => m.weekStart > start), phase: source?.phase ?? null, isCurrent: start === weekStartOf(c.today), days, stats, nextId: next?.id ?? null, rev: ws.revisions[ws.revisions.length - 1]?.id ?? null },
   };
 }
 
@@ -315,7 +316,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
   const base = {
     view: 'result',
     workout: { id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, c.chart), kmMin: km(planned.minM), kmMax: km(planned.maxM), kmUnknown: planned.unknown > 0, status: w.status, dow: dowOf(w.date) },
-    checkin: { status: w.status, feel: saved?.feel ?? null, pain: saved?.pain ?? null, note: saved?.note ?? null, conditions },
+    checkin: { status: w.status, feel: saved?.feel ?? null, pain: saved?.pain ?? null, note: saved?.note ?? null, conditions, saved: saved?.conditions ?? [], version: checkinVersion(w.status, saved) },
     conditionLabels: CONDITIONS,
     target,
   };
@@ -328,7 +329,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     };
   }
   const avgPaceSec = run.movingSec / (run.distanceM / 1000);
-  const laps = (run.laps ?? []).map((l, i) => ({ n: i + 1, distanceM: Math.round(l.distanceM), durationSec: Math.round(l.durationSec), paceSec: Math.round(l.durationSec / (l.distanceM / 1000)), avgHr: l.avgHr ?? null }));
+  const laps = (run.laps ?? []).map((l, i) => ({ n: i + 1, distanceM: Math.round(l.distanceM), durationSec: Math.round(l.durationSec), paceSec: Math.round(l.durationSec / (l.distanceM / 1000)) }));
   const inTarget = target ? laps.filter((l) => l.paceSec >= target.fastSec - 2 && l.paceSec <= target.slowSec + 2).length : null;
   const distance = planned.maxM === 0 ? null : run.distanceM < planned.minM - 300 ? 'short' : run.distanceM > planned.maxM + 300 && !planned.unknown ? 'long' : 'ok';
   const pace = !target || !steady ? null : avgPaceSec < target.fastSec - 2 ? 'faster' : avgPaceSec > target.slowSec + 2 ? 'slower' : 'in';
@@ -345,15 +346,15 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     target && laps.length && !steady ? `V pásmu ${target.label} bylo ${inTarget} z ${laps.length} kol (počítají se i rozklus a pauzy).` : '',
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
-    estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}. Uloží se se zápisem z widgetu.` : '',
-    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Stav, pocit a okolnosti uživatel uloží v kartě sám.',
+    estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}.` : '',
+    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Pocit a bolest uživatel doplní v kartě; když je řekne slovy, zapiš je přes set_status.',
   ].filter(Boolean).join(' ');
   return {
     ok: true,
     text,
     data: {
       ...base,
-      run: { name: run.name ?? null, date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps, reps },
+      run: { date: run.date ?? null, distanceM: Math.round(run.distanceM), movingSec: Math.round(run.movingSec), avgPaceSec: Math.round(avgPaceSec), avgHr: run.avgHr ?? null, elevGainM: run.elevGainM ?? null, laps, reps },
       score, estimate, verdict: { distance, pace, lapsInTarget: inTarget, steady },
     },
   };
