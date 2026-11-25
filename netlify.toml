@@ -24,13 +24,13 @@
   for = "/"
   [headers.values]
     X-Frame-Options = "DENY"
-    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 [[headers]]
   for = "/index.html"
   [headers.values]
     X-Frame-Options = "DENY"
-    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 # Obal aplikace: volá konektor na stejném webu a v rámu ukazuje kartu.
 [[headers]]

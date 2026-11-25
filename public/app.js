@@ -31,6 +31,28 @@
   const linkApp = (key) => { $('app-link').href = key ? `/app/#k=${key}` : '/app/'; };
   linkApp(read());
 
+  // Stáhnout = instalace PWA: kde ji prohlížeč nabízí (Android, Chrome a Edge na počítači), tlačítko ji spustí;
+  // jinde (iPhone, Firefox) odkaz otevře aplikaci a přidání na plochu je v nápovědě pod ním.
+  let install = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    install = e;
+    $('app-hint').textContent = 'Nainstaluje se jako aplikace, bez obchodu.';
+  });
+  window.addEventListener('appinstalled', () => {
+    install = null;
+    $('app-hint').textContent = 'Aplikace je nainstalovaná. Najdeš ji mezi aplikacemi.';
+  });
+  $('app-link').addEventListener('click', async (e) => {
+    if (!install) return;
+    e.preventDefault();
+    const prompt = install;
+    install = null;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome !== 'accepted') install = prompt;
+  });
+
   const newKey = () => {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
