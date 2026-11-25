@@ -115,6 +115,21 @@ button.primary {
   color: var(--accent-ink);
 }
 
+.app-cta { margin-top: 1.25rem; }
+.app-cta p { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.9rem; }
+a.cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+a.cta:hover { filter: brightness(1.08); }
+
 button.link {
   min-height: 2.75rem;
   margin-bottom: 0.5rem;

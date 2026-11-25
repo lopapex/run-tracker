@@ -27,6 +27,10 @@
     }
   };
 
+  // Odkaz do aplikace nese adresu v kotvě: na server se nepošle a aplikace ji uloží pro sebe.
+  const linkApp = (key) => { $('app-link').href = key ? `/app/#k=${key}` : '/app/'; };
+  linkApp(read());
+
   const newKey = () => {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -34,7 +38,7 @@
 
   const show = (key, message) => {
     url.value = `${location.origin}/mcp/${key}`;
-    $('open-app').href = `/app/#k=${key}`;
+    linkApp(key);
     result.hidden = false;
     create.hidden = true;
     status.textContent = message;
