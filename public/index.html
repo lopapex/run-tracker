@@ -10,35 +10,40 @@
   <link rel="icon" href="/brand/run-tracker-v2-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/app/manifest.webmanifest">
+  <link rel="preload" href="/fonts/barlow-latin-800-italic.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
+  <meta name="darkreader-lock">
 </head>
 <body>
   <main>
     <header class="hero">
       <img src="/brand/run-tracker-v2.svg" alt="" width="56" height="56">
-      <h1>Plán od trenéra v telefonu. Každý den víš, co běžet a jak rychle.</h1>
-      <p class="lead">Pošleš plán v PDF Claudovi, on ho přepíše do appky RPM. Appka pak ukáže dnešní trénink s tempy, odpočítává dny do závodu a Claude ti plán přeplánuje, když něco nevyjde.</p>
+      <h1>Plán od trenéra v&nbsp;telefonu. Každý den víš, co běžet a&nbsp;jak rychle.</h1>
+      <p class="lead">Pošleš plán v&nbsp;PDF Claudovi, on ho přepíše do appky RPM. Appka pak ukáže dnešní trénink s&nbsp;tempy, odpočítává dny do závodu a&nbsp;Claude ti plán přeplánuje, když něco nevyjde.</p>
       <div class="app-cta">
         <a href="#zacit" class="cta">Jak začít</a>
         <a id="app-link" class="cta ghost" href="/app/">Otevřít appku</a>
       </div>
-      <p id="app-hint" class="small">Appka běží v prohlížeči a jde přidat na plochu jako běžná aplikace, bez obchodu.</p>
+      <p id="app-hint" class="small">Appka běží v&nbsp;prohlížeči a&nbsp;jde přidat na plochu jako běžná aplikace, bez obchodu.</p>
+      <figure class="hero-shot">
+        <img src="/shots/rpm-tyden.png" width="780" height="1688" alt="Týden v appce RPM: odpočet do závodu jako startovní číslo, uběhnuté kilometry jako trasa k cíli a dnešní trénink rozbalený s tempy a tlačítkem Odběhnuto">
+      </figure>
     </header>
 
     <section class="need" aria-labelledby="need">
       <h2 id="need">Co budeš potřebovat</h2>
       <ul>
-        <li><b>Účet v Claude</b> na <a href="https://claude.ai" rel="noopener noreferrer">claude.ai</a>. Stačí i bezplatný.</li>
+        <li><b>Účet v&nbsp;Claude</b> na <a href="https://claude.ai" rel="noopener noreferrer">claude.ai</a>. Stačí i&nbsp;bezplatný.</li>
         <li><b>Svůj plán</b>: PDF, fotku nebo tabulku od trenéra. Když žádný nemáš, Claude ho postaví podle tvých běhů na Stravě.</li>
         <li><b>Asi 5 minut</b> na první nastavení. Pak už jen běháš.</li>
-        <li class="opt"><b>Volitelně Strava.</b> Claude z ní vyčte tvoje běhy a ohodnotí je. Konektor Strava v Claude vyžaduje předplatné Strava.</li>
+        <li class="opt"><b>Volitelně Strava.</b> Claude z&nbsp;ní vyčte tvoje běhy a&nbsp;ohodnotí je. Konektor Strava v&nbsp;Claude vyžaduje předplatné Strava.</li>
       </ul>
     </section>
 
     <ol class="steps" id="zacit">
       <li>
         <h2>Vytvoř si svoji adresu</h2>
-        <p>Adresa je klíč k tvému plánu, něco jako heslo. Claude i appka přes ni pracují se stejným plánem. Nepotřebuješ účet ani e-mail.</p>
+        <p>Adresa je klíč k&nbsp;tvému plánu, něco jako heslo. Claude i&nbsp;appka přes ni pracují se stejným plánem. Nepotřebuješ účet ani e-mail.</p>
         <button type="button" id="create" class="primary">Vytvořit moji adresu</button>
         <div id="result" hidden>
           <label for="url">Tvoje adresa</label>
@@ -47,60 +52,60 @@
             <button type="button" id="copy">Zkopírovat</button>
           </div>
           <p id="status" class="status" role="status" aria-live="polite"></p>
-          <p class="warn">Kdo adresu zná, vidí a mění tvůj plán. Ulož si ji třeba do správce hesel nebo do poznámek a nikomu ji neposílej. Když ji ztratíš, k plánu se už nedostaneš.</p>
-          <button type="button" id="renew" class="link">Vytvořit novou adresu s prázdným plánem</button>
+          <p class="warn">Kdo adresu zná, vidí a&nbsp;mění tvůj plán. Ulož si ji třeba do správce hesel nebo do poznámek a&nbsp;nikomu ji neposílej. Když ji ztratíš, k&nbsp;plánu se už nedostaneš.</p>
+          <button type="button" id="renew" class="link">Vytvořit novou adresu s&nbsp;prázdným plánem</button>
         </div>
       </li>
 
       <li>
         <h2>Přidej RPM do Claude</h2>
-        <p>Jednou, na počítači nebo v prohlížeči v mobilu. Potom RPM funguje i v aplikaci Claude v telefonu.</p>
+        <p>Jednou, na počítači nebo v&nbsp;prohlížeči v&nbsp;mobilu. Potom RPM funguje i&nbsp;v&nbsp;aplikaci Claude v&nbsp;telefonu.</p>
         <ol class="clicks">
-          <li>Otevři <a href="https://claude.ai" rel="noopener noreferrer">claude.ai</a> a přihlas se.</li>
-          <li>V nabídce vlevo otevři <b>Customize</b> a v ní <b>Connectors</b>.</li>
-          <li>Klikni na <b>+</b> a vyber <b>Add custom connector</b>.</li>
-          <li>Jako název napiš <b>RPM</b>, do pole URL vlož adresu z prvního kroku a klikni na <b>Continue</b>.</li>
-          <li>U přihlášení nech <b>No sign in</b> a klikni na <b>Add</b>. Žádné heslo není potřeba.</li>
+          <li>Otevři <a href="https://claude.ai" rel="noopener noreferrer">claude.ai</a> a&nbsp;přihlas se.</li>
+          <li>V&nbsp;nabídce vlevo otevři <b>Customize</b> a&nbsp;v&nbsp;ní <b>Connectors</b>.</li>
+          <li>Klikni na <b>+</b> a&nbsp;vyber <b>Add custom connector</b>.</li>
+          <li>Jako název napiš <b>RPM</b>, do pole URL vlož adresu z&nbsp;prvního kroku a&nbsp;klikni na <b>Continue</b>.</li>
+          <li>U&nbsp;přihlášení nech <b>No sign in</b> a&nbsp;klikni na <b>Add</b>. Žádné heslo není potřeba.</li>
         </ol>
-        <p class="tip">Na bezplatném účtu Claude jde přidat jeden vlastní konektor, a to bude RPM. Když v chatu Claude o RPM neví, klikni pod zprávou na <b>+</b>, otevři <b>Connectors</b> a RPM zapni.</p>
-        <p class="small"><a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" rel="noopener noreferrer">Podrobný návod Claude k vlastním konektorům (anglicky)</a></p>
+        <p class="tip">Na bezplatném účtu Claude jde přidat jeden vlastní konektor, a&nbsp;to bude RPM. Když v&nbsp;chatu Claude o&nbsp;RPM neví, klikni pod zprávou na <b>+</b>, otevři <b>Connectors</b> a&nbsp;RPM zapni.</p>
+        <p class="small"><a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" rel="noopener noreferrer">Podrobný návod Claude k&nbsp;vlastním konektorům (anglicky)</a></p>
       </li>
 
       <li class="strava">
         <h2><span class="sv" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.39 17.94l-2.09-4.11h-3.07L15.39 24l5.15-10.17h-3.07M10.36 8.23l2.84 5.6h4.17L10.36 0 3.37 13.83h4.17"/></svg></span>Připoj Stravu <small>volitelné</small></h2>
-        <p>Strava se do Claude připojuje oficiálním konektorem Strava, RPM s ní přímo nemluví. Data z tvých běhů čte jen Claude a RPM je neukládá.</p>
+        <p>Strava se do Claude připojuje oficiálním konektorem Strava, RPM s&nbsp;ní přímo nemluví. Data z&nbsp;tvých běhů čte jen Claude a&nbsp;RPM je neukládá.</p>
         <ol class="clicks">
           <li>Ve stejném místě, <b>Customize</b> → <b>Connectors</b>, najdi mezi nabízenými konektory <b>Strava</b>.</li>
-          <li>Klikni na připojení, přihlas se do Stravy a povol přístup.</li>
+          <li>Klikni na připojení, přihlas se do Stravy a&nbsp;povol přístup.</li>
         </ol>
-        <p>Pak můžeš Claudovi napsat třeba „Zhodnoť včerejší intervaly podle Stravy“ nebo „Doplň splnění tohoto týdne podle Stravy“. V appce na to je oranžové tlačítko <b>Zhodnotit se Stravou</b> u každého odběhnutého tréninku.</p>
+        <p>Pak můžeš Claudovi napsat třeba „Zhodnoť včerejší intervaly podle Stravy“ nebo „Doplň splnění tohoto týdne podle Stravy“. V&nbsp;appce na to je oranžové tlačítko <b>Zhodnotit se Stravou</b> u&nbsp;každého odběhnutého tréninku.</p>
       </li>
 
       <li>
         <h2>Pošli Claudovi svůj plán</h2>
-        <p>Otevři nový chat v Claude, přilož PDF s plánem (tlačítko <b>+</b> u pole pro zprávu) a napiš:</p>
+        <p>Otevři nový chat v&nbsp;Claude, přilož PDF s&nbsp;plánem (tlačítko <b>+</b> u&nbsp;pole pro zprávu) a&nbsp;napiš:</p>
         <p class="say">Přepiš mi tenhle plán do RPM.</p>
-        <p>Claude ho přepíše týden po týdnu. Když je v PDF plán dvakrát, v mílích i v kilometrech, vezme kilometry. Součty týdnů porovná s dokumentem a běžné chyby přepisu opraví sám. Do kalendáře ho nezařadí, to uděláš ty po kontrole.</p>
+        <p>Claude ho přepíše týden po týdnu. Když je v&nbsp;PDF plán dvakrát, v&nbsp;mílích i&nbsp;v&nbsp;kilometrech, vezme kilometry. Součty týdnů porovná s&nbsp;dokumentem a&nbsp;běžné chyby přepisu opraví sám. Do kalendáře ho nezařadí, to uděláš ty po kontrole.</p>
         <p>Nemáš plán? Napiš třeba:</p>
         <p class="say">Postav mi plán na půlmaraton 11. dubna podle mé Stravy.</p>
       </li>
 
       <li>
-        <h2>Otevři appku a plán zkontroluj</h2>
-        <p><a id="app-link-2" href="/app/">Otevři appku RPM</a> v telefonu. Když jsi adresu vytvořil v tomhle prohlížeči, appka ji už zná. Jinak ji vlož, appka se na ni zeptá.</p>
+        <h2>Otevři appku a&nbsp;plán zkontroluj</h2>
+        <p><a id="app-link-2" href="/app/">Otevři appku RPM</a> v&nbsp;telefonu. Když adresa vznikla v&nbsp;tomhle prohlížeči, appka ji už zná. Jinak ji vlož, appka se na ni zeptá.</p>
         <ul class="install">
-          <li><b>iPhone:</b> v Safari klepni na <b>Sdílet</b> a pak <b>Přidat na plochu</b>.</li>
-          <li><b>Android:</b> v Chromu otevři nabídku <b>⋮</b> a vyber <b>Nainstalovat aplikaci</b> nebo <b>Přidat na plochu</b>.</li>
+          <li><b>iPhone:</b> v&nbsp;Safari klepni na <b>Sdílet</b> a&nbsp;pak <b>Přidat na plochu</b>.</li>
+          <li><b>Android:</b> v&nbsp;Chromu otevři nabídku <b>⋮</b> a&nbsp;vyber <b>Nainstalovat aplikaci</b> nebo <b>Přidat na plochu</b>.</li>
         </ul>
-        <p>V záložce <b>Plán</b> čeká přepsaný plán ke kontrole. Klepni na týden a uvidíš vedle každého dne znění z dokumentu. Kde nesedí součet kilometrů, appka týden označí. Nakonec zadej datum závodu a klepni na <b>Zařadit do kalendáře</b>.</p>
+        <p>V&nbsp;záložce <b>Plán</b> čeká přepsaný plán ke kontrole. Klepni na týden a&nbsp;uvidíš vedle každého dne znění z&nbsp;dokumentu. Kde nesedí součet kilometrů, appka týden označí. Nakonec zadej datum závodu a&nbsp;klepni na <b>Zařadit do kalendáře</b>.</p>
       </li>
 
       <li>
         <h2>Běhej</h2>
-        <p>Záložka <b>Týden</b> ukáže dnešní trénink s tempy. Po běhu klepni na <b>Odběhnuto</b>. Trénink jde přesunout na jiný den nebo vynechat, poslat do hodinek Garmin a cílový čas si upravíš v <b>Tempech</b>. Na větší změny je Claude:</p>
+        <p>Záložka <b>Týden</b> ukáže dnešní trénink s&nbsp;tempy. Po běhu klepni na <b>Odběhnuto</b>. Trénink jde přesunout na jiný den nebo vynechat, poslat do hodinek Garmin a&nbsp;cílový čas si upravíš v&nbsp;<b>Tempech</b>. Na větší změny je Claude:</p>
         <ul class="prompts">
-          <li>O víkendu nemůžu běhat, přeplánuj to.</li>
-          <li>Mám rýmu, co s tímhle týdnem?</li>
+          <li>O&nbsp;víkendu nemůžu běhat, přeplánuj to.</li>
+          <li>Mám rýmu, co s&nbsp;tímhle týdnem?</li>
           <li>Jak mi šel minulý týden?</li>
         </ul>
       </li>
@@ -109,7 +114,6 @@
     <section aria-labelledby="shots">
       <h2 id="shots">Jak appka vypadá</h2>
       <div class="shots">
-        <img src="/shots/rpm-tyden.png" width="780" height="1688" loading="lazy" alt="Týden: odpočet do závodu jako startovní číslo, uběhnuté kilometry jako trasa k cíli a dnešní trénink rozbalený s tempy a tlačítkem Odběhnuto">
         <img src="/shots/rpm-plan.png" width="780" height="1688" loading="lazy" alt="Plán: všechny týdny po fázích, barvy podle intenzity, závod jako cílová vlajka a kilometry za týden">
         <img src="/shots/rpm-novy.png" width="780" height="1688" loading="lazy" alt="Nový plán: plán od trenéra nebo plán podle Stravy, obojí připraví Claude">
         <img src="/shots/rpm-tempa.png" width="780" height="1688" loading="lazy" alt="Tempa: cílový čas, který jde změnit, a pásma temp na kilometr na jedné ose od volného běhu po tempo na 5 km">
@@ -120,39 +124,39 @@
       <h2 id="faq">Časté otázky</h2>
       <details>
         <summary>Kolik to stojí?</summary>
-        <p>RPM je zdarma. Claude funguje i s bezplatným účtem. Za konektor Strava se platí předplatným Strava, bez něj RPM funguje taky, jen splnění zapisuješ v appce sám.</p>
+        <p>RPM je zdarma. Claude funguje i&nbsp;s&nbsp;bezplatným účtem. Za konektor Strava se platí předplatným Strava, bez něj RPM funguje taky, jen splnění zapisuješ v&nbsp;appce sám.</p>
       </details>
       <details>
         <summary>Co když Claude plán přepíše špatně?</summary>
-        <p>Proto ho před zařazením kontroluješ v appce. U každého dne je doslovné znění z dokumentu, týdny, kde nesedí součet kilometrů, jsou označené, a co Claude opravil, je napsané. Chybu stačí Claudovi napsat a opraví ji.</p>
+        <p>Proto ho před zařazením kontroluješ v&nbsp;appce. U&nbsp;každého dne je doslovné znění z&nbsp;dokumentu, týdny, kde nesedí součet kilometrů, jsou označené, a&nbsp;co Claude opravil, je napsané. Chybu stačí Claudovi napsat a&nbsp;opraví ji.</p>
       </details>
       <details>
-        <summary>Funguje to v mobilní aplikaci Claude?</summary>
-        <p>Ano. Konektor přidáš jednou na webu a pak ho Claude používá i v telefonu.</p>
+        <summary>Funguje to v&nbsp;mobilní aplikaci Claude?</summary>
+        <p>Ano. Konektor přidáš jednou na webu a&nbsp;pak ho Claude používá i&nbsp;v&nbsp;telefonu.</p>
       </details>
       <details>
-        <summary>Ztratil jsem adresu.</summary>
-        <p>Bez adresy se k plánu nedostane nikdo, ani ty. Vytvoř si novou a plán Claudovi pošli znovu.</p>
+        <summary>Co když adresu ztratím?</summary>
+        <p>Bez adresy se k&nbsp;plánu nedostane nikdo, ani ty. Vytvoř si novou a&nbsp;plán Claudovi pošli znovu.</p>
       </details>
       <details>
         <summary>Jak dostanu trénink do hodinek?</summary>
-        <p>U dnešního nebo budoucího tréninku klepni na <b>Do hodinek</b>. Stáhne se soubor FIT, který nahraješ do Garmin Connect jako trénink.</p>
+        <p>U&nbsp;dnešního nebo budoucího tréninku klepni na <b>Do hodinek</b>. Stáhne se soubor FIT, který nahraješ do Garmin Connect jako trénink.</p>
       </details>
     </section>
 
     <section aria-labelledby="privacy">
       <h2 id="privacy">Soukromí</h2>
       <ul>
-        <li>Žádný účet ani e-mail. S daty tě spojuje jen adresa.</li>
-        <li>Ukládá se plán, historie změn, splnění, krátké poznámky k tréninkům a poznámky, které si o tobě vede Claude (zranění, volné dny, cíle).</li>
-        <li>Data aktivit ze Stravy se neukládají. Čte je Claude přes oficiální konektor Strava; z hodnocení běhu zůstane jen stav splnění a nanejvýš odhad formy (VDOT).</li>
+        <li>Žádný účet ani e-mail. S&nbsp;daty tě spojuje jen adresa.</li>
+        <li>Ukládá se plán, historie změn, splnění, krátké poznámky k&nbsp;tréninkům a&nbsp;poznámky, které si o&nbsp;tobě vede Claude (zranění, volné dny, cíle).</li>
+        <li>Data aktivit ze Stravy se neukládají. Čte je Claude přes oficiální konektor Strava; z&nbsp;hodnocení běhu zůstane jen stav splnění a&nbsp;nanejvýš odhad formy (VDOT).</li>
         <li>Soubor do hodinek Garmin je na odkazu, který platí 24 hodin.</li>
-        <li>Všechno smažeš větou „Smaž všechna moje data v RPM“. Smazání je nevratné.</li>
+        <li>Všechno smažeš větou „Smaž všechna moje data v&nbsp;RPM“. Smazání je nevratné.</li>
       </ul>
     </section>
 
     <footer>
-      <p>Strava je ochranná známka společnosti Strava, Inc. RPM s ní není spojené, jen spolupracuje s jejím oficiálním konektorem v Claude.</p>
+      <p>Strava je ochranná známka společnosti Strava, Inc. RPM s&nbsp;ní není spojené, jen spolupracuje s&nbsp;jejím oficiálním konektorem v&nbsp;Claude.</p>
       <p><a href="https://github.com/lopapex/run-tracker" rel="noopener noreferrer">Zdrojový kód</a> · MIT</p>
     </footer>
   </main>

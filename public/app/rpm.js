@@ -31,6 +31,9 @@
   // Ilustrace prázdných obrazovek: trasa ze startu do cíle.
   var ROUTE_ART = '<svg class="art" viewBox="0 0 280 96" aria-hidden="true"><path class="r" d="M18 74c40 0 40-46 90-46s52 44 98 44 46-38 56-50"/><circle class="s" cx="18" cy="74" r="6"/><path class="f" d="M262 22V4l12 5-12 5"/><circle class="me" cx="108" cy="28" r="7"/></svg>';
   var MEDAL_ART = '<svg class="art medal" viewBox="0 0 96 112" aria-hidden="true"><path class="rb1" d="M26 4h18l12 34H38z"/><path class="rb2" d="M70 4H52L40 38h18z"/><circle class="m" cx="48" cy="72" r="30"/><circle class="m2" cx="48" cy="72" r="22"/><path class="m3" d="m48 58 4.3 8.8 9.7 1.4-7 6.8 1.7 9.6L48 80l-8.7 4.6 1.7-9.6-7-6.8 9.7-1.4z"/></svg>';
+  // Fáze z anglických plánů česky; neznámý název zůstane, jak je.
+  var PHASE = { prep: 'příprava', preparation: 'příprava', base: 'základ', build: 'budování', recovery: 'odlehčení', peak: 'vrchol', taper: 'ladění', race: 'závod', 'race week': 'závodní týden' };
+  function phaseCs(ph) { var k = String(ph || '').trim().toLowerCase(); return PHASE[k] || k.replace(/^[a-z]+/, function (w) { return PHASE[w] || w; }); }
   function daysWord(n) { return n === 1 ? 'den' : n >= 2 && n <= 4 ? 'dny' : 'dní'; }
 
   // ---------- Klíč ----------
@@ -85,15 +88,22 @@
 
   // ---------- Hláška s Vrátit ----------
   var toastTimer;
+  // Hláška přijede zespodu a stejnou cestou odjede; přechod (ne keyframes), takže jde přerušit další hláškou.
   function toast(text, undo) {
     clearTimeout(toastTimer);
     toastEl.innerHTML = '<span>' + esc(text) + '</span>' + (undo ? '<button type="button" data-undo>Vrátit</button>' : '');
-    toastEl.hidden = false;
-    toastTimer = setTimeout(function () { toastEl.hidden = true; }, undo ? 6000 : 3000);
+    if (toastEl.hidden) { toastEl.hidden = false; void toastEl.offsetWidth; }
+    toastEl.classList.add('on');
+    toastTimer = setTimeout(hideToast, undo ? 6000 : 3000);
+  }
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toastEl.classList.remove('on');
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, reduced() ? 0 : 200);
   }
   toastEl.addEventListener('click', function (e) {
     if (!e.target.closest('[data-undo]')) return;
-    toastEl.hidden = true;
+    hideToast();
     act('undo_change', {}, 'Vráceno');
   });
 
@@ -203,7 +213,7 @@
     var pct = Math.min(100, Math.round(st.doneKm / Math.max(1, st.plannedKmMax) * 100));
     h += '<div class="hero"><div class="trip"><p class="kmb"><b>' + num(st.doneKm) + '</b><span> z ' + Math.round(st.plannedKmMax) + ' km</span></p>';
     h += '<div class="route' + (pct >= 100 ? ' full' : '') + '" role="img" aria-label="Uběhnuto ' + pct + ' % týdne"><i data-wpct="' + pct + '"></i>' + ico('race', 'flag') + '</div>';
-    h += d.phase ? '<p class="phase">' + esc(d.phase.toLowerCase()) + '</p>' : '';
+    h += d.phase ? '<p class="phase">' + esc(phaseCs(d.phase)) + '</p>' : '';
     h += '</div>';
     // Odpočet do závodu jako startovní číslo.
     if (d.isCurrent && d.daysToRace != null) h += '<div class="bib" role="img" aria-label="Závod ' + (d.daysToRace ? 'za ' + d.daysToRace + ' ' + daysWord(d.daysToRace) : 'dnes') + '"><span>závod</span><b>' + (d.daysToRace || 'DNES') + '</b><small>' + (d.daysToRace ? daysWord(d.daysToRace) + ' do startu' : 'hodně štěstí') + '</small></div>';
@@ -271,15 +281,65 @@
   // ---------- Přesun jednotky ----------
   function moveMenu(id) {
     var x = findW(id), w = x[0], start = S.week.weekStart;
-    var h = '<div class="back" data-do="close"></div><section class="panel" role="dialog" aria-label="Přesunout"><h2>Přesunout ' + esc(w.title) + ' <button type="button" data-do="close">Zavřít</button></h2><div class="seg n wk7">';
+    var h = '<div class="back" data-do="close"></div><section class="panel" role="dialog" aria-modal="true" aria-label="Přesunout"><h2>Přesunout ' + esc(w.title) + ' <button type="button" data-do="close">Zavřít</button></h2><div class="seg n wk7">';
     for (var i = 0; i < 7; i++) {
       var date = addDays(start, i);
       h += '<button type="button" data-do="moveto" data-id="' + id + '" data-v="' + date + '"' + (date === w.date ? ' class="on" disabled' : '') + '>' + DOW[i] + '</button>';
     }
     openSheet(h + '</div><p class="hint">Když je v cílovém dni jiný běh, prohodí se.</p></section>');
   }
-  function openSheet(html) { sheet.innerHTML = html; sheet.hidden = false; }
-  function closeSheet() { sheet.hidden = true; sheet.innerHTML = ''; }
+  // List zespodu: fokus do listu a po zavření zpět, Esc zavře, tah dolů zavře. Zavření jede stejnou cestou jako otevření.
+  var sheetFrom = null, sheetTimer;
+  function openSheet(html) {
+    clearTimeout(sheetTimer);
+    sheetFrom = document.activeElement;
+    sheet.innerHTML = html; sheet.hidden = false;
+    void sheet.offsetWidth;
+    sheet.classList.add('on');
+    var first = sheet.querySelector('.panel button:not([disabled])');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closeSheet() {
+    if (sheet.hidden) return;
+    var panel = sheet.querySelector('.panel');
+    if (panel) { panel.style.transition = ''; panel.style.transform = ''; }
+    sheet.classList.remove('on');
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.hidden = true; sheet.innerHTML = ''; }, reduced() ? 0 : 240);
+    if (sheetFrom && sheetFrom.focus && document.contains(sheetFrom)) sheetFrom.focus({ preventScroll: true });
+    sheetFrom = null;
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !sheet.hidden) { closeSheet(); return; }
+    // Šipky listují týdny, když se zrovna nepíše do pole.
+    if (sheet.hidden && S.tab === 'week' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName || '') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.altKey && !e.metaKey && !e.ctrlKey) goWeek(e.key === 'ArrowRight' ? 1 : -1);
+  });
+  // Tah listu dolů: panel jde 1:1 s prstem, po puštění zavře podle vzdálenosti nebo rychlosti, jinak rychle zpět.
+  var sg = null;
+  sheet.addEventListener('touchstart', function (e) {
+    var panel = e.target.closest('.panel');
+    sg = panel && panel.scrollTop <= 0 && e.touches.length === 1 ? { panel: panel, y: e.touches[0].clientY, dy: 0, v: 0, t: e.timeStamp } : null;
+  }, { passive: true });
+  sheet.addEventListener('touchmove', function (e) {
+    if (!sg) return;
+    var dy = e.touches[0].clientY - sg.y;
+    if (dy <= 0) { sg.panel.style.transform = ''; sg.dy = 0; return; }
+    e.preventDefault();
+    var dt = Math.max(1, e.timeStamp - sg.t);
+    sg.v = (dy - sg.dy) / dt; sg.dy = dy; sg.t = e.timeStamp;
+    sg.panel.style.transition = 'none';
+    sg.panel.style.transform = 'translateY(' + dy + 'px)';
+  }, { passive: false });
+  function sheetEnd(e) {
+    var s = sg; sg = null;
+    if (!s || !s.dy) return;
+    var v = e.timeStamp - s.t > 80 ? 0 : s.v;
+    s.panel.style.transition = '';
+    if (s.dy > s.panel.offsetHeight * 0.3 || v > 0.4) closeSheet();
+    else s.panel.style.transform = '';
+  }
+  sheet.addEventListener('touchend', sheetEnd);
+  sheet.addEventListener('touchcancel', sheetEnd);
 
   // ---------- Plán ----------
   function cell(c, today) {
@@ -290,13 +350,17 @@
     var h = '<table class="mx"><thead><tr><th></th>' + DOW.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th class="vol">km</th></tr></thead><tbody>';
     var phase = null, today = todayIso();
     weeks.forEach(function (w) {
-      var ph = (w.phase || '').toLowerCase();
+      var ph = phaseCs(w.phase);
       if (ph && ph !== phase) h += '<tr class="ph"><td colspan="9">' + esc(ph) + '</td></tr>';
       phase = ph || phase;
       var flag = opts.stage && (w.issues.length || w.totals === 'off'), open = opts.stage && S.sweek === w.index;
       var cls = 'w' + (w.isCurrent ? ' cur' : '') + (w.isPast ? ' past' : '') + (flag ? ' flag' : '') + (open ? ' open' : '');
       var target = opts.link ? ' data-do="week" data-v="' + w.weekStart + '"' : opts.stage ? ' data-do="sweek" data-v="' + w.index + '" aria-expanded="' + open + '"' : '';
-      h += '<tr class="' + cls + '"' + target + '><td class="wk">' + (w.sourceWeek != null ? w.sourceWeek : w.index != null ? w.index : '–') + '</td>';
+      var wkNo = w.sourceWeek != null ? w.sourceWeek : w.index != null ? w.index : '–';
+      // Číslo týdne je tlačítko, aby šel týden otevřít i klávesnicí; klepnout jde dál na celý řádek.
+      var wkBtn = opts.link ? '<button type="button" data-do="week" data-v="' + w.weekStart + '" aria-label="Otevřít týden ' + wkNo + '">' + wkNo + '</button>'
+        : opts.stage ? '<button type="button" data-do="sweek" data-v="' + w.index + '" aria-expanded="' + open + '" aria-label="Týden ' + wkNo + ' ke kontrole">' + wkNo + '</button>' : wkNo;
+      h += '<tr class="' + cls + '"' + target + '><td class="wk">' + wkBtn + '</td>';
       w.cells.forEach(function (c, i) { h += '<td>' + cell(c, opts.link && w.weekStart && addDays(w.weekStart, i) === today) + '</td>'; });
       var plannedKm = w.plannedKmMax != null ? w.plannedKmMax : w.kmMax, vol;
       if (opts.link && (w.isPast || w.isCurrent)) vol = num(w.doneKm) + '<span class="mute"> / ' + Math.round(plannedKm) + '</span>';
@@ -592,7 +656,8 @@
     sizes(gh);
     return gh;
   }
-  function goWeek(dir, gh) {
+  function goWeek(dir, gh, ms) {
+    ms = ms || OUT_MS;
     var el = view.querySelector('.days');
     if (busy || !hasWeek(dir)) { if (el) slide(el, 0, BACK_MS); if (gh) slide(gh, dir * (el ? el.clientWidth : 0), BACK_MS); setTimeout(function () { if (gh) gh.remove(); }, BACK_MS); return; }
     busy = true; S.open = null;
@@ -602,9 +667,9 @@
       if (!el || reduced()) { if (gh) gh.remove(); show(cached); }
       else {
         if (!gh) { gh = ghostFor(dir); slide(gh, dir * el.clientWidth, 0); void gh.offsetWidth; }
-        slide(el, -dir * el.clientWidth, OUT_MS);
-        slide(gh, 0, OUT_MS);
-        setTimeout(function () { show(cached); }, OUT_MS);
+        slide(el, -dir * el.clientWidth, ms);
+        slide(gh, 0, ms);
+        setTimeout(function () { show(cached); }, ms);
       }
       // Na pozadí ověří, že se týden mezitím nezměnil jinde (Claude, druhé zařízení).
       call('show_week', { date: key }).then(function (d) {
@@ -616,7 +681,7 @@
     var data = call('show_week', { date: key });
     var out = new Promise(function (ok) {
       if (!el || reduced()) return ok();
-      slide(el, -dir * el.clientWidth, OUT_MS, 0); setTimeout(ok, OUT_MS);
+      slide(el, -dir * el.clientWidth, ms, 0); setTimeout(ok, ms);
     });
     Promise.all([data, out]).then(function (r) { take(r[0]); render(); slideIn(dir); }, fail).then(function () { busy = false; });
   }
@@ -624,7 +689,7 @@
     g = null;
     if (busy || S.tab !== 'week' || !S.week || S.week.view !== 'week' || e.touches.length !== 1) return;
     var t = e.touches[0];
-    g = { x: t.clientX, y: t.clientY, t: e.timeStamp, axis: null, dx: 0, el: view.querySelector('.days'), ghost: null, gdir: 0 };
+    g = { x: t.clientX, y: t.clientY, t: e.timeStamp, axis: null, dx: 0, raw: 0, v: 0, lt: e.timeStamp, el: view.querySelector('.days'), ghost: null, gdir: 0 };
   }, { passive: true });
   view.addEventListener('touchmove', function (e) {
     if (!g || !g.el) return;
@@ -636,6 +701,9 @@
     if (g.axis !== 'x') return;
     e.preventDefault();
     var dir = dx < 0 ? 1 : -1;
+    // Rychlost prstu z posledních pohybů, ne průměr za celé gesto: švih na konci se počítá.
+    var dt = e.timeStamp - g.lt;
+    if (dt > 0) { g.v = 0.6 * ((dx - g.raw) / dt) + 0.4 * g.v; g.raw = dx; g.lt = e.timeStamp; }
     g.dx = hasWeek(dir) ? dx : dx * 0.2;
     if (g.gdir !== dir) { if (g.ghost) g.ghost.remove(); g.ghost = hasWeek(dir) ? ghostFor(dir) : null; g.gdir = dir; }
     slide(g.el, g.dx, 0);
@@ -644,9 +712,15 @@
   function swipeEnd(e) {
     var s = g; g = null;
     if (!s || s.axis !== 'x' || !s.el) return;
-    var speed = Math.abs(s.dx) / Math.max(1, e.timeStamp - s.t), dir = s.dx < 0 ? 1 : -1;
+    var dir = s.dx < 0 ? 1 : -1, v = e.timeStamp - s.lt > 80 ? 0 : s.v;
+    // Rychlost ve směru tahu; švih opačným směrem gesto zruší.
+    var speed = -dir * v;
     var gh = s.gdir === dir ? s.ghost : null;
-    if (Math.abs(s.dx) > s.el.clientWidth * 0.25 || (speed > 0.3 && Math.abs(s.dx) > 24)) goWeek(dir, gh);
+    if ((Math.abs(s.dx) > s.el.clientWidth * 0.25 && speed > -0.11) || (speed > 0.11 && Math.abs(s.dx) > 16)) {
+      // Týden dojede tak rychle, jak byl hozený: zbývající dráha / rychlost, mezi 120 a 260 ms.
+      var rest = s.el.clientWidth - Math.abs(s.dx);
+      goWeek(dir, gh, Math.round(Math.max(120, Math.min(OUT_MS, rest / Math.max(speed, rest / OUT_MS)))));
+    }
     else {
       slide(s.el, 0, BACK_MS);
       if (gh) { slide(gh, dir * s.el.clientWidth, BACK_MS); setTimeout(function () { gh.remove(); }, BACK_MS); }

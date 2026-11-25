@@ -11,13 +11,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="RPM">
+<!-- Appka má vlastní tmavý režim; rozšíření typu Dark Reader by barvy zón přebarvilo do kalných odstínů. -->
+<meta name="darkreader-lock">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="rpm.css">
 </head>
 <body>
-<main id="view" aria-live="polite"></main>
+<main id="view"></main>
 <nav class="bar" aria-label="Zobrazení">
   <button type="button" class="tab" data-tab="week"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 16V8.5l3 1.5L8 7.5h2.6l3 4 5.2 1.3a2.5 2.5 0 0 1 1.9 2.4v.8z"/><path d="M2.5 19h18.2M9.3 10.6l1.3-1.1M11 12.3l1.3-1.1"/></svg>Týden</button>
   <button type="button" class="tab" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="19" r="2"/><path d="M7 19h7.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H17"/><path d="M17 2.5v5l3-1.2z"/></svg>Plán</button>
