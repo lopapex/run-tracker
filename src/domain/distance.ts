@@ -5,9 +5,13 @@ const zero = (): DistanceRange => ({ minM: 0, maxM: 0, estimated: false, unknown
 function add(a: DistanceRange, b: DistanceRange, count = 1): DistanceRange {
   return { minM: a.minM + b.minM * count, maxM: a.maxM + b.maxM * count, estimated: a.estimated || b.estimated, unknown: a.unknown + b.unknown * count };
 }
+/** Rovinky tabulky temp obvykle neuvádějí; bez nich by se jednotka s rovinkami nedala sečíst. */
+const DEFAULT_PACE: Partial<Record<string, { fromSec: number; toSec: number }>> = { strides: { fromSec: 180, toSec: 240 } };
 function segment(s: Segment, chart?: PaceChart): DistanceRange {
   if (s.distanceM != null) return { ...zero(), minM: s.distanceM, maxM: s.distanceM };
-  const pace = chart?.[s.intensity as keyof PaceChart];
+  // Chůze v pauzách se do běžeckých km nepočítá (tak to dělají i autoři plánů v týdenních součtech).
+  if (s.intensity === 'walk' && !chart?.[s.intensity as keyof PaceChart]) return zero();
+  const pace = chart?.[s.intensity as keyof PaceChart] ?? DEFAULT_PACE[s.intensity];
   if (s.durationSec != null && pace && pace.fromSec > 0 && pace.toSec > 0) {
     return { minM: s.durationSec / Math.max(pace.fromSec, pace.toSec) * 1000, maxM: s.durationSec / Math.min(pace.fromSec, pace.toSec) * 1000, estimated: true, unknown: 0 };
   }

@@ -1,7 +1,6 @@
 // Průchod konektorem přes skutečný MCP protokol: klient SDK → handleMcp → nástroje → úložiště v paměti.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleFile, handleMcp } from './http';
 import { MemoryStore, workspaceId } from './store';
@@ -10,16 +9,15 @@ import type { WorkoutSpec } from '../domain/types';
 const KEY_A = 'a'.repeat(43);
 const KEY_B = 'b'.repeat(43);
 
-async function connect(store: MemoryStore, key = KEY_A) {
+/** Výchozí klient je appka RPM (dostává data a show_week); `app: false` je model v Claude. */
+async function connect(store: MemoryStore, key = KEY_A, app = true) {
   const client = new Client({ name: 'test', version: '1' });
-  const transport = new StreamableHTTPClientTransport(new URL(`https://example.test/mcp/${key}`), {
-    fetch: (url, init) => handleMcp(new Request(url, init), key, store, async () => readFileSync('public/widget.html', 'utf8')),
+  const transport = new StreamableHTTPClientTransport(new URL(`https://example.test/mcp/${key}${app ? '?client=app' : ''}`), {
+    fetch: (url, init) => handleMcp(new Request(url, init), key, store),
   });
   await client.connect(transport);
   const call = async (name: string, args: Record<string, unknown> = {}) => {
-    // Testy přepínají karty rychle za sebou jako záložky; pojistku proti druhé kartě zkouší vlastní test.
-    const withCard = /^show_(week|plan|paces)$/.test(name) && !('fromCard' in args) ? { ...args, fromCard: true } : args;
-    const result = await client.callTool({ name, arguments: withCard });
+    const result = await client.callTool({ name, arguments: args });
     const text = (result.content as Array<{ type: string; text: string }>).map((c) => c.text).join('\n');
     return { text, isError: result.isError === true, data: result.structuredContent as any };
   };
@@ -64,7 +62,7 @@ describe('konektor Run Tracker', () => {
   it('nabídne nástroje s popsaným tvarem jednotky a instrukce pro model', async () => {
     const { client } = await connect(new MemoryStore());
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'draft_plan', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'set_statuses', 'shift_plan', 'show_paces', 'show_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['activate_plan', 'add_workout', 'calculate_paces', 'delete_all_data', 'draft_plan', 'edit_workout', 'export_garmin', 'get_plan', 'import_plan_weeks', 'move_workout', 'restore_workout', 'set_profile', 'set_status', 'set_statuses', 'shift_plan', 'show_result', 'show_week', 'skip_workout', 'undo_change']);
     expect(tools.find((t) => t.name === 'get_plan')?.annotations?.readOnlyHint).toBe(true);
     const edit = JSON.stringify(tools.find((t) => t.name === 'import_plan_weeks')?.inputSchema);
     for (const word of ['recoveryAfterLast', '5k_pace', 'strides', 'rawInstruction']) expect(edit).toContain(word);
@@ -273,26 +271,20 @@ describe('konektor Run Tracker', () => {
     expect((await store.load(id))!.ws.profile.weeklyKm).toBe(50);
   });
 
-  it('vizualizace: nástroje odkazují na widget a vracejí data pro vykreslení', async () => {
-    const { client, call } = await connect(new MemoryStore());
-    const { tools } = await client.listTools();
-    for (const name of ['show_week', 'show_plan', 'show_paces', 'show_result', 'export_garmin']) {
-      const tool = tools.find((t) => t.name === name)!;
-      expect((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri).toMatch(/^ui:\/\/run-tracker\/view-[0-9a-f]{10}\.html$/);
-      // alias pro ChatGPT
-      expect((tool._meta as Record<string, unknown>)['openai/outputTemplate']).toBe((tool._meta as { ui: { resourceUri: string } }).ui.resourceUri);
-      expect(tool.annotations?.readOnlyHint).toBe(name !== 'export_garmin' && name !== 'show_result');
-    }
-    // záložky Plán a Tempa vidí jen karta, model ne
-    expect(tools.filter((t) => ((t._meta as { ui?: { visibility?: string[] } })?.ui?.visibility ?? []).includes('app') && !((t._meta as { ui: { visibility: string[] } }).ui.visibility.includes('model'))).map((t) => t.name).sort()).toEqual(['show_paces', 'show_plan']);
-    const current = (tools.find((t) => t.name === 'show_week')!._meta as { ui: { resourceUri: string } }).ui.resourceUri;
-    expect((await client.readResource({ uri: current })).contents[0].mimeType).toBe('text/html;profile=mcp-app');
-    // starší adresa z mezipaměti hostitele dostane aktuální widget
-    const resource = await client.readResource({ uri: 'ui://run-tracker/view.html' });
-    expect(resource.contents[0].mimeType).toBe('text/html;profile=mcp-app');
-    // widget má vlastní kartu; hostitel ji nemá orámovat podruhé
-    expect(resource.contents[0]._meta).toMatchObject({ ui: { prefersBorder: false }, 'openai/widgetCSP': { redirect_domains: ['https://example.test'] } });
-    expect(String((resource.contents[0] as { text?: string }).text)).toContain('ui/initialize');
+  it('appka dostane data a show_week, model jen text a žádné karty', async () => {
+    const store = new MemoryStore();
+    const { client, call } = await connect(store);
+    const model = await connect(store, KEY_A, false);
+    const appTools = (await client.listTools()).tools;
+    const modelTools = (await model.client.listTools()).tools;
+    expect(appTools.map((t) => t.name)).toContain('show_week');
+    expect(modelTools.map((t) => t.name)).not.toContain('show_week');
+    expect(modelTools.some((t) => t._meta)).toBe(false);
+    expect(JSON.stringify(modelTools)).not.toMatch(/openai|ui:\/\//);
+    expect((await client.listResources().catch(() => ({ resources: [] }))).resources).toEqual([]);
+    const instructions = model.client.getInstructions() ?? '';
+    expect(instructions).toContain('https://example.test/app/');
+    expect(instructions).not.toMatch(/ChatGPT|karta|widget/i);
 
     expect((await call('show_week')).data.view).toBe('empty');
     await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)], paceChart: { easy: { fromSec: 304, toSec: 336 }, '5k_pace': { fromSec: 240, toSec: 250 } } });
@@ -308,17 +300,25 @@ describe('konektor Run Tracker', () => {
     expect(weekData.days).toHaveLength(7);
     expect(weekData.stats).toMatchObject({ units: 5, unitsDone: 1, doneKm: 10 });
     expect(weekData.days[0].workouts[0]).toMatchObject({ status: 'completed', feel: 4, kmMin: 10 });
+    // rychlost s chůzí v pauzách: km jsou známé (chůze se nepočítá), ne prázdné
+    expect(weekData.days[1].workouts[0]).toMatchObject({ kmUnknown: false });
+    expect(weekData.days[1].workouts[0].kmMax).toBeGreaterThan(4);
 
-    const planData = (await call('show_plan')).data;
+    const planData = (await call('show_week', { tab: 'plan' })).data;
     expect(planData.weeks).toHaveLength(2);
     expect(planData.weeks[0]).toMatchObject({ sourceWeek: 1, phase: 'PREP', unitsDone: 1, longRunKm: 16 });
     expect(planData.totals).toMatchObject({ units: 10, unitsDone: 1, doneKm: 10 });
 
     // 3 minuty v tempu 4:00–4:10 jsou 720–750 m
-    const paceData = (await call('show_paces', { workoutId: tuesday })).data;
+    const paceData = (await call('show_week', { tab: 'paces', workoutId: tuesday })).data;
     expect(paceData.paces.map((p: { key: string }) => p.key)).toEqual(['easy', '5k_pace']);
     expect(paceData.workout.rows.find((r: { label: string }) => r.label === 'Rychlý úsek')).toMatchObject({ reps: 6, distMinM: 720, distMaxM: 750 });
     expect(paceData.workout.rows.find((r: { label: string }) => r.label === 'Pauza')).toMatchObject({ reps: 5 });
+    // model dostane po změně jen text, bez dat pro appku
+    const modelSet = await model.call('set_status', { workoutId: tuesday, status: 'completed' });
+    expect(modelSet.isError).toBe(false);
+    expect(modelSet.data).toBeUndefined();
+    expect(modelSet.text).not.toContain('ODPOVĚĎ');
   });
 
   it('porovná běh s plánem, zapíše jen stav a čísla běhu neuloží', async () => {
@@ -523,7 +523,7 @@ describe('konektor Run Tracker', () => {
     expect(await store.getFile('p'.repeat(48))).not.toBeNull();
   });
 
-  it('hromadný zápis splnění: jedno volání, jedna vratná změna, jeden widget', async () => {
+  it('hromadný zápis splnění: jedno volání, jedna vratná změna', async () => {
     const store = new MemoryStore();
     const { call } = await connect(store);
     await call('import_plan_weeks', { name: 'Plán', weeks: [week(1), week(2)] });
@@ -603,7 +603,7 @@ describe('konektor Run Tracker', () => {
     expect(past.data.stats).toMatchObject({ units: 5, unitsDone: 1, unrecorded: 4 });
     expect(past.text).toContain('Nezapsáno: 4 proběhlých běhů');
     expect(past.data.daysToRace).toBe(Math.round((Date.parse(raceDate) - Date.parse(today)) / 86_400_000));
-    expect((await call('show_plan')).data.totals.unrecorded).toBeGreaterThanOrEqual(4);
+    expect((await call('show_week', { tab: 'plan' })).data.totals.unrecorded).toBeGreaterThanOrEqual(4);
 
     // budoucí týden nic nezapsaného nemá
     const future = await call('show_week', { date: '2027-03-01' });
@@ -659,27 +659,9 @@ describe('konektor Run Tracker', () => {
     expect(result.text).toContain('Odhad formy: VDOT');
     // za větru se odhad nedělá: pomalejší úseky by formu podhodnotily
     expect((await call('show_result', { workoutId: id, run: { distanceM: 9000, movingSec: 2900, reps }, conditions: ['wind'] })).data.estimate).toBeNull();
-    const fitness = (await call('show_plan')).data.fitness;
+    const fitness = (await call('show_week', { tab: 'plan' })).data.fitness;
     expect(fitness).toMatchObject({ vdot: result.data.estimate.vdot, distanceM: 10000, targetSec: 2310 });
     expect(fitness.predictedSec).toBeGreaterThan(2300);
-  });
-
-  it('druhá přehledová karta hned po první se nevykreslí, záložky v kartě ano', async () => {
-    const store = new MemoryStore();
-    const { call } = await connect(store);
-    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
-    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
-    // zařazení plánu kartu vykreslilo samo
-    expect((await call('show_plan', { fromCard: false })).data).toEqual({ view: 'none' });
-    const saved = (await store.load(await workspaceId(KEY_A)))!;
-    delete saved.ws.shownAt;
-    await store.save(await workspaceId(KEY_A), saved.ws, saved.etag);
-    expect((await call('show_plan', { fromCard: false })).data.view).toBe('plan');
-    const second = await call('show_week', { fromCard: false });
-    expect(second.data).toEqual({ view: 'none' });
-    expect(second.text).toContain('už zobrazená výše');
-    expect((await call('show_week', { fromCard: true })).data.view).toBe('week');
-    expect((await call('show_result', { workoutId: idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run') })).data.view).toBe('result');
   });
 
   it('starší karta nepřepíše novější zápis', async () => {
@@ -699,28 +681,6 @@ describe('konektor Run Tracker', () => {
     const fresh = (await call('show_week', { date: '2026-11-16' })).data.days[0].workouts[0].version;
     expect((await call('set_status', { workoutId: monday, status: 'completed', feel: 3, seen: fresh })).isError).toBe(false);
     expect((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text).toContain('pocit 3/5, bolest mírná');
-  });
-
-  it('karta, která čeká na změnu od modelu, ji ukáže sama a druhá karta nevznikne', async () => {
-    const { call } = await connect(new MemoryStore());
-    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
-    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
-    const plan = (await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text;
-    expect(plan).toContain('Nezapsané proběhlé jednotky: pondělí 16. 11. Easy Run (');
-    const card = await call('show_week', { watch: true });
-    expect(card.data).toMatchObject({ view: 'week', rev: null });
-    expect(card.data.at).toBeTruthy();
-    const model = await call('set_statuses', { workoutIds: [idOf(plan, '2026-11-16', 'Easy Run'), idOf(plan, '2026-11-17', 'Speed Session')], status: 'completed' });
-    expect(model.data).toEqual({ view: 'none' });
-    expect(model.text).toContain('ukazuje sama');
-    const poll = await call('show_week', { watch: true });
-    expect(poll.data.stats.unitsDone).toBe(2);
-    expect(poll.data.rev).not.toBe(card.data.rev);
-    expect(poll.data.banner).toMatchObject({ text: expect.stringContaining('Splněno: 2 jednotky'), revisionId: expect.any(String) });
-    // oznámení se ukáže jen jednou a bez hlídání model kartu vykreslí normálně
-    expect((await call('show_week', { watch: true })).data.banner).toBeUndefined();
-    vi.setSystemTime(new Date('2026-11-18T10:01:00Z'));
-    expect((await call('undo_change')).data.view).toBe('week');
   });
 
   it('poznámky trenéra se ukládají do profilu a get_plan je vrací', async () => {

@@ -1,5 +1,5 @@
 // Data pro vizualizace v konverzaci. Každá funkce jen čte prostor a vrací text pro model
-// a strukturovaná data pro widget. Nic se tu neukládá; data běhu ze Stravy se jen přepočítají a vrátí.
+// a strukturovaná data pro appku. Nic se tu neukládá; data běhu ze Stravy se jen přepočítají a vrátí.
 import { z } from 'zod';
 import { addDays, diffDays, dowOf, isIsoDate, todayIso, weekStartOf } from '../domain/dates';
 import { plannedDistance, workoutDistance, workoutProfile } from '../domain/distance';
@@ -26,7 +26,6 @@ export const calcInput = z.object({
 export const garminInput = z.object({ workoutId: z.string().min(1).describe('Id běžecké jednotky z get_plan.') });
 export const resultViewInput = z.object({
   workoutId: z.string().min(1).describe('Id naplánované jednotky z get_plan, se kterou se běh porovná.'),
-  fromCard: z.boolean().optional().describe('Jen pro kartu samotnou; nevyplňuj.'),
   run: z.object({
     date: isoDate.optional(),
     distanceM: z.number().positive().max(300_000),
@@ -35,7 +34,7 @@ export const resultViewInput = z.object({
     elevGainM: z.number().min(0).max(20_000).optional(),
     laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600) })).max(80).optional().describe('Bez tepu, nejvýš 30.'),
     reps: z.array(z.object({ distanceM: z.number().positive().max(50_000), durationSec: z.number().positive().max(4 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(40).optional().describe('Jen rychlé pracovní úseky intervalů, spočítané z kol (bez rozklusu a pauz).'),
-  }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich karta nabídne jen zápis.'),
+  }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich vrátí jen plán jednotky.'),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti, které uživatel zmínil (cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore); zohlední se v hodnocení.'),
 });
 
@@ -57,11 +56,11 @@ function context(ws: Workspace, now: Date): Ctx | null {
 }
 const NO_PLAN = 'Uživatel nemá aktivní plán. Plán vznikne přes import_plan_weeks a activate_plan.';
 
-/** Bez plánu widget ukáže, jak začít, místo chybové hlášky. */
+/** Bez plánu appka ukáže, jak začít, místo chybové hlášky. */
 function emptyView(ws: Workspace): View {
   return {
     ok: true,
-    text: `${NO_PLAN} Widget uživateli ukazuje, jak začít; nabídni mu nahrání plánu.`,
+    text: `${NO_PLAN} Plán jde založit v appce RPM, nebo ho přepiš z dokumentu.`,
     data: { view: 'empty', staged: ws.staged ? { name: ws.staged.name, weeks: ws.staged.weeks.map((w) => w.index) } : null },
   };
 }
@@ -190,7 +189,7 @@ export function planView(ws: Workspace, now: Date = new Date()): View {
   const current = weeks.find((w) => w.isCurrent);
   return {
     ok: true,
-    text: `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''} Uživatel widget vidí; jen krátce okomentuj.`,
+    text: `Zobrazen přehled plánu „${c.planName}“: ${weeks.length} týdnů${range ? `, ${range.first} až ${range.last}` : ''}. Splněno ${unitsDone} z ${units} běhů, tj. ${Math.round(done)} z ${Math.round(total)} km podle plánu (ne naměřeno).${current?.sourceWeek != null ? ` Probíhá týden ${current.sourceWeek}.` : ''}`,
     data: { view: 'plan', planName: c.planName, today: c.today, finished: Boolean(range && range.last < c.today), first: range?.first ?? null, last: range?.last ?? null, raceDate: race, daysToRace: race ? diffDays(race, c.today) : null, weeks, totals: { plannedKm: Math.round(total), doneKm: Math.round(done), units, unitsDone, unrecorded: weeks.reduce((s, w) => s + w.unrecorded, 0) }, fitness: fitnessOf(ws) },
   };
 }
@@ -238,7 +237,7 @@ export function paceView(ws: Workspace, input: z.infer<typeof paceViewInput>, no
   if (!paces.length && !workout) return fail('Tempa nejsou zadaná. Ulož je přes set_profile (paceChart) nebo je pošli s importem plánu.');
   return {
     ok: true,
-    text: `Zobrazen pomocník temp: ${paces.map((p) => `${p.label} ${formatPace(p.fromSec)}–${formatPace(p.toSec)}/km`).join('; ') || 'tempa nejsou zadaná'}.${workout ? ` Rozepsaná jednotka: ${workout.title} ${workout.date}.` : ''} Uživatel widget vidí; neopakuj tabulku.`,
+    text: `Zobrazen pomocník temp: ${paces.map((p) => `${p.label} ${formatPace(p.fromSec)}–${formatPace(p.toSec)}/km`).join('; ') || 'tempa nejsou zadaná'}.${workout ? ` Rozepsaná jednotka: ${workout.title} ${workout.date}.` : ''}`,
     data: { view: 'paces', paces, workout },
   };
 }
@@ -331,7 +330,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
   if (!run) {
     return {
       ok: true,
-      text: `Zobrazen zápis doběhnuté jednotky ${w.workout.title} (${w.date}). Uživatel ve widgetu vybere stav, pocit a okolnosti a uloží je sám; když je řekne slovy, zapiš je přes set_status.`,
+      text: `Zobrazen zápis doběhnuté jednotky ${w.workout.title} (${w.date}). Když uživatel řekne stav, pocit nebo okolnosti, zapiš je přes set_status.`,
       data: { ...base, run: null, score: null, verdict: null },
     };
   }
@@ -354,7 +353,7 @@ export function resultView(ws: Workspace, input: z.infer<typeof resultViewInput>
     !steady && !reps.length ? 'Jednotka má rychlé úseky, proto se průměrné tempo celého běhu nehodnotí. Pošli rychlé úseky v run.reps a ohodnotí se jejich tempo.' : '',
     conditions.length ? `Okolnosti: ${conditions.map((x) => CONDITIONS[x]).join(', ')}.` : '',
     estimate ? `Odhad formy: VDOT ${String(estimate.vdot).replace('.', ',')} (${estimate.basis}), odpovídá ${formatKm(estimate.distanceM)} za ${formatTime(estimate.sec)}.` : '',
-    'Čísla běhu se jen vykreslila, Run Tracker je neuložil. Pocit a bolest uživatel doplní v kartě; když je řekne slovy, zapiš je přes set_status.',
+    'Čísla běhu se jen přepočítala, Run Tracker je neuložil. Pocit a bolest zapiš přes set_status, když je uživatel řekne.',
   ].filter(Boolean).join(' ');
   return {
     ok: true,

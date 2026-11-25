@@ -115,9 +115,9 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
 
 1. **Rozhodnutí** (sekce 7).
 2. ~~**Statický prototyp**~~ **Hotovo 25. 11.** nového vzhledu s ukázkovými daty: Týden, Plán (matice) a dnešní trénink po Hotovo, na 390 px ve světlém i tmavém režimu. Schválíš, nebo vrátíš.
-3. **Server:** zeštíhlit podle sekce 5 a upravit testy.
+3. ~~**Server:**~~ **Hotovo 25. 11.** zeštíhlit podle sekce 5 a upravit testy. Data a `show_week` jen pro appku (`?client=app`).
 4. ~~**Appka:**~~ **Hotovo 25. 11.** (shell.js a karta v rámu z appky pryč) přepsat na prototyp a volat API přímo, bez rámu a postMessage. Přidat profil jednotky a matici.
-5. **Mazání:** karta v chatu, stránka v claude.ai, ChatGPT.
+5. **Mazání:** ~~karta v chatu~~, ~~ChatGPT~~ (hotovo 25. 11.); zbývá stránka v claude.ai (smaže se po tvém souhlasu).
 6. **Název a instalace:**
    - manifest, ikona, úvodní stránka (appka první, Claude jako mozek), README;
    - v appce tlačítko Nainstalovat: na Androidu přes výzvu prohlížeče, na iPhonu jednořádkový návod „Sdílet → Přidat na plochu“.

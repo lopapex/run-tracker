@@ -21,7 +21,7 @@
   // ---------- API ----------
   var rid = 0;
   function call(name, args) {
-    return fetch('/mcp/' + key, {
+    return fetch('/mcp/' + key + '?client=app', {
       method: 'POST', cache: 'no-store',
       headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method: 'tools/call', params: { name: name, arguments: args || {} } })
@@ -42,13 +42,21 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function num(x) { return String(Math.round(x * 10) / 10).replace('.', ','); }
-  function kmOf(w) { return w.kmUnknown || !w.kmMax ? '' : (w.kmMin === w.kmMax ? '' : '~') + num(Math.round(w.kmMax * 2) / 2); }
+  // Km z plánu; když je spočítat nejde (úseky na čas bez temp), aspoň délka v minutách z profilu.
+  function kmOf(w) {
+    if (!w.kmUnknown && w.kmMax) return (w.kmMin === w.kmMax ? '' : '~') + num(Math.round(w.kmMax * 2) / 2);
+    var sec = (w.profile || []).reduce(function (s, p) { return s + p[1]; }, 0);
+    return sec ? Math.round(sec / 60) + '<small> min</small>' : '';
+  }
   function pace(s) { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   function dm(iso) { var d = iso.split('-'); return +d[2] + '. ' + +d[1] + '.'; }
   function addDays(iso, n) { var d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function todayIso() { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
   function nextMonday() { var t = todayIso(), dow = (new Date(t + 'T12:00:00Z').getUTCDay() + 6) % 7; return addDays(t, 7 - dow); }
   function lvlOfType(t) { return TYPE_LVL[t] == null ? 1 : TYPE_LVL[t]; }
+
+  // Nový chat s Claudem s připravenou větou; Claude pracuje přes konektor nad stejnými daty.
+  function toClaude(q) { window.open('https://claude.ai/new?q=' + encodeURIComponent(q), '_blank', 'noopener'); }
 
   // ---------- Hláška s Vrátit ----------
   var toastTimer;
@@ -67,9 +75,9 @@
   // ---------- Načtení ----------
   function load(tab, args) {
     S.tab = tab;
-    var p = tab === 'week' ? call('show_week', Object.assign({ fromCard: true }, args))
-      : tab === 'plan' ? call('show_week', { tab: 'plan', fromCard: true })
-      : call('show_week', { tab: 'paces', fromCard: true });
+    var p = tab === 'week' ? call('show_week', Object.assign({}, args))
+      : tab === 'plan' ? call('show_week', { tab: 'plan' })
+      : call('show_week', { tab: 'paces' });
     return p.then(function (d) { take(d); render(); }, fail);
   }
   function take(d) {
@@ -128,10 +136,12 @@
     } else if (w.status === 'completed' || w.status === 'partial') {
       h += '<div class="done-line"><span>' + (w.status === 'partial' ? 'Částečně' : 'Hotovo') + (w.feel ? ' · pocit ' + w.feel + '/5' : '') + '</span><button type="button" data-do="unset" data-id="' + w.id + '">Zrušit zápis</button></div>';
       if (S.feelFor === w.id || !w.feel) h += feel(w);
+      h += '<div class="acts sm"><button type="button" class="btn ext" data-do="eval" data-id="' + w.id + '">Zhodnotit podle Stravy</button></div>';
     } else if (!day.isPast && !day.isToday) {
-      h += '<div class="acts"><button type="button" class="btn" data-do="menu" data-id="' + w.id + '">Přesunout nebo vynechat</button></div>';
+      h += '<div class="acts sm"><button type="button" class="btn" data-do="menu" data-id="' + w.id + '">Přesunout nebo vynechat</button></div>';
     } else {
-      h += '<div class="acts"><button type="button" class="btn go' + (day.isToday ? ' accent' : '') + '" data-do="done" data-id="' + w.id + '">Hotovo</button><button type="button" class="btn more" aria-label="Další možnosti" data-do="menu" data-id="' + w.id + '">···</button></div>';
+      // Hotovo zapíše hned; Zhodnotit pošle běh Claudovi, ten ho porovná se Stravou a zapíše sám.
+      h += '<div class="acts sm"><button type="button" class="btn go' + (day.isToday ? ' accent' : '') + '" data-do="done" data-id="' + w.id + '">Hotovo</button><button type="button" class="btn ext" data-do="eval" data-id="' + w.id + '">Zhodnotit</button><button type="button" class="btn more" aria-label="Další možnosti" data-do="menu" data-id="' + w.id + '">···</button></div>';
     }
     return h + '</div>';
   }
@@ -148,7 +158,7 @@
     var m = d.label.match(/týden (\d+) z (\d+)/);
     var h = '<header class="hd"><h1>' + (m ? 'Týden ' + m[1] + '<span class="n"> z ' + m[2] + '</span>' : esc(d.label.charAt(0).toUpperCase() + d.label.slice(1))) + '</h1>';
     h += '<div class="nav"><button type="button" data-do="prev" aria-label="Předchozí týden"' + (d.hasPrev ? '' : ' disabled') + '>‹</button><button type="button" data-do="next" aria-label="Další týden"' + (d.hasNext ? '' : ' disabled') + '>›</button></div></header>';
-    h += '<p class="meta"><b>' + num(st.doneKm) + '</b> z ' + Math.round(st.plannedKmMax) + ' km' + (d.isCurrent && d.daysToRace != null ? '<span>závod za ' + d.daysToRace + ' dní</span>' : d.phase ? '<span>' + esc(d.phase.toLowerCase()) + '</span>' : '') + '</p>';
+    h += '<p class="meta"><b>' + num(st.doneKm) + '</b> z ' + Math.round(st.plannedKmMax) + ' km' + (d.isCurrent && d.daysToRace != null ? '<span>závod za ' + d.daysToRace + ' dní</span>' : d.phase ? '<span>' + esc(d.phase.toLowerCase()) + '</span>' : '') + '<span class="prog"><i data-wpct="' + Math.min(100, Math.round(st.doneKm / Math.max(1, st.plannedKmMax) * 100)) + '"></i></span></p>';
     h += '<ul class="days">';
     var auto = S.open == null ? autoOpen(d) : S.open;
     d.days.forEach(function (day) {
@@ -334,9 +344,10 @@
     view.querySelectorAll('[data-wpct]').forEach(function (el) { el.style.width = el.getAttribute('data-wpct') + '%'; });
         document.querySelectorAll('.bar [data-tab]').forEach(function (b) {
       var on = b.getAttribute('data-tab') === S.tab;
-      b.className = on ? 'on' : '';
-      b.setAttribute('aria-selected', on);
-      if (b.getAttribute('data-tab') === 'plan') b.textContent = 'Plán' + (S.week && S.week.staged ? ' •' : '');
+      b.classList.toggle('on', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      // Tečka u Plánu: čeká rozpracovaný plán ke schválení.
+      if (b.getAttribute('data-tab') === 'plan') b.classList.toggle('dot', !!(S.week && S.week.staged));
     });
   }
 
@@ -363,6 +374,7 @@
       case 'unset': act('set_status', { workoutId: id, status: 'scheduled' }, 'Zápis zrušen', true); break;
       case 'restore': act('restore_workout', { workoutId: id, reason: '' }, 'Obnoveno', true); break;
       case 'menu': menu(id); break;
+      case 'eval': var ew = findW(id)[0]; toClaude('Zhodnoť můj běh „' + ew.title + '“ z ' + dm(ew.date) + ' podle Stravy (run connector, show_result) a zapiš ho.'); break;
       case 'close': closeSheet(); break;
       case 'partial': closeSheet(); S.open = id; S.feelFor = id; act('set_status', { workoutId: id, status: 'partial' }, 'Zapsáno jako částečně', true); break;
       case 'skip': closeSheet(); act('skip_workout', { workoutId: id, reason: '' }, 'Vynecháno', true); break;
@@ -373,11 +385,11 @@
       case 'week': S.open = null; window.scrollTo(0, 0); load('week', { date: v }); break;
       case 'new': S.sub = 'new'; window.scrollTo(0, 0); render(); break;
       case 'cancel': S.sub = null; S.fromForm = false; render(); break;
-      case 'staged': call('show_week', { tab: 'staged', fromCard: true }).then(function (d) { S.fromForm = false; take(d); render(); }, fail); break;
+      case 'staged': call('show_week', { tab: 'staged' }).then(function (d) { S.fromForm = false; take(d); render(); }, fail); break;
       case 'km': S.form.km = Math.min(200, Math.max(10, S.form.km + +v)); render(); break;
       case 'rest': var r = S.form.rest, i = r.indexOf(+v); if (i >= 0) r.splice(i, 1); else r.push(+v); render(); break;
       case 'draft': draft(); break;
-      case 'doc': window.open('https://claude.ai/new?q=' + encodeURIComponent('Přikládám svůj tréninkový plán. Přepiš ho přes run connector do rozpracovaného importu (import_plan_weeks) a do kalendáře ho nezařazuj; schválím ho v appce RPM.'), '_blank', 'noopener'); break;
+      case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes run connector do rozpracovaného importu (import_plan_weeks) a do kalendáře ho nezařazuj; schválím ho v appce RPM.'); break;
       case 'activate':
         var a = S.staged.activate || { mode: S.amode || 'start', date: S.adate || nextMonday() };
         act('activate_plan', a, 'Plán je v kalendáři').then(function (d) { if (d && d.view === 'plan') { S.sub = null; S.staged = null; S.fromForm = false; S.form = null; if (S.week) S.week.staged = null; render(); } });
@@ -400,26 +412,35 @@
     else S.form[f] = e.target.value;
   });
   document.addEventListener('input', function (e) { if (e.target.getAttribute('data-f') === 'ctime') S.calcForm.time = e.target.value; });
-  $('#claude').addEventListener('click', function () { window.open('https://claude.ai/new?q=' + encodeURIComponent('Podívej se přes run connector na můj aktuální týden.'), '_blank', 'noopener'); });
+  $('#claude').addEventListener('click', function () { toClaude('Podívej se přes run connector na můj aktuální týden.'); });
 
   // Týden gestem do stran: dny jdou za prstem, bez dalšího týdne kladou odpor, po puštění dojedou ven
   // (nebo se vrátí). Další týden se načítá už během odjezdu, takže nebliká prázdno.
   var EASE = 'cubic-bezier(.2, .8, .2, 1)', OUT_MS = 260, BACK_MS = 200, busy = false, g = null;
-  function slide(el, x, ms) {
-    el.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE : 'none';
+  function slide(el, x, ms, opacity) {
+    el.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE + ', opacity ' + ms + 'ms ' + EASE : 'none';
     el.style.transform = x ? 'translateX(' + x + 'px)' : '';
+    el.style.opacity = opacity == null ? '' : opacity;
+  }
+  // Nový týden přijede z druhé strany kousek a dobarví se, takže výměna neblikne.
+  function slideIn(dir) {
+    var el = view.querySelector('.days');
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    slide(el, dir * 56, 0, 0);
+    void el.offsetWidth;
+    slide(el, 0, 240, 1);
   }
   function hasWeek(dir) { var w = S.week; return !!(w && w.view === 'week' && (dir > 0 ? w.hasNext : w.hasPrev)); }
   function goWeek(dir) {
     var el = view.querySelector('.days');
     if (busy || !hasWeek(dir)) { if (el) slide(el, 0, BACK_MS); return; }
     busy = true; S.open = null; S.feelFor = null;
-    var data = call('show_week', { fromCard: true, date: addDays(S.week.weekStart, dir * 7) });
+    var data = call('show_week', { date: addDays(S.week.weekStart, dir * 7) });
     var out = new Promise(function (ok) {
       if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return ok();
-      slide(el, -dir * el.clientWidth, OUT_MS); setTimeout(ok, OUT_MS);
+      slide(el, -dir * el.clientWidth, OUT_MS, 0); setTimeout(ok, OUT_MS);
     });
-    Promise.all([data, out]).then(function (r) { take(r[0]); render(); }, fail).then(function () { busy = false; });
+    Promise.all([data, out]).then(function (r) { take(r[0]); render(); slideIn(dir); }, fail).then(function () { busy = false; });
   }
   view.addEventListener('touchstart', function (e) {
     g = null;
@@ -464,13 +485,13 @@
   function start() {
     view.innerHTML = '<p class="blank">Načítám…</p>';
     // Tempa jsou malá a rozpis dne je potřebuje pro volné běhy bez rozpisu.
-    Promise.all([call('show_week', { fromCard: true }), call('show_week', { tab: 'paces', fromCard: true }).catch(function () { return null; })]).then(function (r) {
+    Promise.all([call('show_week', {}), call('show_week', { tab: 'paces' }).catch(function () { return null; })]).then(function (r) {
       if (r[1]) take(r[1]);
       take(r[0]);
       // Poslední týden a tempa pro start bez signálu (třeba na trati).
       try { localStorage.setItem(CACHE_KEY, JSON.stringify([r[0], r[1]])); } catch (e) { /* plné úložiště */ }
       if (firstTab === 'new') { S.tab = 'plan'; S.sub = 'new'; } else if (firstTab && firstTab !== 'week') return load(firstTab);
-      if (r[0].view !== 'week') { S.tab = 'plan'; S.sub = r[0].staged ? null : 'new'; if (r[0].staged) return call('show_week', { tab: 'staged', fromCard: true }).then(take); }
+      if (r[0].view !== 'week') { S.tab = 'plan'; S.sub = r[0].staged ? null : 'new'; if (r[0].staged) return call('show_week', { tab: 'staged' }).then(take); }
     }).then(render, function (err) {
       var cached = null;
       try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { /* nic */ }

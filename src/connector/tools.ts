@@ -11,7 +11,7 @@ import { lintPaceChart, lintWeek } from '../domain/lint';
 import type { Dow, PaceChart, PlanActivation, PlanTemplate, ScheduledWorkout, TemplateWeek } from '../domain/types';
 import { checkinVersion, CONDITIONS, fatigueOf, MAX_REVISIONS, type Condition, type ConnectorRevision, type WorkoutNote, type Workspace } from './workspace';
 
-/** `banner` je krátké shrnutí pro widget, když je text pro model delší. */
+/** `banner` je krátké shrnutí pro appku, když je text pro model delší. */
 export type Outcome = { ok: true; text: string; changed: boolean; banner?: string } | { ok: false; text: string };
 const fail = (text: string): Outcome => ({ ok: false, text });
 const done = (text: string, changed = true): Outcome => ({ ok: true, text, changed });
@@ -86,11 +86,11 @@ export const statusInput = z.object({
   pain: z.enum(['none', 'mild', 'significant']).optional(),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti běhu, které uživatel zmínil: cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore. Prázdné pole okolnosti smaže.'),
   note: z.string().max(300).optional(),
-  estimateVdot: z.number().min(20).max(90).optional().describe('Jen hodnota estimate.vdot z karty show_result; jinak neposílej.'),
-  seen: z.string().max(80).optional().describe('Jen pro kartu; nevyplňuj.'),
+  estimateVdot: z.number().min(20).max(90).optional().describe('Jen hodnota estimate.vdot z výsledku show_result; jinak neposílej.'),
+  seen: z.string().max(80).optional().describe('Jen pro appku; nevyplňuj.'),
 });
 
-export const STALE_CHECKIN = 'Zápis k jednotce se mezitím změnil jinde. Nic se nepřepsalo; karta ukazuje aktuální stav.';
+export const STALE_CHECKIN = 'Zápis k jednotce se mezitím změnil jinde. Nic se nepřepsalo; appka ukazuje aktuální stav.';
 
 // ---------- Pomocné ----------
 
@@ -268,8 +268,8 @@ export function stageWeeks(ws: Workspace, input: z.infer<typeof stageInput>, now
     ...input.weeks.map((w) => weekCheck({ ...w, days: byIndex.get(w.index)!.days }, chart)),
     warnings.length ? `Varování (${warnings.length}; nejsou to chyby, které by import blokovaly – ukaž je uživateli a oprav jen to, co potvrdí podle dokumentu):` : 'Kontrola jednotek: bez varování.',
     ...warnings.slice(0, 15).map((x) => '- ' + x),
-    warnings.length > 15 ? `- … a dalších ${warnings.length - 15}, celé jsou v kartě kontroly.` : '',
-    'Uživatel vidí kartu kontroly importu. Až budou všechny týdny nahrané, zeptej se na začátek nebo datum závodu a zavolej activate_plan; varování aktivaci nebrání.',
+    warnings.length > 15 ? `- … a dalších ${warnings.length - 15}, celé jsou v appce.` : '',
+    'Uživatel rozpracovaný plán vidí v appce (Plán) a může ho tam zařadit. Až budou všechny týdny nahrané, řekni mu to; když chce zařazení po tobě, zeptej se na začátek nebo datum závodu a zavolej activate_plan. Varování aktivaci nebrání.',
   ].filter(Boolean).join('\n'), banner: `Nahráno: ${shown.length > 1 ? `týdny ${shown[0]}–${shown[shown.length - 1]}` : `týden ${shown[0]}`}.` };
 }
 
@@ -445,7 +445,7 @@ export function draftPlan(ws: Workspace, input: z.infer<typeof draftInput>, now:
     restDows: input.restDows as Dow[], longRunDow: input.longRunDow as Dow, raceDate: input.raceDate, raceDistanceM: input.raceDistanceM, assumptions: [],
   });
   ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now, activate: input.raceDate ? { mode: 'race', date: input.raceDate } : { mode: 'start', date: startDate } };
-  // Kostra z generátoru se ukáže ve stejné kartě jako import, i s případnými varováními.
+  // Kostra z generátoru se v appce ukáže stejně jako import, i s případnými varováními.
   const chart = resolvePaceChart(ws.profile);
   const volumes = generated.map((w) => `T${w.index} ${formatDistanceRange(plannedDistance(w.days.map((d) => d.workout), chart))} (${w.phase})`);
   return done([

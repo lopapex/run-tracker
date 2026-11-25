@@ -48,18 +48,12 @@ export interface Workspace {
   revisions: ConnectorRevision[];
   notes: WorkoutNote[];
   staged?: StagedImport;
-  /** Kdy model naposledy vykreslil přehledovou kartu; druhá hned po ní se nevykreslí. */
-  shownAt?: string;
-  /** Karta čeká na změnu od modelu (uživatel z ní poslal zprávu); model ji pak nevykresluje znovu. */
-  watchAt?: string;
-  /** Změna, kterou model udělal pro čekající kartu: karta si ji vyzvedne a ukáže s tlačítkem Vrátit. */
-  pendingBanner?: { text: string; revisionId: string | null; at: string };
 }
 
 export const MAX_REVISIONS = 200;
 
-/** Verze zápisu, kterou karta viděla: stav a čas posledního zápisu. Karta ji posílá s uložením,
- *  aby starší karta téhož běhu nepřepsala novější zápis. */
+/** Verze zápisu, kterou appka viděla: stav a čas posledního zápisu. Appka ji posílá s uložením,
+ *  aby starší obrazovka téhož běhu nepřepsala novější zápis. */
 export const checkinVersion = (status: string, note?: { at: string } | null) => `${status}|${note?.at ?? ''}`;
 
 /** Signál únavy z posledních zápisů: dva ze tří posledních běhů těžké nebo s bolestí, nebo výrazná bolest v posledním týdnu.

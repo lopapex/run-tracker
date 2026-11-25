@@ -19,12 +19,10 @@
 <body>
 <main id="view" aria-live="polite"></main>
 <nav class="bar" aria-label="Zobrazení">
-  <div class="seg" role="tablist">
-    <button type="button" role="tab" data-tab="week">Týden</button>
-    <button type="button" role="tab" data-tab="plan">Plán</button>
-    <button type="button" role="tab" data-tab="paces">Tempa</button>
-  </div>
-  <button type="button" class="tb ext" id="claude" aria-label="Zeptat se Clauda">Claude</button>
+  <button type="button" class="tab" data-tab="week"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13"/></svg>Týden</button>
+  <button type="button" class="tab" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Plán</button>
+  <button type="button" class="tab" data-tab="paces"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/></svg>Tempa</button>
+  <button type="button" class="tab" id="claude" aria-label="Zeptat se Clauda (otevře nový chat)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H10l-5 4z"/></svg>Claude ↗</button>
 </nav>
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
