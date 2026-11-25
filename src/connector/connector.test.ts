@@ -646,6 +646,14 @@ describe('konektor RPM', () => {
     const off = await call('import_plan_weeks', { name: 'Závod', weeks: [short] });
     expect(off.text).toContain('NESEDÍ');
     expect(off.data.weeks[0].totals).toBe('off');
+    // Stav kontroly vidí model i v další konverzaci.
+    expect((await call('get_plan', {})).text).toContain('Součet nesedí s dokumentem v týdnech 1');
+    // Po zařazení appka u jednotky ukáže, co se při přepisu opravilo.
+    await call('import_plan_weeks', { name: 'Závod', weeks: [last], restart: true });
+    await call('activate_plan', { mode: 'race', date: '2026-12-06' });
+    const raceWeek = await call('show_week', { date: '2026-12-06' });
+    const raceCard = raceWeek.data.days[6].workouts[0];
+    expect(raceCard).toMatchObject({ kmMax: 21.1, fixes: [expect.stringContaining('doplněno 21,1 km')] });
   });
 
   it('cílový čas přepočítá tempa podle tabulky z plánu jen v jejím rozsahu', async () => {

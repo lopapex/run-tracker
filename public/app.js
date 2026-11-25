@@ -28,7 +28,7 @@
   };
 
   // Odkaz do aplikace nese adresu v kotvě: na server se nepošle a aplikace ji uloží pro sebe.
-  const linkApp = (key) => { $('app-link').href = key ? `/app/#k=${key}` : '/app/'; };
+  const linkApp = (key) => { for (const id of ['app-link', 'app-link-2']) $(id).href = key ? `/app/#k=${key}` : '/app/'; };
   linkApp(read());
 
   // Stáhnout = instalace PWA: kde ji prohlížeč nabízí (Android, Chrome a Edge na počítači), tlačítko ji spustí;

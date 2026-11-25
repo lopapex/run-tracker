@@ -191,3 +191,22 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
    - Prompt „podle Stravy“ by se zeptal jen na cíl a datum.
 6. **Skill „RPM import“** s příklady přepisu buněk (rovinky, progresivní běh, opakování s více úseky), když bude kvalita importu u jiných PDF slabší. Načítá se jen při importu, takže nezvyšuje cenu běžné konverzace.
 7. **Snímky na úvodní stránce** jsou zastaralé (formulář a Tempa s 400 m); přefotit po schválení.
+
+## Stav návrhů po druhém kole
+
+- **1. Uspořádání:** zůstává konektor + appka.
+- **2. Sdílení PDF do appky:** neuděláno. Není ověřené, že Claude z výsledku nástroje přečte PDF; tlačítko, které by nemuselo fungovat, do appky nepatří. Vrátit se k tomu, až to půjde ověřit.
+- **3. Druhý průchod přepisu:** částečně. Místo nového nástroje `get_plan` u rozpracovaného plánu vypíše týdny, kde nesedí součet, a týdny s varováním. Model je tak vidí při každém dalším kroku.
+- **4. Varování i po zařazení:** hotové. Den ukáže „Při přepisu opraveno: …“ a varování, dokud se jednotka nezmění.
+- **5. Strava:** hotové. `draft_plan` bere `longestRunKm` a dlouhý běh od něj roste nejvýš o 1,5 km za týden.
+- **6. Skill:** neuděláno. U referenčního PDF stačí instrukce a automatické opravy; skill až při slabším importu jiných plánů.
+- **7. Snímky:** přefocené (390×844 @2x přes DevTools protokol, demo týden 10).
+
+## Vzhled (druhé kolo)
+
+- Typ tréninku má ikonu (bota, trasa, plamen, blesk, rovinky, cílová vlajka, měsíc pro volno) a barvu zóny jako z hodinek: modrá volně, tmavě modrá dlouhý, žlutá tempo, červená rychlost, oranžová závod.
+- Týden: uběhnuté km jako trasa s běžcem a cílovou vlajkou, odpočet do závodu jako startovní číslo, nadpisy tučnou kurzívou.
+- Plán: závod jako šachovnice cílové vlajky. Tempa: všechna pásma na jedné ose od pomalého po rychlé.
+- Konec plánu s medailí, prázdné obrazovky s trasou ze startu do cíle, odškrtnutí s krátkou animací.
+- Co jde přes konektor Strava, má barvu a značku Stravy. Na webu je u toho poznámka o ochranné známce.
+- Web: kroky pro člověka bez technických znalostí (adresa, konektor v Claude klik po kliku, volitelná Strava, poslat PDF, kontrola, běhání), časté otázky, stejné barvy jako appka.

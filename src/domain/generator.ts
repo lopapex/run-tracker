@@ -127,7 +127,10 @@ export function generateWeeks(p: DraftParams): TemplateWeek[] {
     const raceDow = isRaceWeek ? dowOf(p.raceDate!) : null;
     const recovery = p.intent !== 'maintain' && (i + 1) % 4 === 0;
     const n = runDays.length;
-    const longKm = Math.max(5, Math.min(32, volume * (n <= 3 ? 0.4 : 0.3)));
+    const share = Math.max(5, Math.min(32, volume * (n <= 3 ? 0.4 : 0.3)));
+    // Dlouhý běh navazuje na to, co běžec opravdu běhá: nejvýš o 1,5 km za týden nad jeho nejdelší běh.
+    // Zbytek objemu připadne volným běhům, týdenní objem se nemění.
+    const longKm = p.longestRunKm ? Math.max(5, Math.min(share, p.longestRunKm + 1.5 * (i + 1))) : share;
     const qualityKm = qualityDow != null ? Math.max(6, volume * 0.2) : 0;
     const easyCount = n - 1 - (qualityDow != null ? 1 : 0);
     const easyKm = easyCount > 0 ? Math.max(4, (volume - longKm - qualityKm) / easyCount) : 0;

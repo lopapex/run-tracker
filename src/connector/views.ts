@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { addDays, diffDays, dowOf, isIsoDate, todayIso, weekStartOf } from '../domain/dates';
 import { workoutDistance, workoutProfile } from '../domain/distance';
-import { checkWeekTotal, lintPaceChart, lintWeek } from '../domain/lint';
+import { checkWeekTotal, lintPaceChart, lintWeek, lintWorkout } from '../domain/lint';
 import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, workoutSummary } from '../domain/format';
 import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
@@ -69,12 +69,21 @@ function paceRows(chart: PaceChart) {
   return Object.entries(chart).map(([key, range]) => ({ key, label: INTENSITY_LABEL[key as IntensityRef], fromSec: Math.min(range.fromSec, range.toSec), toSec: Math.max(range.fromSec, range.toSec) }));
 }
 
+/** Opravy z přepisu dokumentu u jednotky, jak je zařazená (jen dokud ji nikdo neupravil). */
+function fixesOf(ws: Workspace, w: ScheduledWorkout): string[] {
+  if (w.sourceWeek == null || w.sourceDow == null || JSON.stringify(w.workout) !== JSON.stringify(w.original)) return [];
+  const activation = ws.activations.find((a) => a.id === w.activationId);
+  const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
+  return template?.weeks.find((x) => x.index === w.sourceWeek)?.days.find((d) => d.dow === w.sourceDow)?.source?.issues ?? [];
+}
+
 function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
   const d = workoutDistance(w.workout, chart);
   const note = ws.notes.find((n) => n.workoutId === w.id);
   return {
     id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, load: w.workout.load ?? null, status: w.status,
     summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null, raw: w.workout.rawInstruction ?? null,
+    fixes: fixesOf(ws, w), issues: lintWorkout(w.workout, chart),
     kmMin: km(d.minM), kmMax: km(d.maxM), kmUnknown: d.unknown > 0, moved: w.date !== w.originDate, skipReason: w.skipReason ?? null,
     feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null, conditions: (note?.conditions ?? []).map((x) => CONDITIONS[x]),
     version: checkinVersion(w.status, note), profile: workoutProfile(w.workout, chart),

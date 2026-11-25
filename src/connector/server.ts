@@ -30,7 +30,7 @@ Nový plán (žádný není, předchozí skončil, nebo o něj uživatel požád
 2. Ze Stravy, je-li připojená, zjisti posledních 8–12 týdnů: týdenní objem, běhy za týden, nejdelší běh, nejlepší výkony a závody.
 3. Doptej se jen na to, co chybí: cíl, datum a délka závodu, kolik dní týdně a které, omezení.
 4. Tempa spočítej calculate_paces z nejlepšího čerstvého výkonu a se souhlasem je ulož.
-5. Kostru postav draft_plan (výchozí objem = průměr posledních 4 týdnů) a uprav ji přes import_plan_weeks.
+5. Kostru postav draft_plan (weeklyKm = průměr posledních 4 týdnů, longestRunKm = nejdelší běh posledních 4–6 týdnů) a uprav ji přes import_plan_weeks.
 6. Ukaž souhrn: fáze, objem po týdnech a klíčové tréninky. Po souhlasu zavolej activate_plan.
 
 Appka RPM:

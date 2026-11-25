@@ -192,6 +192,8 @@ export interface DraftParams {
   longRunDow: Dow;
   raceDate?: IsoDate;
   raceDistanceM?: number;
+  /** Nejdelší běh posledních týdnů (km): dlouhý běh od něj roste postupně, ne skokem na podíl z objemu. */
+  longestRunKm?: number;
   /** Co generátor nevěděl a odkud vzal hodnoty. */
   assumptions: string[];
 }

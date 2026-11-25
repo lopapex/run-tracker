@@ -45,6 +45,7 @@ export const draftInput = z.object({
   intent: z.enum(['maintain', 'improve', 'race']).describe('maintain = udržování, improve = postupné zlepšení, race = příprava na závod'),
   weeks: z.number().int().min(1).max(30).optional().describe('Počet týdnů; u závodu se dopočítá z data závodu.'),
   weeklyKm: z.number().min(5).max(250).describe('Výchozí týdenní objem v km, nejlíp průměr posledních 4 týdnů ze Stravy.'),
+  longestRunKm: z.number().min(3).max(60).optional().describe('Nejdelší běh posledních 4–6 týdnů ze Stravy; dlouhý běh od něj poroste postupně.'),
   runsPerWeek: z.number().int().min(2).max(7),
   restDows: z.array(dow).max(5).default([]).describe('Dny bez běhu (0 = pondělí … 6 = neděle).'),
   longRunDow: dow.default(6),
@@ -178,7 +179,13 @@ export function describePlan(ws: Workspace, input: z.infer<typeof planRangeInput
   const history = planSummaries(ws).filter((s) => !s.active || s.last < today);
   if (history.length) lines.push('Historie plánů:', ...history.slice(-5).map(summaryLine));
 
-  if (ws.staged) lines.push(`Rozpracovaný import „${ws.staged.name}“: nahrané týdny ${ws.staged.weeks.map((w) => w.index).join(', ')}. Ještě není zařazený do kalendáře.`);
+  if (ws.staged) {
+    // Stav kontroly importu i v další konverzaci: model týdny se špatným součtem dořeší, i když import dělal jindy.
+    const chart = { ...ws.profile.paceChart, ...ws.staged.paceChart };
+    const off = ws.staged.weeks.filter((w) => checkWeekTotal(w, chart).status === 'off').map((w) => w.index);
+    const flagged = ws.staged.weeks.filter((w) => lintWeek(w, chart).length).map((w) => w.index);
+    lines.push(`Rozpracovaný import „${ws.staged.name}“: nahrané týdny ${ws.staged.weeks.map((w) => w.index).join(', ')}. Ještě není zařazený do kalendáře.${off.length ? ` Součet nesedí s dokumentem v týdnech ${off.join(', ')}: oprav je podle dokumentu.` : ''}${flagged.length ? ` Varování v týdnech ${flagged.join(', ')}.` : ''}`);
+  }
 
   const activation = activeOf(ws);
   if (!activation) {
@@ -456,7 +463,7 @@ export function draftPlan(ws: Workspace, input: z.infer<typeof draftInput>, now:
   const weeks = input.raceDate ? weeksUntil(startDate, input.raceDate) : input.weeks ?? 8;
   if (weeks > 30) return fail(`Plán by měl ${weeks} týdnů; víc než 30 neumím. Zvol pozdější začátek.`);
   const generated = generateWeeks({
-    intent: input.intent, weeks, startDate, weeklyKm: input.weeklyKm, runsPerWeek: input.runsPerWeek,
+    intent: input.intent, weeks, startDate, weeklyKm: input.weeklyKm, longestRunKm: input.longestRunKm, runsPerWeek: input.runsPerWeek,
     restDows: input.restDows as Dow[], longRunDow: input.longRunDow as Dow, raceDate: input.raceDate, raceDistanceM: input.raceDistanceM, assumptions: [],
   });
   ws.staged = { name: input.name, units: 'km', weeks: generated, updatedAt: now, activate: input.raceDate ? { mode: 'race', date: input.raceDate } : { mode: 'start', date: startDate } };
