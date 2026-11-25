@@ -1,11 +1,13 @@
+/* Stejné barvy jako appka: papír, inkoust, oranžová startovní čísla; Strava jen u Stravy. */
 :root {
-  --bg: #f6f5f1;
+  --bg: #f3f2ed;
   --surface: #ffffff;
-  --text: #17201a;
-  --muted: #56615a;
-  --line: #d9dcd4;
-  --accent: #1f7a45;
+  --text: #17191b;
+  --muted: #5b5f63;
+  --line: #dddbd3;
+  --accent: #d2491a;
   --accent-ink: #ffffff;
+  --strava: #fc4c02;
   --warn-bg: #fff4d6;
   --warn-text: #5c4300;
   color-scheme: light dark;
@@ -13,13 +15,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101411;
-    --surface: #181d19;
-    --text: #eef1ec;
-    --muted: #a3ada5;
-    --line: #2c342e;
-    --accent: #4fbf7c;
-    --accent-ink: #06130b;
+    --bg: #111213;
+    --surface: #1a1b1d;
+    --text: #e9e7e1;
+    --muted: #a2a5a8;
+    --line: #2d2f31;
+    --accent: #ff6a33;
+    --accent-ink: #111213;
     --warn-bg: #33290a;
     --warn-text: #f3dc9a;
   }
@@ -44,13 +46,15 @@ header img { display: block; border-radius: 12px; }
 
 h1 {
   margin: 1.25rem 0 0.75rem;
-  font-size: clamp(1.75rem, 6vw, 2.5rem);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.9rem, 7vw, 2.75rem);
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
   text-wrap: balance;
 }
 
-h2 { margin: 0 0 0.35rem; font-size: 1.15rem; line-height: 1.3; }
+h2 { margin: 0 0 0.35rem; font-size: 1.2rem; font-weight: 800; font-style: italic; letter-spacing: -0.02em; line-height: 1.3; }
 
 p { margin: 0 0 0.75rem; }
 .lead { color: var(--muted); font-size: 1.1rem; }
@@ -87,7 +91,8 @@ a { color: var(--accent); text-underline-offset: 0.15em; }
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-ink);
-  font-weight: 700;
+  font-weight: 800;
+  font-style: italic;
   font-size: 0.95rem;
   line-height: 1.75rem;
   text-align: center;
@@ -201,3 +206,44 @@ footer {
 .shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 14px; }
 section + section { margin-top: 2.25rem; }
 footer a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* Úvod */
+.app-cta { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+a.cta.ghost { background: none; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+.small { color: var(--muted); font-size: 0.9rem; }
+.hero .small { margin-top: 0.6rem; }
+
+/* Co budeš potřebovat */
+.need { margin-top: 2rem; padding: 1.1rem 1.2rem; border-radius: 14px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
+.need ul { list-style: none; padding: 0; }
+.need li { position: relative; padding-left: 1.5rem; color: var(--muted); }
+.need li::before { content: ""; position: absolute; left: 0.1rem; top: 0.45em; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--accent); }
+.need li.opt::before { background: none; box-shadow: inset 0 0 0 2px var(--strava); }
+.need b { color: var(--text); }
+
+/* Klikání krok za krokem */
+.clicks { margin: 0 0 0.75rem; padding-left: 1.3rem; color: var(--muted); }
+.clicks li { margin-bottom: 0.35rem; padding-left: 0.2rem; }
+.clicks li::marker { color: var(--text); font-weight: 700; }
+.steps b, .faq b { color: var(--text); }
+.tip { padding: 0.65rem 0.85rem; border-radius: 10px; background: var(--bg); font-size: 0.95rem; }
+/* Věta pro Clauda jako zpráva v chatu */
+.say { display: inline-block; margin: 0 0 0.9rem; padding: 0.55rem 0.9rem; border-radius: 16px 16px 4px 16px; background: var(--text); color: var(--bg) !important; font-weight: 500; }
+.install { margin: 0 0 0.75rem; padding-left: 1.2rem; color: var(--muted); }
+
+/* Strava: oranžová a jejich značka, jen tady */
+.steps > li.strava { border-color: color-mix(in srgb, var(--strava) 45%, var(--line)); }
+.steps > li.strava::before { background: var(--strava); color: #fff; }
+.strava h2 { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.strava h2 small { font-size: 0.8rem; font-weight: 500; font-style: normal; color: var(--muted); }
+.sv { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--strava); }
+.sv svg { width: 1rem; height: 1rem; fill: #fff; }
+
+/* Časté otázky */
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary { min-height: 3rem; display: flex; align-items: center; cursor: pointer; font-weight: 600; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; margin-left: auto; padding-left: 1rem; font-size: 1.3rem; color: var(--muted); }
+.faq details[open] summary::after { content: "−"; }
+.faq details p { color: var(--muted); }
+footer p { margin-bottom: 0.4rem; }

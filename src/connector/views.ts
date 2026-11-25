@@ -2,12 +2,12 @@
 // a strukturovaná data pro appku. Nic se tu neukládá; data běhu ze Stravy se jen přepočítají a vrátí.
 import { z } from 'zod';
 import { addDays, diffDays, dowOf, isIsoDate, todayIso, weekStartOf } from '../domain/dates';
-import { plannedDistance, workoutDistance, workoutProfile } from '../domain/distance';
-import { lintPaceChart, lintWeek } from '../domain/lint';
+import { workoutDistance, workoutProfile } from '../domain/distance';
+import { checkWeekTotal, lintPaceChart, lintWeek, lintWorkout } from '../domain/lint';
 import { blockLines, formatKm, formatPace, INTENSITY_LABEL, resolvePaceChart, workoutSummary } from '../domain/format';
 import { dayWorkouts, planRange } from '../domain/schedule';
 import type { Block, IntensityRef, PaceChart, PlanActivation, ScheduledWorkout, Segment, WorkoutSpec } from '../domain/types';
-import { planSummaries, resolveId } from './tools';
+import { goalOptions, planSummaries, resolveId } from './tools';
 import { describeStep, encodeWorkoutFit, workoutSteps } from './fit';
 import { predictTime, trainingPaces, vdotFromRace } from '../domain/vdot';
 import { checkinVersion, CONDITIONS, fatigueOf, type Condition, type Workspace } from './workspace';
@@ -69,12 +69,21 @@ function paceRows(chart: PaceChart) {
   return Object.entries(chart).map(([key, range]) => ({ key, label: INTENSITY_LABEL[key as IntensityRef], fromSec: Math.min(range.fromSec, range.toSec), toSec: Math.max(range.fromSec, range.toSec) }));
 }
 
+/** Opravy z přepisu dokumentu u jednotky, jak je zařazená (jen dokud ji nikdo neupravil). */
+function fixesOf(ws: Workspace, w: ScheduledWorkout): string[] {
+  if (w.sourceWeek == null || w.sourceDow == null || JSON.stringify(w.workout) !== JSON.stringify(w.original)) return [];
+  const activation = ws.activations.find((a) => a.id === w.activationId);
+  const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
+  return template?.weeks.find((x) => x.index === w.sourceWeek)?.days.find((d) => d.dow === w.sourceDow)?.source?.issues ?? [];
+}
+
 function workoutCard(ws: Workspace, w: ScheduledWorkout, chart: PaceChart) {
   const d = workoutDistance(w.workout, chart);
   const note = ws.notes.find((n) => n.workoutId === w.id);
   return {
     id: w.id, date: w.date, title: w.workout.title, type: w.workout.type, load: w.workout.load ?? null, status: w.status,
-    summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null,
+    summary: workoutSummary(w.workout), lines: blockLines(w.workout.blocks, chart), planNote: w.workout.note ?? null, raw: w.workout.rawInstruction ?? null,
+    fixes: fixesOf(ws, w), issues: lintWorkout(w.workout, chart),
     kmMin: km(d.minM), kmMax: km(d.maxM), kmUnknown: d.unknown > 0, moved: w.date !== w.originDate, skipReason: w.skipReason ?? null,
     feel: note?.feel ?? null, pain: note?.pain ?? null, userNote: note?.note ?? null, conditions: (note?.conditions ?? []).map((x) => CONDITIONS[x]),
     version: checkinVersion(w.status, note), profile: workoutProfile(w.workout, chart),
@@ -145,12 +154,26 @@ export function importView(ws: Workspace): View {
   const chart = resolvePaceChart(ws.profile, st.paceChart);
   const DAY = ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'];
   const weeks = st.weeks.map((w) => {
-    const r = plannedDistance(w.days.map((d) => d.workout), chart);
-    const declared = w.declaredTotalM ?? null;
-    const totals = declared == null ? 'none' : declared < r.minM - 500 || (!r.unknown && declared > r.maxM + 500) ? 'off' : r.unknown ? 'unknown' : 'ok';
+    // Stejná kontrola jako v import_plan_weeks, aby appka a model ukazovaly totéž.
+    const check = checkWeekTotal(w, chart);
+    const declared = check.declaredM;
     const cells = w.days.map((d) => (d.workout.type === 'rest' ? null : [d.workout.type, 'scheduled']));
-    return { index: w.index, phase: w.phase ?? null, kmMin: km(r.minM), kmMax: km(r.maxM), declaredKm: declared == null ? null : km(declared), totals, cells, issues: lintWeek(w, chart).map((x) => ({ day: DAY[x.dow], title: x.title, text: x.text })) };
+    const issues = lintWeek(w, chart);
+    // Detail týdne ke schválení: přepis vedle původního znění z dokumentu, ať jde chyba přepisu najít očima.
+    const days = w.days.map((d) => {
+      const dist = workoutDistance(d.workout, chart);
+      return {
+        dow: d.dow, day: DAY[d.dow], type: d.workout.type, title: d.workout.title, summary: workoutSummary(d.workout),
+        lines: blockLines(d.workout.blocks, chart), raw: d.workout.rawInstruction ?? null, kmMax: km(dist.maxM), kmUnknown: dist.unknown > 0,
+        fixes: d.source?.issues ?? [], issues: issues.filter((x) => x.dow === d.dow).map((x) => x.text),
+      };
+    });
+    return { index: w.index, phase: w.phase ?? null, kmMin: km(check.minM), kmMax: km(check.maxM), declaredKm: declared == null ? null : km(declared), totals: check.status, cells, days, issues: issues.map((x) => ({ day: DAY[x.dow], title: x.title, text: x.text })) };
   });
+  // Plán z dokumentu končící závodem se zařazuje podle data závodu, ne podle začátku.
+  const lastWeek = st.weeks[st.weeks.length - 1];
+  const raceDay = lastWeek?.days.find((d) => d.workout.type === 'race');
+  const suggest = st.activate ? null : raceDay ? { mode: 'race' as const, dow: raceDay.dow } : { mode: 'start' as const, dow: 0 };
   const missing: number[] = [];
   for (let i = 1; i <= st.weeks[st.weeks.length - 1].index; i++) if (!st.weeks.some((w) => w.index === i)) missing.push(i);
   const paceIssues = lintPaceChart(st.paceChart);
@@ -158,7 +181,7 @@ export function importView(ws: Workspace): View {
   return {
     ok: true,
     text: `Zobrazena kontrola importu „${st.name}“: ${st.weeks.length} týdnů, ${count} varování.`,
-    data: { view: 'import', name: st.name, activate: st.activate ?? null, weeks, missing, hasPaces: Boolean(st.paceChart && Object.keys(st.paceChart).length), paceIssues, warnings: count },
+    data: { view: 'import', name: st.name, activate: st.activate ?? null, suggest, fixes: weeks.reduce((s, w) => s + w.days.reduce((t, d) => t + d.fixes.length, 0), 0), weeks, missing, hasPaces: Boolean(st.paceChart && Object.keys(st.paceChart).length), paceIssues, warnings: count },
   };
 }
 
@@ -234,11 +257,11 @@ export function paceView(ws: Workspace, input: z.infer<typeof paceViewInput>, no
     if (!w) return fail('Jednotka v rozpisu není. Načti aktuální id přes get_plan.');
     workout = { id: w.id, date: w.date, title: w.workout.title, summary: workoutSummary(w.workout), rows: segmentRows(w.workout.blocks, chart), raw: w.workout.rawInstruction ?? null };
   }
-  if (!paces.length && !workout) return fail('Tempa nejsou zadaná. Ulož je přes set_profile (paceChart) nebo je pošli s importem plánu.');
+  if (!paces.length && !workout && !goalOptions(ws)) return fail('Tempa nejsou zadaná. Ulož je přes set_profile (paceChart) nebo je pošli s importem plánu.');
   return {
     ok: true,
     text: `Zobrazen pomocník temp: ${paces.map((p) => `${p.label} ${formatPace(p.fromSec)}–${formatPace(p.toSec)}/km`).join('; ') || 'tempa nejsou zadaná'}.${workout ? ` Rozepsaná jednotka: ${workout.title} ${workout.date}.` : ''}`,
-    data: { view: 'paces', paces, workout },
+    data: { view: 'paces', paces, workout, goal: goalOptions(ws) },
   };
 }
 

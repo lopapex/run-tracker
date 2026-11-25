@@ -131,3 +131,82 @@ Appka dál volá `/mcp/<klíč>`. Nástroje, které potřebuje jen ona, se skryj
 3. **Stránka v claude.ai** (připnutá) pryč? Doporučuju ano, je to třetí kopie téže appky.
 4. ~~ChatGPT pryč?~~ **Rozhodnuto 25. 11.:** ano. Z úvodní stránky a README je pryč; metadata `openai/*` na serveru zmizí se zeštíhlením.
 5. **Hodnocení běhu:** stačí v chatu textem, s uloženým jen stavem a pocitem? Nebo má appka ukazovat i skóre (uložené jedno číslo)?
+
+---
+
+# Review 25. 11.: PDF jako hlavní cesta, Strava druhá
+
+## Co jsem našel
+
+**Import z PDF (hlavní cesta):**
+- Referenční přepis plánu Half Marathon L4 měl tři druhy chyb, které nikdo neviděl.
+  - Všech 11 běhů „Easy Run & Strides“ bylo zapsaných jako 10–11 km rovinek. Appka pak ukazovala „10 km rovinky“.
+  - Závod „Half Marathon!“ neměl délku, takže týden 12 vycházel na 18 km místo 48–51 km.
+  - Ve středě týdne 10 se „6x“ přečetlo jako „ex“, takže z 6× (800 m + 200 m) zbyl jeden úsek.
+- Kontrola součtů u týdnů s úseky na čas psala jen „nejde ověřit“, takže nechytla ani jednu z těch chyb. Varování byla jen text pro model a po zařazení zmizela.
+- V appce nešlo rozpracovaný plán rozkliknout. Nebyl vidět součet autora ani původní znění, takže nebylo jak přepis zkontrolovat.
+- Zařazení plánu, který končí závodem, se nabízelo jako „Začít týdnem od“.
+- „Nahrát plán od trenéra“ byl až pod formulářem generátoru, za „nebo“.
+
+**Appka:**
+- Při listování mezi týdny bylo chvíli prázdno, protože další týden se načítal až po odjezdu.
+- Při prvním klepnutí na Plán probliklo, než se ukázala matice, protože se nejdřív vykreslil formulář nového plánu.
+- Sám se rozbaloval i nejbližší budoucí běh, ne jen dnešek.
+- Tempa: sloupec na 400 m navíc. Cílový čas nešel změnit, i když PDF má tabulku pro 1h25, 1h30 a 1h35.
+- Tempa bez uložených temp ukázala chybu psanou pro model („Ulož je přes set_profile…“).
+- Řádek se dvěma tempy (800 m + 200 m) nechal jedno tempo v textu.
+
+**Úvodní stránka:** kroky šly „appka, pak Claude“. U PDF musí být Claude první, protože bez konektoru appka plán nezaloží.
+
+## Co je hotové (necommitnuté)
+
+- Server: automatické opravy přepisu (`autofixWorkout`) a kontrola součtů s odhadem úseků na čas (`checkWeekTotal`, tolerance 4 %). Na skutečném PDF dává 0 falešných chyb a chybu v týdnu 10 najde.
+- Instrukce pro model: z PDF s verzí v mílích i v km vzít jen km, rovinky jako blok, závod vždy s délkou, u rozpětí součtu („48–51k“) horní hranice, celá tabulka temp v `paceTable`.
+- Nový prompt `plan-z-dokumentu` a nový nástroj `set_goal_time`.
+- Appka:
+  - Nový plán: Plán od trenéra, pak Plán podle mé Stravy, ruční formulář schovaný pod „Sestavit bez Clauda“.
+  - Kontrola plánu: týdny jdou rozkliknout, u každého dne přepis, znění z dokumentu, opravy a varování; v km sloupci součet přepisu / součet autora; zařazení podle závodu je výchozí.
+  - U každého dne „V plánu: …“ (doslovné znění).
+  - Upozornění na rozpracovaný plán i v Týdnu.
+  - Rozbaluje se jen dnešek.
+  - Listování ukazuje sousední týden vedle (načtený předem).
+  - Plán se načte na pozadí, takže neproblikne.
+  - Tempa: cílový čas s krokem 1 min v rozsahu tabulky, bez 400 m.
+
+## Návrhy dál
+
+1. **Uspořádání nechat: konektor + appka.**
+   - Podmínky Strava API vylučují vlastní napojení s AI.
+   - Tokeny jdou z předplatného uživatele.
+   - PDF umí číst jen Claude.
+   - Alternativy a proč ne:
+     - Claude API v appce: vlastní klíč a náklady, Strava stejně ne.
+     - Karta v chatu: duplicita appky.
+     - Čistě Claude Project: bez appky v telefonu.
+2. **Sdílení PDF rovnou do appky** (Web Share Target na Androidu): appka soubor uloží k prostoru a nový nástroj `get_uploaded_plan` ho vrátí Claudovi. Uživatel by PDF nemusel přikládat znovu. Nejdřív ověřit, jestli Claude předá modelu PDF nebo obrázky stránek z výsledku nástroje; když ne, rozdělit PDF v appce na obrázky stránek (pdf.js).
+3. **Druhý průchod přepisu:** po importu by model zavolal `get_import_review` s týdny, kde součet nesedí, a opravil je bez zásahu uživatele. Dnes to zajišťují instrukce; nástroj by to vynutil.
+4. **Varování i po zařazení:** jednotky s varováním nebo opravou označit v Týdnu tečkou a „V plánu“ zvýraznit.
+5. **Strava jako druhá cesta:**
+   - `draft_plan` by bral i nejdelší běh a počet běhů posledních týdnů, aby kostra nezačínala od průměru.
+   - Prompt „podle Stravy“ by se zeptal jen na cíl a datum.
+6. **Skill „RPM import“** s příklady přepisu buněk (rovinky, progresivní běh, opakování s více úseky), když bude kvalita importu u jiných PDF slabší. Načítá se jen při importu, takže nezvyšuje cenu běžné konverzace.
+7. **Snímky na úvodní stránce** jsou zastaralé (formulář a Tempa s 400 m); přefotit po schválení.
+
+## Stav návrhů po druhém kole
+
+- **1. Uspořádání:** zůstává konektor + appka.
+- **2. Sdílení PDF do appky:** neuděláno. Není ověřené, že Claude z výsledku nástroje přečte PDF; tlačítko, které by nemuselo fungovat, do appky nepatří. Vrátit se k tomu, až to půjde ověřit.
+- **3. Druhý průchod přepisu:** částečně. Místo nového nástroje `get_plan` u rozpracovaného plánu vypíše týdny, kde nesedí součet, a týdny s varováním. Model je tak vidí při každém dalším kroku.
+- **4. Varování i po zařazení:** hotové. Den ukáže „Při přepisu opraveno: …“ a varování, dokud se jednotka nezmění.
+- **5. Strava:** hotové. `draft_plan` bere `longestRunKm` a dlouhý běh od něj roste nejvýš o 1,5 km za týden.
+- **6. Skill:** neuděláno. U referenčního PDF stačí instrukce a automatické opravy; skill až při slabším importu jiných plánů.
+- **7. Snímky:** přefocené (390×844 @2x přes DevTools protokol, demo týden 10).
+
+## Vzhled (druhé kolo)
+
+- Typ tréninku má ikonu (bota, trasa, plamen, blesk, rovinky, cílová vlajka, měsíc pro volno) a barvu zóny jako z hodinek: modrá volně, tmavě modrá dlouhý, žlutá tempo, červená rychlost, oranžová závod.
+- Týden: uběhnuté km jako trasa s běžcem a cílovou vlajkou, odpočet do závodu jako startovní číslo, nadpisy tučnou kurzívou.
+- Plán: závod jako šachovnice cílové vlajky. Tempa: všechna pásma na jedné ose od pomalého po rychlé.
+- Konec plánu s medailí, prázdné obrazovky s trasou ze startu do cíle, odškrtnutí s krátkou animací.
+- Co jde přes konektor Strava, má barvu a značku Stravy. Na webu je u toho poznámka o ochranné známce.
+- Web: kroky pro člověka bez technických znalostí (adresa, konektor v Claude klik po kliku, volitelná Strava, poslat PDF, kontrola, běhání), časté otázky, stejné barvy jako appka.

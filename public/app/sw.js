@@ -1,5 +1,5 @@
 // Offline start aplikace: stránka ze sítě, bez sítě z mezipaměti. Data plánu (POST na konektor) se necachují.
-const CACHE = 'rpm-1';
+const CACHE = 'rpm-2';
 const SHELL = ['./', 'rpm.js', 'rpm.css', 'manifest.webmanifest', '/brand/run-tracker-v2-192.png'];
 
 self.addEventListener('install', (e) => {

@@ -106,7 +106,15 @@ export interface PlanTemplate {
   verifiedAt: string;
   units: 'km' | 'mi';
   paceChart?: PaceChart;
+  /** Tabulka temp po cílových časech, jak ji uvádí dokument (např. 1h25 / 1h30 / 1h35); tempa se mezi řádky dopočítají. */
+  paceTable?: PaceTableRow[];
   weeks: TemplateWeek[];
+}
+
+export interface PaceTableRow {
+  /** Cílový čas závodu v sekundách. */
+  goalSec: number;
+  paces: PaceChart;
 }
 
 // ---------- Aktivace a rozpis ----------
@@ -184,6 +192,8 @@ export interface DraftParams {
   longRunDow: Dow;
   raceDate?: IsoDate;
   raceDistanceM?: number;
+  /** Nejdelší běh posledních týdnů (km): dlouhý běh od něj roste postupně, ne skokem na podíl z objemu. */
+  longestRunKm?: number;
   /** Co generátor nevěděl a odkud vzal hodnoty. */
   assumptions: string[];
 }

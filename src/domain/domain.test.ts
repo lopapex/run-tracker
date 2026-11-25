@@ -153,6 +153,16 @@ describe('generátor', () => {
     const total = (w: TemplateWeek) => w.days.reduce((a, d) => a + (d.workout.type === 'race' ? 0 : (d.workout.distanceM ?? 0)), 0);
     expect(total(raceWeek)).toBeLessThan(total(weeks[0]));
   });
+  it('dlouhý běh roste od nejdelšího běhu ze Stravy, objem týdne zůstane', () => {
+    const long = (w: TemplateWeek) => w.days.find((d) => d.workout.type === 'long')!.workout.distanceM!;
+    const sum = (w: TemplateWeek) => w.days.reduce((a, d) => a + (d.workout.distanceM ?? 0), 0);
+    const free = generateWeeks({ ...params, weeklyKm: 60 });
+    const capped = generateWeeks({ ...params, weeklyKm: 60, longestRunKm: 12 });
+    expect(long(free[0])).toBe(18_000);
+    expect(long(capped[0])).toBe(14_000);
+    expect(long(capped[1])).toBe(15_000);
+    expect(Math.abs(sum(capped[0]) - sum(free[0]))).toBeLessThanOrEqual(3000);
+  });
 });
 
 it('addDays přes změnu času', () => {
