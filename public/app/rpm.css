@@ -395,10 +395,7 @@ body:has(#view .sticky) .toast { bottom: calc(64px + 76px + env(safe-area-inset-
   .sheet .panel { width: 520px; margin: 0 auto; }
 }
 
-/* Nastavení na jednou: tichý řádek pod plánem, odkaz podtržený jako ostatní tiché odkazy. */
-.setting { padding: 20px var(--gut) 8px; font-size: 13px; color: var(--mute); }
-.setting button { position: relative; min-height: 32px; color: var(--mute); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--faint); }
-.setting button::before { content: ""; position: absolute; inset: -6px -4px; }
+/* Nastavení Stravy: jen nenápadný odkaz u nového plánu. */
 .row-link.quiet { padding-top: 0; font-size: 13px; }
 
 /* Logo Stravy: plný tvar, ne obrys. */
