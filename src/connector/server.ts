@@ -282,7 +282,7 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
 
   server.registerTool('set_goal_time', {
     title: 'Cílový čas a tempa',
-    description: 'Uloží cílový čas závodu a přepočítá tempa: podle tabulky temp z plánu (jen v jejím rozsahu), bez ní podle VDOT na délku závodu.',
+    description: 'Uloží cílový čas závodu a přepočítá tempa: podle tabulky temp z plánu (jen v jejím rozsahu), nebo podle VDOT na délku závodu. Když jde obojí, method přepne zdroj (volbu si uživatel dělá v appce).',
     inputSchema: goalInput.shape,
     annotations: change,
   }, (input) => write((ws) => setGoal(ws, input), (ws) => paceView(ws, {})));

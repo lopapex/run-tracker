@@ -670,6 +670,29 @@ describe('konektor RPM', () => {
     expect(hm).toMatchObject({ fromSec: 246, toSec: 252 });
     expect(set.data.goal.sec).toBe(5250);
     expect((await call('set_goal_time', { goalSec: 4800 })).text).toContain('1:25:00 až 1:35:00');
+    // Bez délky závodu je jediná možnost tabulka.
+    expect(set.data.goal.methods).toEqual(['table']);
+    expect((await call('set_goal_time', { goalSec: 5400, method: 'vdot' })).isError).toBe(true);
+  });
+
+  it('s tabulkou i délkou závodu jde přepnout tempa mezi tabulkou a VDOT', async () => {
+    const { call } = await connect(new MemoryStore());
+    const row = (e: number, h: number) => ({ easy: { fromSec: e, toSec: e + 30 }, hm_pace: { fromSec: h, toSec: h + 6 } });
+    const paceTable = [{ goalSec: 5100, paces: row(286, 239) }, { goalSec: 5400, paces: row(304, 252) }, { goalSec: 5700, paces: row(317, 267) }];
+    await call('import_plan_weeks', { name: 'Půlmaraton', weeks: [week(1)], paceChart: paceTable[1].paces, paceTable });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    await call('set_profile', { raceDistanceM: 21097.5 });
+    const before = await call('show_week', { tab: 'paces' });
+    expect(before.data.goal).toMatchObject({ source: 'table', methods: ['table', 'vdot'] });
+    // VDOT má širší rozsah a vlastní pásma (ustáleně, maraton).
+    const vdot = await call('set_goal_time', { goalSec: 4800, method: 'vdot' });
+    expect(vdot.isError).toBe(false);
+    expect(vdot.data.goal).toMatchObject({ source: 'vdot', sec: 4800 });
+    expect(vdot.data.paces.map((p: { key: string }) => p.key)).toContain('steady');
+    // Volba zůstane i bez method; zpět na tabulku se čas posune do jejího rozsahu.
+    expect((await call('set_goal_time', { goalSec: 4900 })).data.goal.source).toBe('vdot');
+    const back = await call('set_goal_time', { goalSec: 4900, method: 'table' });
+    expect(back.data.goal).toMatchObject({ source: 'table', sec: 5100 });
   });
 
   it('dva těžké běhy po sobě ukážou upozornění na únavu', async () => {

@@ -218,4 +218,6 @@ export interface AthleteProfile {
   raceTargetSec?: number;
   paceChart?: PaceChart;
   paceSource?: 'plan' | 'profile';
+  /** Odkud se tempa počítají z cílového času, když plán má tabulku temp: z tabulky, nebo podle VDOT. */
+  paceMethod?: 'table' | 'vdot';
 }

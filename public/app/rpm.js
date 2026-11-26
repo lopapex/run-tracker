@@ -343,12 +343,14 @@
 
   // ---------- Plán ----------
   function cell(c, today) {
-    if (!c) return '<span class="c rest"></span>';
+    if (!c) return '<span class="c rest' + (today ? ' today' : '') + '"></span>';
     return '<span class="c e' + lvlOfType(c[0]) + ' s-' + c[1] + (today ? ' today' : '') + '"></span>';
   }
   function matrix(weeks, opts) {
-    var h = '<table class="mx"><thead><tr><th></th>' + DOW.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th class="vol">km</th></tr></thead><tbody>';
     var phase = null, today = todayIso();
+    // Dnešek: sloupec dne v záhlaví oranžově s tečkou, buňka v probíhajícím týdnu s oranžovým rámečkem (i volný den).
+    var nowDow = opts.link && weeks.some(function (w) { return w.isCurrent; }) ? (new Date(today + 'T12:00:00Z').getUTCDay() + 6) % 7 : -1;
+    var h = '<table class="mx"><thead><tr><th></th>' + DOW.map(function (x, i) { return i === nowDow ? '<th class="now" aria-current="date">' + x + '</th>' : '<th>' + x + '</th>'; }).join('') + '<th class="vol">km</th></tr></thead><tbody>';
     weeks.forEach(function (w) {
       var ph = phaseCs(w.phase);
       if (ph && ph !== phase) h += '<tr class="ph"><td colspan="9">' + esc(ph) + '</td></tr>';
@@ -370,12 +372,12 @@
       h += '<td class="vol">' + vol + '</td></tr>';
       if (open) h += '<tr class="wd"><td colspan="9">' + weekDetail(w) + '</td></tr>';
     });
-    return h + '</tbody></table>' + legend();
+    return h + '</tbody></table>' + legend(nowDow >= 0);
   }
-  function legend() {
+  function legend(now) {
     var t = [['e1', 'volně'], ['e2', 'dlouhý'], ['e3', 'tempo'], ['e4', 'rychlost'], ['e5', 'závod']];
     return '<div class="legend">' + t.map(function (x) { return '<span><i class="c ' + x[0] + ' s-completed"></i>' + x[1] + '</span>'; }).join('') +
-      '</div><div class="legend sts"><span><i class="c e2 s-scheduled"></i>v plánu</span><span><i class="c e2 s-completed"></i>splněno</span><span><i class="c e2 s-missed"></i>nezapsáno</span><span><i class="c e2 s-skipped"></i>vynecháno</span></div>';
+      '</div><div class="legend sts"><span><i class="c e2 s-scheduled"></i>v plánu</span><span><i class="c e2 s-completed"></i>splněno</span><span><i class="c e2 s-missed"></i>nezapsáno</span><span><i class="c e2 s-skipped"></i>vynecháno</span>' + (now ? '<span><i class="c e2 s-scheduled today"></i>dnes</span>' : '') + '</div>';
   }
 
   function renderPlan() {
@@ -493,8 +495,19 @@
     var goal = !S.calc && S.paces && S.paces.goal;
     if (goal) {
       var gs = S.goalSec != null ? S.goalSec : goal.sec, dist = RACES.filter(function (r) { return Math.abs(r[0] - goal.distanceM) < 200; })[0];
-      h += '<div class="goal"><span class="lab">Cílový čas' + (dist ? ' · ' + dist[1] + (dist[0] > 10000 ? ' km' : '') : '') + '</span><div class="step"><button type="button" data-do="goal" data-v="-60" aria-label="O minutu rychleji"' + (gs <= goal.minSec ? ' disabled' : '') + '>−</button><output class="n">' + hms(gs) + '</output><button type="button" data-do="goal" data-v="60" aria-label="O minutu pomaleji"' + (gs >= goal.maxSec ? ' disabled' : '') + '>+</button></div>';
-      h += '<p class="hint">' + (goal.source === 'table' ? 'Podle tabulky temp z plánu, v jejím rozsahu ' + hms(goal.minSec) + '–' + hms(goal.maxSec) + '.' : 'Tempa spočítaná z cílového času (VDOT).') + '</p></div>';
+      var method = S.goalMethod || goal.source, st = goalStep(gs), methods = goal.methods || [goal.source];
+      h += '<div class="goal">';
+      // Zdroj temp: tabulka autora plánu, nebo VDOT. Přepínač jen když jde obojí.
+      if (methods.length > 1) h += '<div class="f0"><span class="lab">Odkud brát tempa</span>' + seg('gmethod', [['table', 'Tabulka z plánu'], ['vdot', 'Z cílového času']], method) + '</div>';
+      h += '<span class="lab">Cílový čas' + (dist ? ' na ' + dist[1] + (dist[0] > 10000 ? ' km' : '') : '') + '</span>';
+      // Krok je vidět na tlačítkách a popisky pod nimi říkají směr: kratší čas = rychlejší tempa.
+      h += '<div class="step goalstep"><button type="button" data-do="goal" data-v="' + -st + '" aria-label="Rychleji o ' + stepWord(st) + '"' + (gs <= goal.minSec ? ' disabled' : '') + '><b>−' + stepWord(st) + '</b><small>rychleji</small></button>';
+      h += '<output class="n" aria-live="polite">' + hms(gs) + (goal.distanceM ? '<small>' + pace(gs / (goal.distanceM / 1000)) + ' /km</small>' : '') + '</output>';
+      h += '<button type="button" data-do="goal" data-v="' + st + '" aria-label="Pomaleji o ' + stepWord(st) + '"' + (gs >= goal.maxSec ? ' disabled' : '') + '><b>+' + stepWord(st) + '</b><small>pomaleji</small></button></div>';
+      var how = method === 'table'
+        ? 'Tempa jsou z tabulky, kterou trenér dal do plánu. Cíl jde nastavit od ' + hms(goal.minSec) + ' do ' + hms(goal.maxSec) + '.'
+        : 'Tempa se spočítají z cílového času, jako v běžecké kalkulačce. Cíl jde nastavit od ' + hms(goal.minSec) + ' do ' + hms(goal.maxSec) + '.';
+      h += '<p class="hint" aria-live="polite">' + (S.goalBusy ? 'Přepočítávám tempa…' : how) + '</p></div>';
     }
     if (!d || !d.paces || !d.paces.length) h += '<p class="blank">Tempa zatím nejsou. Spočítej je z čerstvého závodu.</p>';
     else {
@@ -502,7 +515,7 @@
       var slow = 0, fast = 1e9;
       d.paces.forEach(function (p) { slow = Math.max(slow, p.toSec); fast = Math.min(fast, p.fromSec); });
       var span = Math.max(1, slow - fast);
-      h += '<ul class="pz">' + d.paces.map(function (p) {
+      h += '<ul class="pz' + (S.goalBusy ? ' stale' : '') + '">' + d.paces.slice().sort(function (a, b) { return b.toSec - a.toSec; }).map(function (p) {
         var lvl = INT_LVL[p.key] == null ? 1 : INT_LVL[p.key];
         var left = Math.round((slow - p.toSec) / span * 92), width = Math.max(4, Math.round((p.toSec - p.fromSec) / span * 92));
         return '<li><span class="bd e' + lvl + '">' + ico(PACE_IC[p.key] || 'easy') + '</span><span class="lb">' + esc(p.label.charAt(0).toUpperCase() + p.label.slice(1)) + '</span><span class="pv">' + pace(p.fromSec) + '–' + pace(p.toSec) + '<small> /km</small></span><span class="sc"><i class="e' + lvl + '" data-lpct="' + left + '" data-wpct="' + width + '"></i></span></li>';
@@ -515,6 +528,9 @@
     h += '<div class="form"><div class="f"><span class="lab">Čerstvý závod</span>' + seg('cdist', RACES, c.dist, 'n') + '<input class="in n gap" inputmode="numeric" placeholder="čas, např. 1:32:00" data-f="ctime" value="' + esc(c.time) + '" aria-label="Čas"></div></div>';
     return h + '<div class="sticky"><button type="button" class="btn go" data-do="calc">Spočítat tempa</button></div>';
   }
+  // Krok cílového času podle délky závodu: u pětky po 10 s, u maratonu po minutě.
+  function goalStep(sec) { return sec < 1800 ? 10 : sec < 3600 ? 15 : sec < 2 * 3600 ? 30 : 60; }
+  function stepWord(s) { return s < 60 ? s + ' s' : s / 60 + ' min'; }
   function hms(s) { var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
   function parseTime(t) {
     var p = String(t).trim().split(':').map(Number);
@@ -553,6 +569,7 @@
       var f = t.getAttribute('data-f');
       if (f === 'cdist') S.calcForm.dist = +v;
       else if (f === 'amode') S.amode = v;
+      else if (f === 'gmethod') { if (v !== (S.goalMethod || S.paces.goal.source)) saveGoal(v); return; }
       else S.form[f] = f === 'intent' ? v : +v;
       if (f === 'long') S.form.rest = S.form.rest.filter(function (x) { return x !== +v; });
       render(); return;
@@ -601,19 +618,33 @@
       case 'goal':
         var go = S.paces.goal, cur = S.goalSec != null ? S.goalSec : go.sec;
         S.goalSec = Math.min(go.maxSec, Math.max(go.minSec, cur + +v));
+        // Tempa pod tím ztlumená, dokud se nepřepočítají: je vidět, že změna teprve dorazí.
+        S.goalBusy = true;
         render();
         // Klepání za sebou se uloží jednou, až prst přestane.
         clearTimeout(S.goalTimer);
-        S.goalTimer = setTimeout(function () {
-          var want = S.goalSec;
-          call('set_goal_time', { goalSec: want }).then(function (d) { weeks = {}; if (S.goalSec === want) S.goalSec = null; take(d); render(); }, fail);
-        }, 600);
+        S.goalTimer = setTimeout(function () { saveGoal(); }, 500);
         break;
       case 'calcback': S.calc = null; render(); break;
       case 'calcopen': S.calcForm.open = true; render(); break;
       case 'calcsave': call('calculate_paces', { distanceM: S.calc.calc.distanceM, timeSec: S.calc.calc.timeSec, save: true }).then(function () { S.calc = null; toast('Tempa uložena'); load('paces'); }, fail); break;
     }
   });
+  // Uloží cílový čas (a případně zdroj temp); server vrátí přepočítaná tempa.
+  function saveGoal(method) {
+    var go = S.paces && S.paces.goal;
+    if (!go) return;
+    clearTimeout(S.goalTimer);
+    var want = S.goalSec != null ? S.goalSec : go.sec, args = { goalSec: want };
+    if (method) { args.method = method; S.goalMethod = method; }
+    S.goalBusy = true; render();
+    call('set_goal_time', args).then(function (d) {
+      weeks = {};
+      if (S.goalSec === want || method) { S.goalSec = null; S.goalBusy = false; S.goalMethod = null; }
+      take(d); render();
+      if (method) toast(method === 'vdot' ? 'Tempa spočítaná z cílového času' : 'Tempa z tabulky v plánu');
+    }, function (err) { S.goalBusy = false; S.goalMethod = null; S.goalSec = null; fail(err); });
+  }
   document.addEventListener('change', function (e) {
     var f = e.target.getAttribute('data-f');
     if (!f) return;

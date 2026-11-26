@@ -70,7 +70,10 @@ export const stageInput = z.object({
   })).min(1).max(8),
 });
 
-export const goalInput = z.object({ goalSec: z.number().int().min(600).max(8 * 3600).describe('Cílový čas závodu v sekundách.') });
+export const goalInput = z.object({
+  goalSec: z.number().int().min(600).max(8 * 3600).describe('Cílový čas závodu v sekundách.'),
+  method: z.enum(['table', 'vdot']).optional().describe('Podle čeho tempa počítat: table = tabulka temp z plánu, vdot = VDOT na délku závodu. Bez něj zůstane dosavadní volba. Čas mimo rozsah zvolené metody se posune na nejbližší mez.'),
+});
 
 export const activateInput = z.object({
   mode: z.enum(['start', 'race']),
@@ -517,42 +520,52 @@ export function interpolatePaces(table: PaceTableRow[], goalSec: number): PaceCh
   return out;
 }
 
-export interface GoalOptions { source: 'table' | 'vdot'; distanceM: number | null; minSec: number; maxSec: number; sec: number }
+type GoalMethod = 'table' | 'vdot';
+export interface GoalOptions { source: GoalMethod; methods: GoalMethod[]; distanceM: number | null; minSec: number; maxSec: number; sec: number }
 
-/** Co jde v appce nastavit jako cílový čas: v rozsahu tabulky z plánu, jinak podle VDOT na délku závodu. */
-export function goalOptions(ws: Workspace): GoalOptions | null {
+/** Co jde v appce nastavit jako cílový čas: v rozsahu tabulky z plánu, nebo podle VDOT na délku závodu.
+ *  Když jde obojí, rozhoduje uložená volba (paceMethod), výchozí je tabulka autora plánu. */
+export function goalOptions(ws: Workspace, want?: GoalMethod): GoalOptions | null {
   const activation = activeOf(ws);
   const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
   const raceInPlan = template?.weeks.flatMap((w) => w.days).find((d) => d.workout.type === 'race' && d.workout.distanceM)?.workout.distanceM;
   const distanceM = ws.profile.raceDistanceM ?? raceInPlan ?? null;
   const table = template?.paceTable && template.paceTable.length >= 2 ? [...template.paceTable].sort((a, b) => a.goalSec - b.goalSec) : null;
-  if (table) {
+  const methods: GoalMethod[] = [...(table ? ['table' as const] : []), ...(distanceM ? ['vdot' as const] : [])];
+  if (!methods.length) return null;
+  const pick = want ?? ws.profile.paceMethod;
+  const method: GoalMethod = pick && methods.includes(pick) ? pick : methods[0];
+  if (method === 'table' && table) {
     const minSec = table[0].goalSec, maxSec = table[table.length - 1].goalSec;
     // Bez uloženého cíle řádek, podle kterého je plán (shoda tempa půlmaratonu), jinak prostřední.
     const hm = template!.paceChart?.hm_pace?.fromSec;
     const matching = hm != null ? table.find((r) => r.paces.hm_pace?.fromSec === hm) : undefined;
     const saved = ws.profile.raceTargetSec;
     const sec = saved != null && saved >= minSec && saved <= maxSec ? saved : (matching ?? table[Math.floor(table.length / 2)]).goalSec;
-    return { source: 'table', distanceM, minSec, maxSec, sec };
+    return { source: 'table', methods, distanceM, minSec, maxSec, sec };
   }
   if (!distanceM) return null;
   const minSec = Math.round(predictTime(85, distanceM)), maxSec = Math.round(predictTime(30, distanceM));
   const key = RACE_KEY.find(([d]) => Math.abs(d - distanceM) < 200)?.[1];
   const pace = key ? resolvePaceChart(ws.profile, template?.paceChart)[key] : undefined;
   const guess = ws.profile.raceTargetSec ?? (pace ? Math.round((pace.fromSec + pace.toSec) / 2 * distanceM / 1000) : Math.round(predictTime(45, distanceM)));
-  return { source: 'vdot', distanceM, minSec, maxSec, sec: Math.min(maxSec, Math.max(minSec, guess)) };
+  return { source: 'vdot', methods, distanceM, minSec, maxSec, sec: Math.min(maxSec, Math.max(minSec, guess)) };
 }
 
 /** Nastaví cílový čas a podle něj tempa v profilu (mají přednost před tempy plánu). */
 export function setGoal(ws: Workspace, input: z.infer<typeof goalInput>): Outcome {
-  const opts = goalOptions(ws);
+  const opts = goalOptions(ws, input.method);
   if (!opts) return fail('Cílový čas jde nastavit u plánu na závod (s tabulkou temp nebo se známou délkou závodu).');
-  if (input.goalSec < opts.minSec || input.goalSec > opts.maxSec) {
+  if (input.method && opts.source !== input.method) return fail(input.method === 'table' ? 'Plán nemá tabulku temp pro různé cílové časy.' : 'Pro VDOT chybí délka závodu; ulož ji přes set_profile (raceDistanceM).');
+  // Při přepnutí metody se čas posune do jejího rozsahu; jinak čas mimo rozsah odmítne.
+  const goalSec = input.method ? Math.min(opts.maxSec, Math.max(opts.minSec, input.goalSec)) : input.goalSec;
+  if (goalSec < opts.minSec || goalSec > opts.maxSec) {
     return fail(opts.source === 'table' ? `Tabulka temp v plánu má řádky pro ${hms(opts.minSec)} až ${hms(opts.maxSec)}; mimo ně tempa nedopočítávám.` : `Cílový čas musí být mezi ${hms(opts.minSec)} a ${hms(opts.maxSec)}.`);
   }
   const activation = activeOf(ws);
   const template = activation ? ws.templates.find((t) => t.id === activation.templateId) : undefined;
-  const chart = opts.source === 'table' ? interpolatePaces(template!.paceTable!, input.goalSec) : trainingPaces(opts.distanceM!, input.goalSec).chart;
-  ws.profile = { ...ws.profile, raceTargetSec: input.goalSec, paceChart: chart, paceSource: 'profile' };
-  return { ok: true, changed: true, banner: `Cíl ${hms(input.goalSec)}, tempa přepočítána.`, text: `Cílový čas ${hms(input.goalSec)} uložen. Tempa jsou přepočítaná ${opts.source === 'table' ? 'podle tabulky temp z plánu' : 'podle VDOT'}: ${Object.entries(chart).map(([k, v]) => `${k} ${formatPace(v!.fromSec)}–${formatPace(v!.toSec)}`).join('; ')}.` };
+  const chart = opts.source === 'table' ? interpolatePaces(template!.paceTable!, goalSec) : trainingPaces(opts.distanceM!, goalSec).chart;
+  ws.profile = { ...ws.profile, raceTargetSec: goalSec, paceChart: chart, paceSource: 'profile', ...(opts.methods.length > 1 ? { paceMethod: opts.source } : {}) };
+  const how = opts.source === 'table' ? 'podle tabulky temp z plánu' : 'podle VDOT';
+  return { ok: true, changed: true, banner: `Cíl ${hms(goalSec)}, tempa ${how}.`, text: `Cílový čas ${hms(goalSec)} uložen. Tempa jsou přepočítaná ${how}: ${Object.entries(chart).map(([k, v]) => `${k} ${formatPace(v!.fromSec)}–${formatPace(v!.toSec)}`).join('; ')}.` };
 }

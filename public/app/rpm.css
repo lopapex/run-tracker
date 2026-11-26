@@ -207,6 +207,12 @@ button { background: none; border: 0; cursor: pointer; }
 .c.e5.s-completed { box-shadow: 0 0 0 2px var(--ok); background: repeating-conic-gradient(var(--ink) 0 25%, var(--paper) 0 50%) 0 0 / 8px 8px; }
 .c.rest { width: 4px; height: 4px; border-radius: 50%; background: var(--faint); opacity: .6; }
 .c.today { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Volný den dnes: stejný oranžový rámeček jako u běhu, uvnitř tečka volna. */
+.c.rest.today { width: 26px; height: 22px; border-radius: 3px; opacity: 1; background: radial-gradient(circle, var(--faint) 2px, transparent 2.5px); }
+/* Dnešní den v záhlaví: oranžově, tučně a s tečkou pod zkratkou. */
+.mx th.now { position: relative; color: var(--accent); font-weight: 700; }
+.mx th.now::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.legend .c.today { outline-width: 1.5px; outline-offset: 1.5px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 14px var(--gut) 8px; font-size: 12px; color: var(--mute); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend .c { width: 14px; height: 12px; margin: 0; }
@@ -264,6 +270,18 @@ button { background: none; border: 0; cursor: pointer; }
 .axis { display: flex; justify-content: space-between; padding: 8px var(--gut) 0 calc(var(--gut) + 42px); font: 11px var(--mono); color: var(--mute); }
 .axis span:last-child::after { content: " →"; } .axis span:first-child::before { content: "← "; }
 .goal .step output { font: italic 800 26px var(--sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+/* Cílový čas: tlačítka nesou krok i směr, pod časem tempo závodu na km. */
+.goal .f0 { margin-bottom: 14px; }
+.goalstep { height: 64px; }
+.goalstep button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 76px; height: 100%; border-radius: 10px; }
+.goalstep button:active { background: var(--fill); }
+.goalstep button b { font: 600 15px var(--mono); }
+.goalstep button small { font-size: 11px; color: var(--mute); }
+.goalstep button:disabled b, .goalstep button:disabled small { color: var(--faint); }
+.goal .goalstep output { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+.goal .goalstep output small { margin-top: 3px; font: 400 12px var(--mono); font-style: normal; color: var(--mute); letter-spacing: 0; }
+.pz { transition: opacity 160ms ease; }
+.pz.stale { opacity: .45; }
 .goal { padding: 6px var(--gut) 14px; border-bottom: 1px solid var(--line); }
 .goal .lab { display: block; font-size: 13px; color: var(--mute); margin-bottom: 8px; }
 .step button:disabled { color: var(--faint); }
