@@ -412,9 +412,9 @@
     h += ROUTE_ART + '<button type="button" class="doc main" data-do="doc"><span class="bd ink">' + ico('doc') + '</span><b>Plán od trenéra</b><span>PDF, fotka nebo tabulka. Otevře se Claude s připravenou zprávou, přiložíš soubor a odešleš. Přepsaný plán se objeví tady ke kontrole.</span></button>';
     if (S.strava) h += '<button type="button" class="doc strava" data-do="strava"><span class="bd sv">' + ico('strava', 'fill') + '</span><b>Plán podle mé Stravy</b><span>Claude projde tvoje běhy za poslední 2–3 měsíce, zeptá se na cíl a postaví plán ke kontrole.</span></button>';
     h += '<p class="hint">' + (S.strava ? 'Obojí potřebuje adresu RPM přidanou v Claude jako konektor; pro Stravu i oficiální konektor Strava.' : 'Potřebuje adresu RPM přidanou v Claude jako konektor.') + '</p>';
-    // Strava se nastavuje jen tady, při zakládání plánu: nenápadný odkaz ji zapne nebo vypne.
-    // Appka konektory v Claude nevidí; zapne se i sama po prvním hodnocení běhu ze Stravy.
-    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button><button type="button" class="row-link quiet" data-do="stravasw">' + (S.strava ? 'Nemám v Claude konektor Strava' : 'Mám v Claude konektor Strava') + '</button></div>';
+    // Strava se zapíná jen tady, při zakládání plánu, a pak zůstane. Appka konektory v Claude nevidí;
+    // zapne se i sama po prvním hodnocení běhu ze Stravy.
+    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button>' + (S.strava ? '' : '<button type="button" class="row-link quiet" data-do="stravasw">Mám v Claude konektor Strava</button>') + '</div>';
   }
   function renderForm() {
     if (!S.manual) return renderChoice();
@@ -607,8 +607,8 @@
       case 'strava': toClaude('Postav mi nový běžecký plán podle mé Stravy. Postupuj podle instrukcí RPM pro nový plán: načti profil a historii, projdi Stravu za posledních 8–12 týdnů, zeptej se jen na to, co chybí, a kostru nech v rozpracovaném importu; zkontroluju ji v appce RPM.'); break;
       case 'stravasw':
         var was = S.strava;
-        S.strava = !S.strava; render();
-        call('set_profile', { strava: S.strava }).then(function () { toast(S.strava ? 'Tlačítka Stravy zapnutá' : 'Tlačítka Stravy schovaná'); }, function (err) { S.strava = was; fail(err); });
+        S.strava = true; render();
+        call('set_profile', { strava: true }).then(function () { toast('Strava zapnutá'); }, function (err) { S.strava = was; fail(err); });
         break;
       case 'manual': S.manual = true; window.scrollTo(0, 0); render(); break;
       case 'choice': S.manual = false; window.scrollTo(0, 0); render(); break;
