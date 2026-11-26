@@ -128,6 +128,8 @@
     });
   }
   function take(d) {
+    // Tlačítka Stravy jen u toho, kdo má v Claude konektor Strava (server to ví z hodnocení nebo z přepínače).
+    if (d && 'strava' in d) S.strava = d.strava;
     if (d.view === 'week') { S.week = d; weeks[d.weekStart] = d; }
     else if (d.view === 'plan') S.plan = d;
     else if (d.view === 'paces') { if (d.calc) S.calc = d; else { S.paces = d; S.calc = null; } }
@@ -193,7 +195,7 @@
       h += '<p class="state">Vynecháno' + (w.skipReason ? ': ' + esc(w.skipReason) : '') + '</p><div class="links">' + link('restore', id, 'Obnovit') + '</div>';
     } else if (w.status === 'completed' || w.status === 'partial') {
       if (w.status === 'partial') h += '<p class="state">Odběhnuto jen částečně</p>';
-      h += '<div class="links">' + link('eval', id, ico('strava', 'fill') + 'Zhodnotit se Stravou', 'ext strava') + (w.status === 'completed' ? link('partial', id, 'Jen část') : '') + link('unset', id, 'Zrušit') + '</div>';
+      h += '<div class="links">' + (S.strava ? link('eval', id, ico('strava', 'fill') + 'Zhodnotit se Stravou', 'ext strava') : '') + (w.status === 'completed' ? link('partial', id, 'Jen část') : '') + link('unset', id, 'Zrušit') + '</div>';
     } else {
       if (day.isPast) h += '<p class="state">Nezapsáno.</p>';
       if (day.isPast || day.isToday) h += '<div class="acts sm"><button type="button" class="btn go' + (day.isToday ? ' accent' : '') + '" data-do="done" data-id="' + id + '">' + ico('check') + 'Odběhnuto</button></div>';
@@ -391,7 +393,7 @@
     var h = '<header class="hd"><h1>' + esc(d.planName) + '</h1><button type="button" class="tb" data-do="new">Nový</button></header>';
     h += '<p class="meta"><b>' + t.doneKm + '</b> z ' + t.plannedKm + ' km<span>' + (d.last ? 'do ' + dm(d.last) : '') + '</span></p>';
     if (S.week && S.week.staged) h += '<button type="button" class="pending" data-do="staged"><span>Rozpracovaný plán „' + esc(S.week.staged.name) + '“ čeká na schválení.</span><b>Zkontrolovat ›</b></button>';
-    return h + matrix(d.weeks, { link: true });
+    return h + matrix(d.weeks, { link: true }) + '<div class="form">' + stravaSwitch() + '</div>';
   }
 
   // ---------- Nový plán ----------
@@ -408,9 +410,15 @@
     var hasPlan = S.plan && S.plan.view === 'plan';
     var h = '<header class="hd line"><h1>Nový plán</h1>' + (hasPlan ? '<button type="button" class="tb" data-do="cancel">Zrušit</button>' : '') + '</header><div class="form choice">';
     h += ROUTE_ART + '<button type="button" class="doc main" data-do="doc"><span class="bd ink">' + ico('doc') + '</span><b>Plán od trenéra</b><span>PDF, fotka nebo tabulka. Otevře se Claude s připravenou zprávou, přiložíš soubor a odešleš. Přepsaný plán se objeví tady ke kontrole.</span></button>';
-    h += '<button type="button" class="doc strava" data-do="strava"><span class="bd sv">' + ico('strava', 'fill') + '</span><b>Plán podle mé Stravy</b><span>Claude projde tvoje běhy za poslední 2–3 měsíce, zeptá se na cíl a postaví plán ke kontrole.</span></button>';
-    h += '<p class="hint">Obojí potřebuje adresu RPM přidanou v Claude jako konektor; pro Stravu i oficiální konektor Strava.</p>';
-    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button></div>';
+    if (S.strava) h += '<button type="button" class="doc strava" data-do="strava"><span class="bd sv">' + ico('strava', 'fill') + '</span><b>Plán podle mé Stravy</b><span>Claude projde tvoje běhy za poslední 2–3 měsíce, zeptá se na cíl a postaví plán ke kontrole.</span></button>';
+    h += '<p class="hint">' + (S.strava ? 'Obojí potřebuje adresu RPM přidanou v Claude jako konektor; pro Stravu i oficiální konektor Strava.' : 'Potřebuje adresu RPM přidanou v Claude jako konektor.') + '</p>';
+    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button>' + stravaSwitch() + '</div>';
+  }
+  // Přepínač Stravy: appka nevidí konektory v Claude, tak to řekne uživatel (nebo se zapne sám po hodnocení ze Stravy).
+  function stravaSwitch() {
+    var on = !!S.strava;
+    return '<button type="button" class="sw" role="switch" aria-checked="' + on + '" data-do="stravasw"><span class="bd sv' + (on ? '' : ' off') + '">' + ico('strava', 'fill') + '</span><span class="sw-t"><b>Mám v Claude konektor Strava</b><small>' +
+      (on ? 'Ukazuju Zhodnotit se Stravou a plán podle Stravy.' : 'Tlačítka Stravy jsou schovaná. Zapni, až Stravu v Claude připojíš.') + '</small></span><i aria-hidden="true"></i></button>';
   }
   function renderForm() {
     if (!S.manual) return renderChoice();
@@ -601,6 +609,11 @@
       case 'draft': draft(); break;
       case 'doc': toClaude('Přikládám svůj tréninkový plán. Přepiš ho přes konektor RPM do rozpracovaného importu (import_plan_weeks): když je v dokumentu verze v mílích i v km, vezmi jen kilometrovou, a týdny, kde nesedí součet, oprav podle dokumentu. Do kalendáře ho nezařazuj, zkontroluju ho v appce RPM.'); break;
       case 'strava': toClaude('Postav mi nový běžecký plán podle mé Stravy. Postupuj podle instrukcí RPM pro nový plán: načti profil a historii, projdi Stravu za posledních 8–12 týdnů, zeptej se jen na to, co chybí, a kostru nech v rozpracovaném importu; zkontroluju ji v appce RPM.'); break;
+      case 'stravasw':
+        var was = S.strava;
+        S.strava = !S.strava; render();
+        call('set_profile', { strava: S.strava }).then(function () { toast(S.strava ? 'Tlačítka Stravy zapnutá' : 'Tlačítka Stravy schovaná'); }, function (err) { S.strava = was; fail(err); });
+        break;
       case 'manual': S.manual = true; window.scrollTo(0, 0); render(); break;
       case 'choice': S.manual = false; window.scrollTo(0, 0); render(); break;
       case 'sweek': S.sweek = S.sweek === +v ? null : +v; render(); break;

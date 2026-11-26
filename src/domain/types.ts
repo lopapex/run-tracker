@@ -220,4 +220,6 @@ export interface AthleteProfile {
   paceSource?: 'plan' | 'profile';
   /** Odkud se tempa počítají z cílového času, když plán má tabulku temp: z tabulky, nebo podle VDOT. */
   paceMethod?: 'table' | 'vdot';
+  /** Uživatel má v Claude konektor Strava: appka podle toho ukáže tlačítka Stravy. Nevyplněno = zatím nevíme. */
+  strava?: boolean;
 }

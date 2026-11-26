@@ -675,6 +675,22 @@ describe('konektor RPM', () => {
     expect((await call('set_goal_time', { goalSec: 5400, method: 'vdot' })).isError).toBe(true);
   });
 
+  it('tlačítka Stravy: neznámo, zapne je hodnocení čísly ze Stravy, ruční vypnutí vydrží', async () => {
+    const { call } = await connect(new MemoryStore());
+    await call('import_plan_weeks', { name: 'Plán', weeks: [week(1)] });
+    await call('activate_plan', { mode: 'start', date: '2026-11-16' });
+    expect((await call('show_week', {})).data.strava).toBeNull();
+    const id = idOf((await call('get_plan', { from: '2026-11-16', to: '2026-11-22' })).text, '2026-11-16', 'Easy Run');
+    // Čísla od uživatele Stravu nezapnou.
+    await call('show_result', { workoutId: id, run: { distanceM: 8000, movingSec: 2700 }, source: 'user' });
+    expect((await call('show_week', {})).data.strava).toBeNull();
+    await call('show_result', { workoutId: id, run: { distanceM: 8000, movingSec: 2700 }, source: 'strava' });
+    expect((await call('show_week', {})).data.strava).toBe(true);
+    await call('set_profile', { strava: false });
+    await call('show_result', { workoutId: id, run: { distanceM: 8000, movingSec: 2700 }, source: 'strava' });
+    expect((await call('show_week', {})).data.strava).toBe(false);
+  });
+
   it('s tabulkou i délkou závodu jde přepnout tempa mezi tabulkou a VDOT', async () => {
     const { call } = await connect(new MemoryStore());
     const row = (e: number, h: number) => ({ easy: { fromSec: e, toSec: e + 30 }, hm_pace: { fromSec: h, toSec: h + 6 } });

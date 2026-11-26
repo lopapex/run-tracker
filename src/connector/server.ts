@@ -35,7 +35,7 @@ Nový plán (žádný není, předchozí skončil, nebo o něj uživatel požád
 
 Appka RPM:
 - Uživatel má plán v appce RPM${origin ? ` (${origin}/app/)` : ''}: tam vidí týden, celý plán a tempa, zapisuje splnění a zakládá plán. Ty odpovídáš textem, česky a krátce: to podstatné s čísly z nástrojů, bez opisování celých rozpisů. Kdo chce plán vidět, toho pošli do appky.
-- Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, najdi běh ve Stravě a zavolej show_result s čísly: jednotku tím rovnou zapíše (splněno nebo částečně podle hodnocení), set_status po něm nevolej. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Výsledek shrň jednou dvěma větami.
+- Když uživatel řekne, že doběhl, nebo chceš zhodnotit konkrétní běh, najdi běh ve Stravě a zavolej show_result s čísly (a source: strava; čísla od uživatele source: user, ze souboru source: file): jednotku tím rovnou zapíše (splněno nebo částečně podle hodnocení), set_status po něm nevolej. U intervalů spočítej z kol rychlé pracovní úseky (třeba 4× 1600 m z kol po 1000 + 600 m) a pošli je v run.reps; hodnotí se pak tempo úseků, ne průměr celého běhu. Výsledek shrň jednou dvěma větami.
 - Soubor do hodinek připraví export_garmin, jen když o něj uživatel požádá.
 
 Import plánu z dokumentu (PDF, obrázek, tabulka, text) – hlavní způsob, jak uživatel plán zakládá:
@@ -253,6 +253,11 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
     inputSchema: { ...weekViewInput.shape, tab: z.enum(['week', 'plan', 'paces', 'staged']).optional(), workoutId: z.string().optional() },
     annotations: readOnly,
   }, (input) => show((ws) => {
+    // Každá odpověď appce nese i to, jestli ukazovat tlačítka Stravy (null = zatím nevíme).
+    const v = appView(ws, input);
+    return v.ok ? { ...v, data: { ...v.data, strava: ws.profile.strava ?? null } } : v;
+  }));
+  const appView = (ws: Workspace, input: { tab?: 'week' | 'plan' | 'paces' | 'staged'; date?: string; workoutId?: string }): View => {
     if (input.tab === 'staged') return ws.staged?.weeks.length ? importView(ws) : planView(ws);
     if (input.tab === 'plan') return planView(ws);
     if (input.tab === 'paces') {
@@ -261,7 +266,7 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
       return v.ok || input.workoutId ? v : { ok: true, text: '', data: { view: 'paces', paces: [], workout: null } };
     }
     return weekView(ws, { date: input.date });
-  }));
+  };
 
   server.registerTool('calculate_paces', {
     title: 'Spočítat tempa z výkonu',
@@ -301,7 +306,11 @@ export function buildServer(store: WorkspaceStore, id: string, origin?: string, 
     const conditions = input.conditions?.length ? (pre.data.checkin as { conditions: Condition[] }).conditions : undefined;
     return write((ws) => {
       const outcome = setStatus(ws, { workoutId: input.workoutId, status, ...(conditions ? { conditions } : {}), ...(vdot != null ? { estimateVdot: vdot } : {}) }, nowIso());
-      return outcome.ok && outcome.changed ? { ...outcome, banner: `Zapsáno jako ${status === 'partial' ? 'splněno částečně' : 'splněno'}.` } : outcome;
+      // Čísla ze Stravy = uživatel má konektor Strava; appka pak ukáže tlačítka Stravy. Ruční vypnutí v appce se nepřepisuje.
+      const stravaOn = outcome.ok && input.source === 'strava' && ws.profile.strava === undefined;
+      if (stravaOn) ws.profile = { ...ws.profile, strava: true };
+      if (outcome.ok && outcome.changed) return { ...outcome, banner: `Zapsáno jako ${status === 'partial' ? 'splněno částečně' : 'splněno'}.` };
+      return stravaOn ? { ...outcome, changed: true } : outcome;
     }, (ws) => resultView(ws, input), { viewText: true, always: true });
   });
 

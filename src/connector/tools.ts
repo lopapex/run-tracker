@@ -37,6 +37,7 @@ export const profileInput = z.object({
   raceDistanceM: z.number().positive().max(200_000).optional(),
   raceTargetSec: z.number().int().positive().max(48 * 3600).optional(),
   paceChart: paceChartSchema.optional(),
+  strava: z.boolean().optional().describe('Uživatel má v Claude připojený konektor Strava. Appka podle toho ukáže nebo skryje tlačítka Stravy.'),
   notes: z.string().max(1500).optional().describe('Poznámky trenéra o běžci: zranění a omezení, dny a časy, cíle, závody, co mu nesedí. Pošli celé nové znění; prázdný text poznámky smaže.'),
 });
 

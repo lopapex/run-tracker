@@ -35,6 +35,7 @@ export const resultViewInput = z.object({
     laps: z.array(z.object({ distanceM: z.number().positive().max(100_000), durationSec: z.number().positive().max(12 * 3600) })).max(80).optional().describe('Bez tepu, nejvýš 30.'),
     reps: z.array(z.object({ distanceM: z.number().positive().max(50_000), durationSec: z.number().positive().max(4 * 3600), avgHr: z.number().min(30).max(250).optional() })).max(40).optional().describe('Jen rychlé pracovní úseky intervalů, spočítané z kol (bez rozklusu a pauz).'),
   }).optional().describe('Čísla skutečného běhu ze Stravy nebo od uživatele. Bez nich vrátí jen plán jednotky.'),
+  source: z.enum(['strava', 'user', 'file']).optional().describe('Odkud čísla běhu jsou: strava = z konektoru Strava, user = napsal je uživatel, file = z nahraného souboru GPX/TCX/FIT.'),
   conditions: z.array(z.enum(Object.keys(CONDITIONS) as [Condition, ...Condition[]])).max(8).optional().describe('Okolnosti, které uživatel zmínil (cold, heat, wind, rain, hills, poor_sleep, alcohol, dehydrated, tired, sick, stress, sore); zohlední se v hodnocení.'),
 });
 
