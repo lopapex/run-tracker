@@ -393,7 +393,7 @@
     var h = '<header class="hd"><h1>' + esc(d.planName) + '</h1><button type="button" class="tb" data-do="new">Nový</button></header>';
     h += '<p class="meta"><b>' + t.doneKm + '</b> z ' + t.plannedKm + ' km<span>' + (d.last ? 'do ' + dm(d.last) : '') + '</span></p>';
     if (S.week && S.week.staged) h += '<button type="button" class="pending" data-do="staged"><span>Rozpracovaný plán „' + esc(S.week.staged.name) + '“ čeká na schválení.</span><b>Zkontrolovat ›</b></button>';
-    return h + matrix(d.weeks, { link: true }) + '<div class="form">' + stravaSwitch() + '</div>';
+    return h + matrix(d.weeks, { link: true }) + stravaLine();
   }
 
   // ---------- Nový plán ----------
@@ -412,13 +412,13 @@
     h += ROUTE_ART + '<button type="button" class="doc main" data-do="doc"><span class="bd ink">' + ico('doc') + '</span><b>Plán od trenéra</b><span>PDF, fotka nebo tabulka. Otevře se Claude s připravenou zprávou, přiložíš soubor a odešleš. Přepsaný plán se objeví tady ke kontrole.</span></button>';
     if (S.strava) h += '<button type="button" class="doc strava" data-do="strava"><span class="bd sv">' + ico('strava', 'fill') + '</span><b>Plán podle mé Stravy</b><span>Claude projde tvoje běhy za poslední 2–3 měsíce, zeptá se na cíl a postaví plán ke kontrole.</span></button>';
     h += '<p class="hint">' + (S.strava ? 'Obojí potřebuje adresu RPM přidanou v Claude jako konektor; pro Stravu i oficiální konektor Strava.' : 'Potřebuje adresu RPM přidanou v Claude jako konektor.') + '</p>';
-    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button>' + stravaSwitch() + '</div>';
+    // Bez Stravy jen nenápadný odkaz, kterým se karta Stravy zapne; nastavuje se jednou.
+    return h + '<button type="button" class="row-link" data-do="manual">Sestavit bez Clauda</button>' + (S.strava ? '' : '<button type="button" class="row-link quiet" data-do="stravasw">Mám v Claude konektor Strava</button>') + '</div>';
   }
-  // Přepínač Stravy: appka nevidí konektory v Claude, tak to řekne uživatel (nebo se zapne sám po hodnocení ze Stravy).
-  function stravaSwitch() {
-    var on = !!S.strava;
-    return '<button type="button" class="sw" role="switch" aria-checked="' + on + '" data-do="stravasw"><span class="bd sv' + (on ? '' : ' off') + '">' + ico('strava', 'fill') + '</span><span class="sw-t"><b>Mám v Claude konektor Strava</b><small>' +
-      (on ? 'Ukazuju Zhodnotit se Stravou a plán podle Stravy.' : 'Tlačítka Stravy jsou schovaná. Zapni, až Stravu v Claude připojíš.') + '</small></span><i aria-hidden="true"></i></button>';
+  // Tichý řádek dole v Plánu: appka nevidí konektory v Claude, tak tlačítka Stravy jdou zapnout a vypnout tady.
+  // Zapnou se i sama po prvním hodnocení běhu ze Stravy.
+  function stravaLine() {
+    return '<p class="setting">Tlačítka Stravy ' + (S.strava ? 'zapnutá' : 'vypnutá') + ' · <button type="button" data-do="stravasw">' + (S.strava ? 'Vypnout' : 'Zapnout') + '</button></p>';
   }
   function renderForm() {
     if (!S.manual) return renderChoice();

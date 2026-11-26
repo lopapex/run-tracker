@@ -395,15 +395,11 @@ body:has(#view .sticky) .toast { bottom: calc(64px + 76px + env(safe-area-inset-
   .sheet .panel { width: 520px; margin: 0 auto; }
 }
 
-/* Přepínač Stravy */
-.sw { display: grid; grid-template-columns: 30px 1fr 44px; align-items: center; column-gap: 12px; width: 100%; margin-top: 16px; padding: 14px 0; text-align: left; border-top: 1px solid var(--line); }
-.sw .bd.off { background: var(--fill); color: var(--mute); }
-.sw-t b { display: block; font-weight: 600; font-size: 15px; }
-.sw-t small { display: block; margin-top: 2px; font-size: 13px; color: var(--mute); text-wrap: pretty; }
-.sw i { position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--line); transition: background-color 160ms ease; }
-.sw i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform 200ms cubic-bezier(.23, 1, .32, 1); }
-.sw[aria-checked="true"] i { background: var(--ok); }
-.sw[aria-checked="true"] i::after { transform: translateX(18px); }
+/* Nastavení na jednou: tichý řádek pod plánem, odkaz podtržený jako ostatní tiché odkazy. */
+.setting { padding: 20px var(--gut) 8px; font-size: 13px; color: var(--mute); }
+.setting button { position: relative; min-height: 32px; color: var(--mute); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--faint); }
+.setting button::before { content: ""; position: absolute; inset: -6px -4px; }
+.row-link.quiet { padding-top: 0; font-size: 13px; }
 
 /* Logo Stravy: plný tvar, ne obrys. */
 .ic.fill { fill: currentColor; stroke: none; }
